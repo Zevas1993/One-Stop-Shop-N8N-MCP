@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # Latest n8n container to extract from
+  n8n-latest:
+    image: n8nio/n8n:latest
+    container_name: n8n-extract-source
+    environment:
+      - DB_TYPE=sqlite
+      - DB_SQLITE_DATABASE=/home/node/.n8n/database.sqlite
+      - N8N_LOG_LEVEL=info
+      - WEBHOOK_URL=http://localhost:5678/
+    volumes:
+      - n8n-extract-data:/home/node/.n8n
+    ports:
+      - "5679:5678"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # MCP Server with access to n8n container files
+  node-extractor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: n8n-mcp-extractor
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - N8N_MODULES_PATH=/n8n-modules
+      - AUTH_TOKEN=extract-token
+    volumes:
+      # Mount n8n container's node_modules for extraction
+      - n8n-extract-data:/n8n-modules:ro
+      # Output directory for extracted database
+      - ./data:/app/data
+    depends_on:
+      n8n-latest:
+        condition: service_healthy
+    command: node dist/scripts/rebuild.js
+    profiles:
+      - extract
+
+volumes:
+  n8n-extract-data:
+    driver: local

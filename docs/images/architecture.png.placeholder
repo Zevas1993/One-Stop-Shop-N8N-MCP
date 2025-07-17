@@ -1,0 +1,4 @@
+This is a placeholder for an architecture diagram.
+Replace this with an actual diagram showing the layered architecture of the n8n MCP Server, 
+including the Transport Layer, API Client Layer, Tools Layer, Resources Layer, 
+Configuration Layer, and Error Handling Layer.

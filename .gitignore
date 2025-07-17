@@ -1,0 +1,102 @@
+# Dependency directories
+node_modules/
+coverage/
+
+# Environment variables - CRITICAL: Never commit credentials!
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+**/env/**
+**/.env/**
+
+# Additional credential protection
+config.json
+secrets.json
+credentials.json
+api-keys.json
+
+# Build outputs
+dist/
+build/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# macOS
+.DS_Store
+
+# Misc
+.npm
+.eslintcache
+.yarn-integrity
+
+# CRCT System
+cline_docs/
+strategy_tasks/
+Previous_versions/
+--output
+test-output-summary.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.env/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Embeddings
+*.embedding
+embeddings/
+mcp-config.json
+
+# Cleanup - files to ignore
+*.bak
+*.backup
+temp_processes.txt
+test-output-*
+manual_verify_update.mjs
+n8n-scraping-progress.json
+next-node-continuation.md
+
+# Development artifacts
+reports/
+data/integrations/
+*.pdf
+
+# Windows specific artifacts
+nul
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Database files (may contain secrets)
+cache/
+data/
+*.db
+nodes.db

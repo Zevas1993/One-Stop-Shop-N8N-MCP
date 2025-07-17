@@ -1,0 +1,40 @@
+name: Node.js Package
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Allow workflow to push to the repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }} # Uses the default GITHUB_TOKEN
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Specify your desired Node.js version
+          registry-url: 'https://registry.npmjs.org' # Point to npmjs.com
+      - run: npm ci
+      - run: npm run build # Add your build script here if you have one, otherwise remove this line
+      - name: Bump version, commit, and push
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          npm version patch -m "chore: release %s"
+          git push
+          git push --tags
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}} # NPM_TOKEN might be needed for npm version if it interacts with registry
+      - name: Publish to npmjs.com
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}} # Use the NPM_TOKEN secret

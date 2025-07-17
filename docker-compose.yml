@@ -1,0 +1,74 @@
+# docker-compose.yml
+# For optimized builds with BuildKit, use: docker-compose -f docker-compose.buildkit.yml up
+version: '3.8'
+
+services:
+  n8n-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: n8n-mcp:unified-v1
+    container_name: n8n-mcp-unified
+    restart: unless-stopped
+    network_mode: host
+    
+    # Environment configuration
+    environment:
+      # Mode configuration (http or simple-auto)
+      MCP_MODE: ${MCP_MODE:-http}
+      USE_FIXED_HTTP: ${USE_FIXED_HTTP:-true}  # Use fixed implementation for stability
+      AUTH_TOKEN: ${AUTH_TOKEN:?AUTH_TOKEN is required for HTTP mode}
+      
+      # Auto-update configuration (for simple-auto mode)
+      # GITHUB_TOKEN: ${GITHUB_TOKEN:-}  # Disabled: no n8n packages in runtime image
+      UPDATE_INTERVAL_MINUTES: ${UPDATE_INTERVAL_MINUTES:-15}
+      
+      # Application settings
+      NODE_ENV: ${NODE_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PORT: ${PORT:-3000}
+      
+      # Database
+      NODE_DB_PATH: ${NODE_DB_PATH:-/app/data/nodes.db}
+      REBUILD_ON_START: ${REBUILD_ON_START:-false}
+      
+      # Optional: n8n API configuration (enables 16 additional management tools)
+      # Uncomment and configure to enable n8n workflow management
+      N8N_API_URL: ${N8N_API_URL}
+      N8N_API_KEY: ${N8N_API_KEY}
+      N8N_API_TIMEOUT: ${N8N_API_TIMEOUT:-30000}
+      N8N_API_MAX_RETRIES: ${N8N_API_MAX_RETRIES:-3}
+      
+      # N8N Browser Authentication (for visual verification)
+      N8N_USERNAME: ${N8N_USERNAME:-chrisboyd1993@gmail.com}
+      N8N_PASSWORD: ${N8N_PASSWORD:-AlastorB2024!@#}
+    
+    # Volumes for persistence and Docker access
+    volumes:
+      - n8n-mcp-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket for container access
+    
+    # Port mapping (not needed with host network mode)
+    # ports:
+    #   - "${PORT:-3000}:3000"
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Named volume for data persistence
+volumes:
+  n8n-mcp-data:
+    driver: local
