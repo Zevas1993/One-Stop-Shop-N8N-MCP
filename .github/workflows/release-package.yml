@@ -1,12 +1,15 @@
 name: Node.js Package
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  # Disabled - requires NPM_TOKEN secret to be configured
+  # Uncomment and configure NPM_TOKEN secret to enable
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   branches:
+  #     - main
 
 jobs:
   build-and-publish:

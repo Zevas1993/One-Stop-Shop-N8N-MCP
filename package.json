@@ -47,7 +47,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/czlonkowski/n8n-mcp.git"
+    "url": "git+https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP.git"
   },
   "keywords": [
     "n8n",
@@ -60,9 +60,9 @@
   "author": "Romuald Czlonkowski @ www.aiadvisors.pl/en",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/czlonkowski/n8n-mcp/issues"
+    "url": "https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP/issues"
   },
-  "homepage": "https://github.com/czlonkowski/n8n-mcp#readme",
+  "homepage": "https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP#readme",
   "devDependencies": {
     "@playwright/test": "^1.53.2",
     "@types/express": "^5.0.3",

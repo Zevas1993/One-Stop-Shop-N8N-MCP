@@ -1,9 +1,10 @@
 name: Update n8n Dependencies
 
 on:
+  # Disabled - enable when automated dependency updates are needed
   # Run every Monday at 9 AM UTC
-  schedule:
-    - cron: '0 9 * * 1'
+  # schedule:
+  #   - cron: '0 9 * * 1'
   
   # Allow manual trigger
   workflow_dispatch:
