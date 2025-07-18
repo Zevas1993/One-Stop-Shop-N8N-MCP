@@ -1,7 +1,7 @@
 # One-Stop-Shop-N8N-MCP: Complete AI Agent Server for n8n Automation
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.7.3-blue.svg)](https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP)
+[![Version](https://img.shields.io/badge/version-2.7.4-blue.svg)](https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP)
 [![Docker](https://img.shields.io/badge/docker-ready-green.svg)](https://hub.docker.com)
 
 A **complete** Model Context Protocol (MCP) server that provides AI assistants with comprehensive access to n8n workflow automation. Features the full workflow lifecycle: discover nodes, create workflows, execute them, and validate they work correctly.
@@ -12,11 +12,11 @@ One-Stop-Shop-N8N-MCP is the **complete solution** for AI-powered n8n automation
 
 ### 🚀 Key Features
 
-- **📚 526+ n8n nodes** - Complete coverage from n8n-nodes-base and @n8n/n8n-nodes-langchain
+- **📚 526 n8n nodes** - Complete coverage from n8n-nodes-base (435 nodes) and @n8n/n8n-nodes-langchain (91 nodes)
 - **🔄 Progressive disclosure** - AI agents get exactly the information they need (1KB to 50KB responses)
 - **🔧 Complete workflow lifecycle** - Create, update, execute, and validate workflows via n8n API
 - **🤖 AI-optimized tools** - 39 specialized tools designed for AI agent efficiency
-- **🛡️ Bulletproof reliability** - 100% working tools with robust error handling
+- **🛡️ Bulletproof reliability** - 100% working tools with robust error handling (39/39 tools pass)
 - **⚡ Universal compatibility** - Works with any Node.js version (automatic database adapter)
 - **🐳 Docker-ready** - Complete solution with bundled dependencies
 
@@ -48,6 +48,12 @@ cp .env.example .env
 
 # Edit with your settings (optional - defaults work fine)
 nano .env
+
+# Key settings to configure:
+# AUTH_TOKEN=your-secure-token-here (generate with: openssl rand -base64 32)
+# MCP_MODE=http (for Docker) or stdio (for local)
+# N8N_API_URL=http://localhost:5678 (optional, for workflow management)
+# N8N_API_KEY=your-n8n-api-key (optional, for workflow management)
 ```
 
 #### Step 3: Run with Docker Compose
@@ -61,8 +67,45 @@ docker compose logs -f
 # You should see: "n8n MCP Fixed HTTP Server running on 0.0.0.0:3000"
 ```
 
-#### Step 4: Connect to Claude Desktop
+#### Step 4: Test the Server
+```bash
+# Test health endpoint
+curl http://localhost:3000/health
+
+# Test tool count
+curl -H "Authorization: Bearer test-browser-automation-token" \
+  http://localhost:3000/mcp -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' \
+  | grep -o '"name"' | wc -l
+
+# Should return: 39
+```
+
+#### Step 5: Connect to Claude Desktop
 Add to your `~/.claude_desktop_config.json`:
+
+**For Docker (HTTP mode):**
+```json
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/mcp-remote@latest",
+        "connect",
+        "http://localhost:3000/mcp"
+      ],
+      "env": {
+        "MCP_AUTH_TOKEN": "test-browser-automation-token"
+      }
+    }
+  }
+}
+```
+
+**For Docker (stdio mode - advanced):**
 ```json
 {
   "mcpServers": {
@@ -93,7 +136,7 @@ npm run build
 # Initialize database (downloads n8n node information)
 npm run rebuild
 
-# Start server
+# Start server in stdio mode
 npm start
 ```
 
@@ -109,52 +152,40 @@ The server uses environment variables for configuration. Key settings:
 MCP_MODE=http
 PORT=3000
 
-# Authentication token (set in .env file)
+# Authentication token (required for HTTP mode)
 AUTH_TOKEN=test-browser-automation-token
+
+# Database path
+NODE_DB_PATH=/app/data/nodes.db
 
 # Logging level
 LOG_LEVEL=info
 ```
 
-#### n8n API Integration (Optional but Recommended)
+#### n8n API Integration (Optional - Enables 11 Workflow Management Tools)
 ```bash
 # Enable workflow management tools by providing n8n API access
 N8N_API_URL=http://localhost:5678
 N8N_API_KEY=your-n8n-api-key
 
-# Optional: For enhanced verification
-N8N_USERNAME=your-n8n-username
-N8N_PASSWORD=your-n8n-password
+# Optional: API timeout and retries
+N8N_API_TIMEOUT=30000
+N8N_API_MAX_RETRIES=3
 ```
 
 #### How to Get n8n API Key
-1. Open your n8n instance
+1. Open your n8n instance (e.g., `http://localhost:5678`)
 2. Go to **Settings** → **API**
 3. Click **Create API Key**
 4. Copy the key and add it to your `.env` file
 
 ### 🔗 Integration Examples
 
-#### Claude Desktop (Local Docker)
+#### Claude Desktop - HTTP Mode (Recommended)
 ```json
 {
   "mcpServers": {
     "n8n-mcp": {
-      "command": "docker",
-      "args": ["exec", "-i", "n8n-mcp-unified", "node", "dist/mcp/index.js"],
-      "env": {
-        "MCP_MODE": "stdio"
-      }
-    }
-  }
-}
-```
-
-#### Remote Access (HTTP Mode)
-```json
-{
-  "mcpServers": {
-    "n8n-mcp-remote": {
       "command": "npx",
       "args": [
         "-y",
@@ -170,7 +201,7 @@ N8N_PASSWORD=your-n8n-password
 }
 ```
 
-#### Alternative: Local Binary
+#### Claude Desktop - stdio Mode (Local Binary)
 ```json
 {
   "mcpServers": {
@@ -189,7 +220,7 @@ N8N_PASSWORD=your-n8n-password
 
 The server provides **39 specialized tools** organized by category:
 
-### 🔍 Node Discovery & Information
+### 🔍 Node Discovery & Information (9 tools)
 - `list_nodes` - List all available n8n nodes with filtering
 - `find_nodes` - Search nodes by keywords or category
 - `get_node_info` - Full node details (essentials ~5KB, complete ~50KB)
@@ -200,7 +231,7 @@ The server provides **39 specialized tools** organized by category:
 - `get_node_as_tool_info` - Get information about using nodes as AI tools
 - `list_ai_tools` - List all AI-capable nodes
 
-### 🏗️ Workflow Management Tools (Requires n8n API)
+### 🏗️ Workflow Management Tools (11 tools - Requires n8n API)
 - `n8n_create_workflow` - Create new workflows from JSON
 - `n8n_get_workflow` - Get workflow by ID (multiple detail levels)
 - `n8n_update_full_workflow` - Complete workflow replacement
@@ -212,9 +243,8 @@ The server provides **39 specialized tools** organized by category:
 - `n8n_list_executions` - Browse execution history
 - `n8n_delete_execution` - Delete execution records
 - `n8n_system` - Health checks and diagnostics
-- `n8n_validate_workflow` - Validate workflow from n8n instance by ID
 
-### 🔧 Configuration & Validation Tools
+### 🔧 Configuration & Validation Tools (11 tools)
 - `get_node_config` - Pre-configured node settings for common tasks
 - `get_node_for_task` - Get node configuration for specific tasks
 - `list_tasks` - List all available task templates
@@ -227,7 +257,7 @@ The server provides **39 specialized tools** organized by category:
 - `validate_before_adding` - Pre-flight workflow validation
 - `check_compatibility` - Quick node connection validation
 
-### 📋 Template & Utility Tools
+### 📋 Template & Utility Tools (8 tools)
 - `get_template` - Get complete workflow JSON by template ID
 - `list_node_templates` - Find workflow templates using specific nodes
 - `get_templates_for_task` - Get curated templates for common tasks
@@ -235,38 +265,39 @@ The server provides **39 specialized tools** organized by category:
 - `get_property_dependencies` - Analyze property dependencies
 - `get_node_documentation` - Get parsed documentation from n8n-docs
 - `get_database_statistics` - Server metrics and performance data
+- `n8n_validate_workflow` - Validate workflow from n8n instance by ID
 
 ## 🎯 Common Usage Patterns
 
 ### 🔍 **Node Discovery & Learning**
 ```
 AI Agent: "I need to create a workflow that processes webhooks"
-1. find_nodes(query="webhook") -> Find webhook nodes
-2. get_node_summary("nodes-base.webhook") -> Quick overview (<1KB)
-3. get_node_essentials("nodes-base.webhook") -> Essential configuration details (~5KB)
+1. find_nodes({"query": "webhook"}) -> Find webhook nodes
+2. get_node_summary({"nodeType": "nodes-base.webhook"}) -> Quick overview (<1KB)
+3. get_node_essentials({"nodeType": "nodes-base.webhook"}) -> Essential configuration (~5KB)
 ```
 
 ### 🏗️ **Workflow Creation**
 ```
 AI Agent: "Create a webhook-to-slack workflow"
-1. n8n_create_workflow(workflow_json) -> Create workflow
-2. validate_workflow(workflow_json) -> Validate configuration
-3. n8n_get_workflow(workflow_id) -> Confirm creation
+1. n8n_create_workflow({"name": "Webhook to Slack", "nodes": [...], "connections": {...}})
+2. validate_workflow({"workflow": {...}, "mode": "quick"}) -> Validate configuration
+3. n8n_get_workflow({"id": "workflow-id"}) -> Confirm creation
 ```
 
 ### 🔧 **Workflow Updates**
 ```
 AI Agent: "Add a HTTP Request node to existing workflow"
-1. n8n_update_partial_workflow(id, operations) -> Use diff updates
-2. validate_workflow(workflow_json) -> Ensure it's still valid
-3. n8n_validate_workflow(workflowId) -> Validate from n8n instance
+1. n8n_update_partial_workflow({"id": "workflow-id", "operations": [...]}) -> Use diff updates
+2. validate_workflow({"workflow": {...}}) -> Ensure it's still valid
+3. n8n_validate_workflow({"workflowId": "workflow-id"}) -> Validate from n8n instance
 ```
 
 ### 📋 **Template Usage**
 ```
 AI Agent: "Find templates for Slack automation"
-1. get_templates_for_task(task="slack_integration") -> Search templates
-2. get_template(templateId) -> Get complete workflow JSON
+1. get_templates_for_task({"task": "slack_integration"}) -> Search templates
+2. get_template({"templateId": 123}) -> Get complete workflow JSON
 3. n8n_create_workflow(template_json) -> Create from template
 ```
 
@@ -290,8 +321,9 @@ Tools are designed with **progressive disclosure** for AI efficiency:
 ### 🚀 Optimized for Production
 - **Ultra-lightweight** - Optimized runtime image
 - **Fast startup** - Pre-built database included
-- **Memory efficient** - Intelligent cache management
+- **Memory efficient** - Intelligent cache management (512MB limit)
 - **Security focused** - Non-root user execution
+- **Health checks** - Built-in monitoring
 
 ### 📋 Docker Commands
 ```bash
@@ -308,6 +340,9 @@ docker compose down
 
 # Update and restart
 git pull && docker compose up -d --build
+
+# Test server
+curl http://localhost:3000/health
 ```
 
 ## 🔒 Security & Credentials
@@ -324,6 +359,7 @@ git pull && docker compose up -d --build
 
 ### 🚨 Important Security Notes
 - **Generate strong tokens**: Use `openssl rand -base64 32` for AUTH_TOKEN
+- **Current default token**: `test-browser-automation-token` (change for production!)
 - **Secure n8n access**: Use HTTPS for production n8n instances
 - **Network security**: Run in private networks when possible
 
@@ -340,6 +376,7 @@ npm run lint         # Run linting
 
 # Database Management
 npm run rebuild      # Rebuild node database from n8n packages
+npm run rebuild:local # Rebuild without GitHub dependencies
 npm run validate     # Validate critical nodes work correctly
 
 # Docker Development
@@ -351,9 +388,9 @@ docker compose logs -f        # View logs
 ```
 src/
 ├── mcp/
-│   ├── server.ts                    # Main MCP server (handles all tools)
-│   ├── tools.ts                     # Node documentation tools
-│   └── tools-n8n-manager.ts        # n8n API management tools
+│   ├── server.ts                    # Main MCP server (handles all 39 tools)
+│   ├── tools.ts                     # Node documentation tools (28 tools)
+│   └── tools-n8n-manager.ts        # n8n API management tools (11 tools)
 ├── services/
 │   ├── node-documentation-service.ts # Node data service
 │   ├── workflow-validator.ts        # Workflow validation logic
@@ -369,18 +406,26 @@ src/
 
 ## 📈 Performance Metrics
 
-- **526 nodes** successfully loaded (100% coverage from n8n v1.97.1)
-- **520 nodes** with properties (99% coverage)
-- **457 nodes** with documentation (87% coverage)
+**Current Database Statistics:**
+- **526 nodes** successfully loaded (100% coverage)
+- **435 nodes** from n8n-nodes-base package
+- **91 nodes** from @n8n/n8n-nodes-langchain package
+- **470 nodes** with documentation (89% coverage)
 - **263 AI-capable tools** detected and catalogued
+- **104 trigger nodes** for workflow initiation
+- **128 versioned nodes** with multiple versions
+
+**Server Performance:**
 - **Auto-fallback** database system ensures 100% uptime
 - **<2ms** average response time for cached queries
+- **33% cache hit rate** (improves with consistent usage)
+- **Memory usage**: 256MB-512MB (Docker limits)
 
-## 🔄 Recent Updates (v2.7.3)
+## 🔄 Recent Updates (v2.7.4)
 
 ### ✅ Tool Reliability Enhancement
 - **39 tools working** - 100% success rate, removed 2 broken template search tools
-- **Fixed parameter inconsistencies** - n8n_validate_workflow now uses correct parameter names
+- **Fixed parameter inconsistencies** - n8n_validate_workflow now uses correct `workflowId` parameter
 - **Enhanced error handling** - All tools provide clear error messages
 - **Improved documentation** - Updated tool descriptions and examples
 
@@ -425,7 +470,7 @@ Contributions are welcome! This is a specialized MCP server designed for AI agen
 1. **AI agent compatibility** - Tools should be designed for AI consumption
 2. **Progressive disclosure** - Provide appropriate information granularity
 3. **Documentation** - Update README and tool descriptions
-4. **Testing** - Verify all tools work correctly
+4. **Testing** - Verify all tools work correctly (aim for 100% success rate)
 
 ## 🚀 Getting Started Checklist
 
@@ -433,25 +478,33 @@ Ready to use One-Stop-Shop-N8N-MCP? Follow this checklist:
 
 ### ✅ Prerequisites
 - [ ] Docker and Docker Compose installed
-- [ ] n8n instance running (for workflow management features)
+- [ ] n8n instance running (optional, for workflow management features)
 - [ ] Claude Desktop or MCP client ready
 
 ### ✅ Quick Setup
 - [ ] Clone repository: `git clone https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP.git`
 - [ ] Copy environment: `cp .env.example .env`
+- [ ] Generate secure token: `openssl rand -base64 32` (replace in .env)
 - [ ] Start server: `docker compose up -d`
 - [ ] Check logs: `docker compose logs -f`
 - [ ] Look for: "n8n MCP Fixed HTTP Server running on 0.0.0.0:3000"
 
+### ✅ Health Check
+- [ ] Test health endpoint: `curl http://localhost:3000/health`
+- [ ] Verify tool count: Should return 39 tools
+- [ ] Check database: Should show 526 nodes loaded
+
 ### ✅ Claude Desktop Integration
 - [ ] Add server to `~/.claude_desktop_config.json`
+- [ ] Use HTTP mode with mcp-remote for best compatibility
 - [ ] Restart Claude Desktop
 - [ ] Test with: "List available n8n nodes for Slack"
 
 ### ✅ Optional: n8n API Setup
 - [ ] Get n8n API key from Settings → API
 - [ ] Add `N8N_API_URL` and `N8N_API_KEY` to `.env`
-- [ ] Restart container to enable workflow management tools
+- [ ] Restart container: `docker compose up -d`
+- [ ] Verify workflow tools: Should have 11 additional n8n management tools
 
 ---
 
