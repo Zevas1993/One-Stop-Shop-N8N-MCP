@@ -435,5 +435,41 @@ Validation example:
         }
       }
     }
+  },
+
+  // Workflow Validation Tool
+  {
+    name: 'n8n_validate_workflow',
+    description: `Validate workflow from n8n instance by ID. Fetches workflow from n8n API and runs comprehensive validation using existing WorkflowValidator.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Workflow ID to validate from n8n instance'
+        },
+        mode: {
+          type: 'string',
+          enum: ['quick', 'full', 'structure', 'connections', 'expressions', 'nodes'],
+          description: 'Validation mode. Default "full" for complete validation.',
+          default: 'full'
+        },
+        options: {
+          type: 'object',
+          description: 'Optional validation settings',
+          properties: {
+            validateNodes: { type: 'boolean' },
+            validateConnections: { type: 'boolean' },
+            validateExpressions: { type: 'boolean' },
+            profile: {
+              type: 'string',
+              enum: ['minimal', 'runtime', 'ai-friendly', 'strict'],
+              default: 'runtime'
+            }
+          }
+        }
+      },
+      required: ['id']
+    }
   }
 ];

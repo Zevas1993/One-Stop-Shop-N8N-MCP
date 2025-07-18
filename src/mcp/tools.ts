@@ -301,6 +301,296 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
       required: [],
     },
   },
+  // Missing tools that were in HandlerRegistry but not in tool definitions
+  {
+    name: 'list_nodes',
+    description: 'List all available n8n nodes with filtering options. Returns nodeType, name, description.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          enum: ['trigger', 'transform', 'output', 'input', 'AI', 'ai_tools'],
+          description: 'Node category filter. trigger=workflow starters, AI=LangChain nodes, ai_tools=optimized for AI agents.',
+        },
+        package: {
+          type: 'string',
+          description: 'Package filter. Examples: "n8n-nodes-base", "@n8n/n8n-nodes-langchain".',
+        },
+        limit: {
+          type: 'number',
+          description: 'Results limit. Default 100.',
+          default: 100,
+        },
+      },
+    },
+  },
+  {
+    name: 'search_nodes',
+    description: 'Full-text search across all node documentation. More powerful than find_nodes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query. Searches names, descriptions, and documentation.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Results limit. Default 50.',
+          default: 50,
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_node_essentials',
+    description: 'Get only essential properties (10-20) with examples. 95% smaller than complete. Fast discovery tool.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nodeType: {
+          type: 'string',
+          description: 'Full node type. Examples: "nodes-base.slack", "nodes-base.httpRequest".',
+        },
+      },
+      required: ['nodeType'],
+    },
+  },
+  {
+    name: 'search_node_properties',
+    description: 'Search for specific properties within a node without downloading everything.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nodeType: {
+          type: 'string',
+          description: 'Full node type to search within.',
+        },
+        query: {
+          type: 'string',
+          description: 'Property search term. Examples: "auth", "header", "body".',
+        },
+      },
+      required: ['nodeType', 'query'],
+    },
+  },
+  {
+    name: 'get_node_as_tool_info',
+    description: 'Get specific information about using ANY node as an AI tool. Connection guidance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nodeType: {
+          type: 'string',
+          description: 'Full node type to get AI tool information for.',
+        },
+      },
+      required: ['nodeType'],
+    },
+  },
+  {
+    name: 'get_node_for_task',
+    description: 'Get pre-configured node settings for common tasks.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: {
+          type: 'string',
+          description: 'Task name. Examples: "post_json_request", "receive_webhook", "send_slack_message".',
+        },
+      },
+      required: ['task'],
+    },
+  },
+  {
+    name: 'list_tasks',
+    description: 'List all available task templates.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'validate_node_operation',
+    description: 'Verify node configuration with operation awareness and profiles.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nodeType: {
+          type: 'string',
+          description: 'Node type to validate.',
+        },
+        config: {
+          type: 'object',
+          description: 'Node configuration to validate.',
+        },
+        operation: {
+          type: 'string',
+          description: 'Specific operation being performed.',
+        },
+        profile: {
+          type: 'string',
+          enum: ['minimal', 'runtime', 'ai-friendly', 'strict'],
+          description: 'Validation profile. Default "runtime".',
+          default: 'runtime',
+        },
+      },
+      required: ['nodeType', 'config'],
+    },
+  },
+  {
+    name: 'validate_node_minimal',
+    description: 'Quick validation for just required fields.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nodeType: {
+          type: 'string',
+          description: 'Node type to validate.',
+        },
+        config: {
+          type: 'object',
+          description: 'Node configuration to validate.',
+        },
+      },
+      required: ['nodeType', 'config'],
+    },
+  },
+  {
+    name: 'validate_workflow_connections',
+    description: 'Check workflow structure and connections.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workflow: {
+          type: 'object',
+          description: 'Complete workflow JSON to validate connections.',
+        },
+      },
+      required: ['workflow'],
+    },
+  },
+  {
+    name: 'validate_workflow_expressions',
+    description: 'Validate all n8n expressions in a workflow.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workflow: {
+          type: 'object',
+          description: 'Complete workflow JSON to validate expressions.',
+        },
+      },
+      required: ['workflow'],
+    },
+  },
+  {
+    name: 'get_property_dependencies',
+    description: 'Analyze property dependencies and visibility conditions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nodeType: {
+          type: 'string',
+          description: 'Node type to analyze.',
+        },
+        config: {
+          type: 'object',
+          description: 'Current configuration for dependency analysis.',
+        },
+      },
+      required: ['nodeType'],
+    },
+  },
+  {
+    name: 'list_ai_tools',
+    description: 'List all AI-capable nodes with usage guidance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Results limit. Default 50.',
+          default: 50,
+        },
+      },
+    },
+  },
+  {
+    name: 'get_node_documentation',
+    description: 'Get parsed documentation from n8n-docs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nodeType: {
+          type: 'string',
+          description: 'Node type to get documentation for.',
+        },
+      },
+      required: ['nodeType'],
+    },
+  },
+  {
+    name: 'list_node_templates',
+    description: 'Find workflow templates using specific nodes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nodeTypes: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of node types to search for in templates.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Results limit. Default 20.',
+          default: 20,
+        },
+      },
+      required: ['nodeTypes'],
+    },
+  },
+  {
+    name: 'search_templates',
+    description: 'Search templates by keywords.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query for template names/descriptions.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Results limit. Default 20.',
+          default: 20,
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_templates_for_task',
+    description: 'Get curated templates for common tasks.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: {
+          type: 'string',
+          enum: ['ai_automation', 'data_sync', 'webhook_processing', 'email_automation', 'slack_integration', 'data_transformation', 'file_processing', 'scheduling', 'api_integration', 'database_operations'],
+          description: 'Task category for templates.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Results limit. Default 20.',
+          default: 20,
+        },
+      },
+      required: ['task'],
+    },
+  },
 ];
 
 /**

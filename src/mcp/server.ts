@@ -27,6 +27,7 @@ import { WorkflowValidator } from '../services/workflow-validator';
 import { isN8nApiConfigured } from '../config/n8n-api';
 import * as n8nHandlers from './handlers-n8n-manager';
 import { handleUpdatePartialWorkflow } from './handlers-workflow-diff';
+import { HandlerRegistry } from './handlers/handler-registry';
 import { PROJECT_VERSION } from '../utils/version';
 
 interface NodeRow {
@@ -52,6 +53,7 @@ export class N8NDocumentationMCPServer {
   private db: DatabaseAdapter | null = null;
   private repository: NodeRepository | null = null;
   private templateService: TemplateService | null = null;
+  private handlerRegistry: HandlerRegistry | null = null;
   private initialized: Promise<void>;
   private cache = new SimpleCache();
   private nodeListCache = new Map<string, any>();
@@ -116,6 +118,7 @@ export class N8NDocumentationMCPServer {
       this.db = await createDatabaseAdapter(dbPath);
       this.repository = new NodeRepository(this.db);
       this.templateService = new TemplateService(this.db);
+      this.handlerRegistry = new HandlerRegistry(this.repository, this.templateService, this.cache);
       logger.info(`Initialized database from: ${dbPath}`);
       
       // Start cache warming in background
@@ -335,6 +338,9 @@ export class N8NDocumentationMCPServer {
         return n8nHandlers.handleDeleteExecution(args);
       case 'n8n_system':
         return this.handleN8nSystemUnified(args);
+      case 'n8n_validate_workflow':
+        // Validate workflow from n8n instance by ID
+        return this.validateWorkflowUnified({ ...args, mode: 'remote' });
       
       // Browser tools - temporarily disabled due to native module issues
       /*
@@ -387,6 +393,43 @@ export class N8NDocumentationMCPServer {
       case 'take_workflow_screenshot':
       case 'find_workflows_by_name':
         return executeEnhancedVisualTool(name, args);
+      
+      // Missing tools that were in HandlerRegistry but not in switch statement
+      case 'list_nodes':
+        return this.listNodesOptimized(args);
+      case 'search_nodes':
+        return this.searchNodes(args.query, args.limit);
+      case 'get_node_essentials':
+        return this.getNodeEssentials(args.nodeType);
+      case 'search_node_properties':
+        return this.searchNodeProperties(args.nodeType, args.query);
+      case 'get_node_as_tool_info':
+        return this.getNodeAsToolInfo(args.nodeType);
+      case 'get_node_for_task':
+        return this.getNodeForTask(args.task);
+      case 'list_tasks':
+        return this.listTasks();
+      case 'validate_node_operation':
+        // Use existing enhanced validation with operation awareness
+        return this.validateNodeOperationInternal(args.nodeType, args.config, args.operation, args.profile);
+      case 'validate_node_minimal':
+        return this.validateNodeMinimal(args.nodeType, args.config);
+      case 'validate_workflow_connections':
+        return this.validateWorkflowConnections(args.workflow);
+      case 'validate_workflow_expressions':
+        return this.validateWorkflowExpressions(args.workflow);
+      case 'get_property_dependencies':
+        return this.getPropertyDependencies(args.nodeType, args.config);
+      case 'list_ai_tools':
+        return this.listAITools();
+      case 'get_node_documentation':
+        return this.getNodeDocumentation(args.nodeType);
+      case 'list_node_templates':
+        return this.listNodeTemplates(args.nodeTypes, args.limit);
+      case 'search_templates':
+        return this.searchTemplates(args.query, args.limit);
+      case 'get_templates_for_task':
+        return this.getTemplatesForTask(args.task);
         
       default:
         throw new Error(`Unknown tool: ${name}`);
@@ -1278,6 +1321,73 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
     };
   }
   
+  private async validateNodeOperationInternal(
+    nodeType: string, 
+    config: Record<string, any>, 
+    operation?: string, 
+    profile: string = 'runtime'
+  ): Promise<any> {
+    await this.ensureInitialized();
+    if (!this.repository) throw new Error('Repository not initialized');
+    
+    // Get node info
+    let node = this.repository.getNode(nodeType);
+    
+    if (!node) {
+      const alternatives = [
+        `n8n-nodes-base.${nodeType}`,
+        `nodes-base.${nodeType}`,
+        nodeType.replace('nodes-base.', 'n8n-nodes-base.'),
+        nodeType.replace('n8n-nodes-base.', 'nodes-base.')
+      ];
+      
+      for (const alt of alternatives) {
+        const found = this.repository!.getNode(alt);
+        if (found) {
+          node = found;
+          break;
+        }
+      }
+      
+      if (!node) {
+        throw new Error(`Node type not found: ${nodeType}. Try: find_nodes("${nodeType.split('.').pop()}")`);
+      }
+    }
+    
+    try {
+      const properties = JSON.parse(node.properties_schema || '[]');
+      const enhancedValidator = new EnhancedConfigValidator(this.repository);
+      
+      const result = enhancedValidator.validateConfig(
+        nodeType,
+        config,
+        properties,
+        'operation', // ValidationMode
+        profile as any // ValidationProfile
+      );
+      
+      return {
+        nodeType,
+        operation,
+        profile,
+        isValid: result.valid,
+        errors: result.errors,
+        warnings: result.warnings,
+        examples: result.examples || [],
+        nextSteps: result.nextSteps || []
+      };
+    } catch (error) {
+      return {
+        nodeType,
+        isValid: false,
+        errors: [`Validation error: ${(error as Error).message}`],
+        warnings: [],
+        examples: [],
+        nextSteps: ['Check node configuration and try again']
+      };
+    }
+  }
+
   private async validateNodeMinimal(nodeType: string, config: Record<string, any>): Promise<any> {
     await this.ensureInitialized();
     if (!this.repository) throw new Error('Repository not initialized');

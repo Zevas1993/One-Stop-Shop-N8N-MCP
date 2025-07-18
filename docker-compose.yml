@@ -10,7 +10,6 @@ services:
     image: n8n-mcp:unified-v1
     container_name: n8n-mcp-unified
     restart: unless-stopped
-    network_mode: host
     
     # Environment configuration
     environment:
@@ -48,9 +47,9 @@ services:
       - n8n-mcp-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket for container access
     
-    # Port mapping (not needed with host network mode)
-    # ports:
-    #   - "${PORT:-3000}:3000"
+    # Port mapping
+    ports:
+      - "${PORT:-3000}:3000"
     
     # Resource limits
     deploy:

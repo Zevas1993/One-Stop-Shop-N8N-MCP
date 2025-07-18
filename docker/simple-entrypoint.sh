@@ -8,7 +8,7 @@ export MCP_MODE=${MCP_MODE:-stdio}
 
 # Start the server
 if [ "$MCP_MODE" = "stdio" ]; then
-    exec node /app/dist/index.js
+    exec node /app/dist/mcp/index.js
 else
-    exec node /app/dist/http-server.js
+    exec node /app/dist/mcp/index.js
 fi
