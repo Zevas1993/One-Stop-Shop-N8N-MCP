@@ -490,8 +490,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Attribution
 
-Created by **Romuald Czlonkowski** @ [www.aiadvisors.pl/en](https://www.aiadvisors.pl/en)
-
 - ✅ Free for any use (personal, commercial, etc.)
 - ✅ Modifications and distribution allowed
 - ✅ Can be included in commercial products
@@ -533,14 +531,6 @@ Ready to use n8n-MCP? Follow this checklist:
 - [ ] Get n8n API key from Settings → API
 - [ ] Add `N8N_API_URL` and `N8N_API_KEY` to `.env`
 - [ ] Restart container to enable workflow management tools
-
-## 📞 Support
-
-For issues, questions, or feature requests:
-- 📧 Email: [support@aiadvisors.pl](mailto:support@aiadvisors.pl)
-- 🐛 Issues: [GitHub Issues](https://github.com/your-username/n8n-mcp-server/issues)
-- 📚 Documentation: [See CLAUDE.md](./CLAUDE.md) for technical details
-- 🔧 Troubleshooting: Check Docker logs first: `docker logs n8n-mcp-server`
 
 ---
 
