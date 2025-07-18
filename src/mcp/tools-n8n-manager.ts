@@ -444,7 +444,7 @@ Validation example:
     inputSchema: {
       type: 'object',
       properties: {
-        id: {
+        workflowId: {
           type: 'string',
           description: 'Workflow ID to validate from n8n instance'
         },
@@ -469,7 +469,7 @@ Validation example:
           }
         }
       },
-      required: ['id']
+      required: ['workflowId']
     }
   }
 ];

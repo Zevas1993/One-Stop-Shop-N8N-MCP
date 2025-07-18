@@ -300,8 +300,6 @@ export class N8NDocumentationMCPServer {
         return this.getNodeConfigUnified(args);
       case 'validate_node':
         return this.validateNodeUnified(args);
-      case 'find_templates':
-        return this.findTemplatesUnified(args);
       case 'get_template':
         return this.getTemplate(args.templateId);
       case 'validate_workflow':
@@ -426,8 +424,6 @@ export class N8NDocumentationMCPServer {
         return this.getNodeDocumentation(args.nodeType);
       case 'list_node_templates':
         return this.listNodeTemplates(args.nodeTypes, args.limit);
-      case 'search_templates':
-        return this.searchTemplates(args.query, args.limit);
       case 'get_templates_for_task':
         return this.getTemplatesForTask(args.task);
         
@@ -2044,7 +2040,7 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
     if (!template) {
       return {
         error: `Template ${templateId} not found`,
-        tip: "Use list_node_templates or search_templates to find available templates"
+        tip: "Use list_node_templates or get_templates_for_task to find available templates"
       };
     }
     
@@ -2086,7 +2082,7 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
       return {
         message: `No templates found for task: ${task}`,
         availableTasks,
-        tip: "Try a different task or use search_templates for custom searches"
+        tip: "Try a different task or use list_node_templates for custom searches"
       };
     }
     

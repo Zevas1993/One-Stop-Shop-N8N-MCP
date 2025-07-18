@@ -196,47 +196,6 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
     },
   },
   {
-    name: 'find_templates',
-    description: `Search workflow templates from n8n.io. Modes: nodes (by node type), keywords (text search), task (curated), all (browse). Size options: summary or detailed responses.`,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        mode: {
-          type: 'string',
-          enum: ['nodes', 'keywords', 'task', 'all'],
-          description: 'Search mode. Default "keywords" for general search.',
-          default: 'keywords'
-        },
-        nodeTypes: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Array of node types to search for (mode: "nodes" only). Use full names like "n8n-nodes-base.httpRequest".',
-        },
-        query: {
-          type: 'string',
-          description: 'Search query for template names/descriptions (mode: "keywords" only). Examples: "chatbot", "automation", "social media".'
-        },
-        task: {
-          type: 'string',
-          enum: ['ai_automation', 'data_sync', 'webhook_processing', 'email_automation', 'slack_integration', 'data_transformation', 'file_processing', 'scheduling', 'api_integration', 'database_operations'],
-          description: 'Task category (mode: "task" only). Predefined categories for common automation tasks.'
-        },
-        limit: {
-          type: 'number',
-          description: 'Maximum number of templates to return. Default 20.',
-          default: 20
-        },
-        detail: {
-          type: 'string',
-          enum: ['summary', 'detailed'],
-          description: 'Response detail level. summary=name+description only (<2KB), detailed=full template info.',
-          default: 'summary'
-        }
-      },
-      required: []
-    }
-  },
-  {
     name: 'get_template',
     description: `Get workflow template JSON by ID. Returns complete workflow definition for import.`,
     inputSchema: {
@@ -553,25 +512,6 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
     },
   },
   {
-    name: 'search_templates',
-    description: 'Search templates by keywords.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Search query for template names/descriptions.',
-        },
-        limit: {
-          type: 'number',
-          description: 'Results limit. Default 20.',
-          default: 20,
-        },
-      },
-      required: ['query'],
-    },
-  },
-  {
     name: 'get_templates_for_task',
     description: 'Get curated templates for common tasks.',
     inputSchema: {
@@ -615,7 +555,6 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
  *    - If no results: use list_nodes with category filter
  * 
  * 4. TEMPLATE SEARCHING:
- *    - search_templates("slack") searches template names/descriptions, NOT node types!
  *    - To find templates using Slack node: list_node_templates(["n8n-nodes-base.slack"])
  *    - For task-based templates: get_templates_for_task("slack_integration")
  *    - 399 templates available from the last year
