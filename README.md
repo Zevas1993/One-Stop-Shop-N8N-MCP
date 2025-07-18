@@ -1,7 +1,7 @@
 # One-Stop-Shop-N8N-MCP: Complete AI Agent Server for n8n Automation
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.7.4-blue.svg)](https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP)
+[![Version](https://img.shields.io/badge/version-2.7.5-blue.svg)](https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP)
 [![Docker](https://img.shields.io/badge/docker-ready-green.svg)](https://hub.docker.com)
 
 A **complete** Model Context Protocol (MCP) server that provides AI assistants with comprehensive access to n8n workflow automation. Features the full workflow lifecycle: discover nodes, create workflows, execute them, and validate they work correctly.
@@ -421,7 +421,7 @@ src/
 - **33% cache hit rate** (improves with consistent usage)
 - **Memory usage**: 256MB-512MB (Docker limits)
 
-## 🔄 Recent Updates (v2.7.4)
+## 🔄 Recent Updates (v2.7.5)
 
 ### ✅ Tool Reliability Enhancement
 - **39 tools working** - 100% success rate, removed 2 broken template search tools
