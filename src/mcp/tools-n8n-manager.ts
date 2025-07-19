@@ -10,7 +10,7 @@ export const n8nManagementTools: ToolDefinition[] = [
   // Workflow Management Tools
   {
     name: 'n8n_create_workflow',
-    description: `⚠️ CRITICAL: MUST call validate_workflow FIRST before using this tool! Create a new workflow in n8n. Only use after validate_workflow returns no errors. This tool will FAIL if workflow has credential placement errors, disconnected nodes, or invalid structure. Always validate first to prevent failures.`,
+    description: `🚨 STEP 3: CREATE WORKFLOW (after validate_workflow passes). Creates workflow in n8n instance. WORKFLOW: 1️⃣ validate_workflow 2️⃣ Fix errors 3️⃣ n8n_create_workflow. This tool WILL FAIL if validation found errors!`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -70,27 +70,7 @@ export const n8nManagementTools: ToolDefinition[] = [
   },
   {
     name: 'n8n_get_workflow',
-    description: `Unified workflow retrieval tool with multiple detail levels. Get workflows from n8n instance by ID with different amounts of information based on your needs.
-
-DETAIL LEVELS:
-• complete (default) - Full workflow with nodes, connections, settings, and metadata
-• details - Workflow with metadata, version, and execution statistics
-• structure - Simplified view with only nodes and connections (no parameters)
-• minimal - Basic info only (ID, name, active status, tags) - fastest option
-
-USAGE EXAMPLES:
-• get_workflow({id: "123"}) - Complete workflow (same as detail: "complete")
-• get_workflow({id: "123", detail: "structure"}) - Just nodes and connections
-• get_workflow({id: "123", detail: "minimal"}) - Just name, status, tags
-• get_workflow({id: "123", detail: "details"}) - With execution stats
-
-PERFORMANCE:
-• minimal - Fastest, smallest response
-• structure - Good for understanding workflow flow
-• details - Includes execution statistics 
-• complete - Full data, largest response
-
-All modes require N8N_API_URL and N8N_API_KEY to be configured.`,
+    description: `📖 GET WORKFLOW: Download existing workflow by ID. Use 'minimal' for quick checks, 'structure' for editing, 'complete' for full details. Essential for modifying existing workflows.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -283,7 +263,7 @@ Validation example:
   },
   {
     name: 'n8n_list_workflows',
-    description: `List workflows with optional filters. Supports pagination via cursor.`,
+    description: `📋 LIST WORKFLOWS: See all workflows in your n8n instance. Use active=true to find running workflows, tags to filter by category. ESSENTIAL for workflow management.`,
     inputSchema: {
       type: 'object',
       properties: {

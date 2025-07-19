@@ -23,7 +23,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'get_node_info',
-    description: `Get node configuration data. essentials=~5KB, complete=~50KB, ai_tool=~10KB. Format: "nodes-base.slack".`,
+    description: `🔍 GET NODE DETAILS: Use when you need to configure a specific node. Always use 'essentials' first (5KB), then 'complete' if needed (50KB). NEVER guess node parameters - always get them from this tool.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -43,7 +43,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'find_nodes',
-    description: `Find n8n nodes by search term or category. Returns nodeType, name, description.`,
+    description: `🔎 FIND NODES: FIRST STEP for any workflow. Search for nodes by service name (e.g., "slack", "gmail") or task (e.g., "webhook", "database"). Use this before get_node_info.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -66,7 +66,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'get_node_summary',
-    description: `Get ultra-light node overview - description + key properties only (<1KB response). Fast discovery tool for AI agents.`,
+    description: `⚡ QUICK NODE CHECK: Ultra-fast overview (<1KB). Use for browsing/discovery. For actual workflow building, use get_node_info with 'essentials'.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -80,7 +80,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'check_compatibility',
-    description: `Quick yes/no check if two nodes can connect. Returns connection compatibility without full schemas.`,
+    description: `🔗 CONNECTION CHECK: Quick compatibility test between two nodes. Use before building connections. Prevents "nodes can't connect" errors.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -173,7 +173,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'validate_node',
-    description: `Validate node configuration. Returns errors, warnings, and fix suggestions.`,
+    description: `🔧 VALIDATE SINGLE NODE: Check if your node configuration is correct before adding to workflow. Catches missing properties, wrong types, invalid values.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -197,7 +197,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'get_template',
-    description: `Get workflow template JSON by ID. Returns complete workflow definition for import.`,
+    description: `📋 GET TEMPLATE: Download complete working workflow by ID. Use after find_templates to get actual workflow JSON you can modify and deploy.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -263,7 +263,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   // Missing tools that were in HandlerRegistry but not in tool definitions
   {
     name: 'list_nodes',
-    description: 'List all available n8n nodes with filtering options. Returns nodeType, name, description.',
+    description: '📋 LIST ALL NODES: Browse the complete catalog of 526 nodes. Use category filter to narrow down (trigger, AI, transform). START HERE for workflow discovery.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -286,7 +286,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'search_nodes',
-    description: 'Full-text search across all node documentation. More powerful than find_nodes.',
+    description: '🔍 SMART SEARCH: Powerful full-text search across 526 nodes. Use when you know what you want but not which node does it (e.g., "send email", "database query").',
     inputSchema: {
       type: 'object',
       properties: {
@@ -305,7 +305,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'get_node_essentials',
-    description: 'Get only essential properties (10-20) with examples. 95% smaller than complete. Fast discovery tool.',
+    description: '⚡ ESSENTIAL CONFIG: Get only the 10-20 most important properties with examples (95% smaller than complete). PERFECT for quick workflow building.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -319,7 +319,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'search_node_properties',
-    description: 'Search for specific properties within a node without downloading everything.',
+    description: '🎯 FIND PROPERTY: Search for specific settings within a node (e.g., "auth", "headers"). Use when you need ONE specific property without downloading 50KB.',
     inputSchema: {
       type: 'object',
       properties: {
