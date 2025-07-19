@@ -211,7 +211,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'validate_workflow',
-    description: `Validate n8n workflows. Modes: full, structure, connections, expressions, nodes, remote. Returns errors and suggestions.`,
+    description: `🔍 CRITICAL: Always validate workflows BEFORE creating them! Catches credential placement errors, disconnected nodes, invalid connections, and other common issues. Use this tool before n8n_create_workflow to prevent broken workflows.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -419,7 +419,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'validate_workflow_connections',
-    description: 'Check workflow structure and connections.',
+    description: '🔍 Check workflow structure and connections for disconnected nodes and invalid connections. Use BEFORE creating workflows.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -275,6 +275,23 @@ export class WorkflowValidator {
           });
           continue;
         }
+
+        // Check for credentials placed incorrectly in parameters
+        if (node.parameters && typeof node.parameters === 'object') {
+          for (const [key, value] of Object.entries(node.parameters)) {
+            if (key.toLowerCase().includes('credential') || 
+                (typeof value === 'object' && value !== null && 
+                 ('id' in value || 'name' in value) && 
+                 ('type' in value))) {
+              result.errors.push({
+                type: 'error',
+                nodeId: node.id,
+                nodeName: node.name,
+                message: `Credentials found in parameters.${key}. Credentials must be defined at the node level in the "credentials" property, not inside parameters. Move credential configuration from parameters to the node's credentials object.`
+              });
+            }
+          }
+        }
         
         // Get node definition - try multiple formats
         let nodeInfo = this.nodeRepository.getNode(node.type);
@@ -541,12 +558,23 @@ export class WorkflowValidator {
                        normalizedType === 'nodes-base.formTrigger';
       
       if (!connectedNodes.has(node.name) && !isTrigger) {
-        result.warnings.push({
-          type: 'warning',
-          nodeId: node.id,
-          nodeName: node.name,
-          message: 'Node is not connected to any other nodes'
-        });
+        // Check if there are multiple nodes - disconnected nodes in multi-node workflows are errors
+        const enabledNodeCount = workflow.nodes.filter(n => !n.disabled).length;
+        if (enabledNodeCount > 1) {
+          result.errors.push({
+            type: 'error',
+            nodeId: node.id,
+            nodeName: node.name,
+            message: `Node "${node.name}" is not connected to any other nodes. In multi-node workflows, all nodes must be connected. Use connections to link this node to other nodes in the workflow.`
+          });
+        } else {
+          result.warnings.push({
+            type: 'warning',
+            nodeId: node.id,
+            nodeName: node.name,
+            message: 'Node is not connected to any other nodes'
+          });
+        }
       }
     }
 
