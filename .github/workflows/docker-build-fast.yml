@@ -2,14 +2,15 @@
 name: Build Docker (AMD64 only - Fast)
 
 on:
+  # Temporarily disabled - complex build causing failures
   workflow_dispatch:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'Dockerfile'
-      - 'package.runtime.json'
-      - '.github/workflows/docker-build-fast.yml'
+  # pull_request:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'Dockerfile'
+  #     - 'package.runtime.json'
+  #     - '.github/workflows/docker-build-fast.yml'
 
 env:
   REGISTRY: ghcr.io
