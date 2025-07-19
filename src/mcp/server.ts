@@ -55,7 +55,7 @@ export class N8NDocumentationMCPServer {
   private templateService: TemplateService | null = null;
   private handlerRegistry: HandlerRegistry | null = null;
   private initialized: Promise<void>;
-  private cache = new SimpleCache();
+  private cache = new SimpleCache({ enabled: false, ttl: 300, maxSize: 10 }); // Disabled cache to prevent memory pressure
   private nodeListCache = new Map<string, any>();
   private nodeInfoCache = new Map<string, any>();
   private performanceMetrics = {
@@ -85,8 +85,8 @@ export class N8NDocumentationMCPServer {
       throw new Error('Database nodes.db not found. Please run npm run rebuild first.');
     }
     
-    // Initialize database asynchronously
-    this.initialized = this.initializeDatabase(dbPath);
+    // Initialize database asynchronously 
+    this.initialized = this.initializeDatabase(dbPath, false); // Full mode but optimized
     
     logger.info('Initializing n8n Documentation MCP server');
     
@@ -113,20 +113,16 @@ export class N8NDocumentationMCPServer {
     this.setupHandlers();
   }
   
-  private async initializeDatabase(dbPath: string): Promise<void> {
+  private async initializeDatabase(dbPath: string, fastMode: boolean = false): Promise<void> {
     try {
       this.db = await createDatabaseAdapter(dbPath);
       this.repository = new NodeRepository(this.db);
+      
+      // Always do full initialization but with optimized cache
       this.templateService = new TemplateService(this.db);
       this.handlerRegistry = new HandlerRegistry(this.repository, this.templateService, this.cache);
-      logger.info(`Initialized database from: ${dbPath}`);
       
-      // Start cache warming in background
-      if (process.env.ENABLE_CACHE_WARMING !== 'false') {
-        const { CacheWarmer } = await import('../utils/cache-warmer');
-        const warmer = new CacheWarmer(this.repository);
-        warmer.warmCacheInBackground();
-      }
+      logger.info(`Initialized database from: ${dbPath} (fast mode: ${fastMode})`);
     } catch (error) {
       logger.error('Failed to initialize database:', error);
       throw new Error(`Failed to open database: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -137,6 +133,18 @@ export class N8NDocumentationMCPServer {
     await this.initialized;
     if (!this.db || !this.repository) {
       throw new Error('Database not initialized');
+    }
+  }
+  
+  private async ensureFullyInitialized(): Promise<void> {
+    await this.ensureInitialized();
+    
+    // Lazy initialization of heavy services
+    if (!this.templateService && this.db) {
+      this.templateService = new TemplateService(this.db);
+    }
+    if (!this.handlerRegistry && this.repository && this.templateService) {
+      this.handlerRegistry = new HandlerRegistry(this.repository, this.templateService, this.cache);
     }
   }
 

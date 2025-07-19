@@ -85,7 +85,26 @@ curl -H "Authorization: Bearer test-browser-automation-token" \
 #### Step 5: Connect to Claude Desktop
 Add to your `~/.claude_desktop_config.json`:
 
-**For Docker (HTTP mode - Recommended):**
+**For Local Development (stdio mode - Current Working Setup):**
+```json
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\YourUsername\\Documents\\MCP-Servers\\One-Stop-Shop-N8N-MCP\\claude-stdio-bridge.js"
+      ],
+      "env": {
+        "NODE_DB_PATH": "C:\\Users\\YourUsername\\Documents\\MCP-Servers\\One-Stop-Shop-N8N-MCP\\data\\nodes.db",
+        "N8N_API_URL": "http://localhost:5678",
+        "N8N_API_KEY": "your-n8n-api-key-here"
+      }
+    }
+  }
+}
+```
+
+**For Docker (HTTP mode - Alternative):**
 ```json
 {
   "mcpServers": {
@@ -513,6 +532,48 @@ Ready to use One-Stop-Shop-N8N-MCP? Follow this checklist:
 - [ ] Add `N8N_API_URL` and `N8N_API_KEY` to `.env`
 - [ ] Restart container: `docker compose up -d`
 - [ ] Verify workflow tools: Should have 11 additional n8n management tools
+
+## 🛠️ Troubleshooting
+
+### Memory Pressure and Timeout Issues
+
+If you encounter "MCP server connection + listTools timed out after 60 seconds" or memory pressure warnings:
+
+**Problem:** The full MCP server loads all 526 nodes into memory at startup, causing timeouts.
+
+**Solution:** Use the stdio bridge for live Docker queries:
+
+```json
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "node",
+      "args": [
+        "path/to/One-Stop-Shop-N8N-MCP/claude-stdio-bridge.js"
+      ],
+      "env": {
+        "NODE_DB_PATH": "path/to/One-Stop-Shop-N8N-MCP/data/nodes.db",
+        "N8N_API_URL": "http://localhost:5678",
+        "N8N_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+**Benefits:**
+- ✅ **No memory pressure** - Queries live Docker container instead of loading database
+- ✅ **Fast startup** - Connects in <10 seconds instead of timing out
+- ✅ **All tools available** - Full workflow management capabilities preserved
+- ✅ **Real-time data** - Always pulls latest node information from n8n
+
+### Other Common Issues
+
+**Database not found:** Run `npm run rebuild` to create the nodes database.
+
+**Docker container errors:** Ensure n8n container is running and accessible.
+
+**Tool failures:** Check that `N8N_API_URL` and `N8N_API_KEY` are correctly configured.
 
 ---
 
