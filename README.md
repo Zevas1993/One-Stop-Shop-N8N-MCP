@@ -85,11 +85,11 @@ curl -H "Authorization: Bearer test-browser-automation-token" \
 #### Step 5: Connect to Claude Desktop
 Add to your `~/.claude_desktop_config.json`:
 
-**For Docker (HTTP mode):**
+**For Docker (HTTP mode - Recommended):**
 ```json
 {
   "mcpServers": {
-    "n8n-mcp": {
+    "n8n-mcp-docker": {
       "command": "npx",
       "args": [
         "-y",
@@ -103,6 +103,14 @@ Add to your `~/.claude_desktop_config.json`:
     }
   }
 }
+```
+
+**Alternative: Use the provided config file:**
+```bash
+# Copy the ready-made configuration
+cp claude-desktop-config.json ~/.claude_desktop_config.json
+
+# Restart Claude Desktop to load the new configuration
 ```
 
 **For Docker (stdio mode - advanced):**
@@ -185,7 +193,7 @@ N8N_API_MAX_RETRIES=3
 ```json
 {
   "mcpServers": {
-    "n8n-mcp": {
+    "n8n-mcp-docker": {
       "command": "npx",
       "args": [
         "-y",
