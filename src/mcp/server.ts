@@ -2433,9 +2433,15 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
     try {
       const result = await validator.validateWorkflow(workflow, options);
       
+      // CACHE VALIDATION RESULT - Enable AI agents to be enforced to validate first
+      const { validationCache } = await import('../utils/validation-cache');
+      const cacheHash = validationCache.recordValidation(workflow, result);
+      
       // Format the response for better readability
       const response: any = {
         valid: result.valid,
+        validationCached: true,
+        cacheHash,
         summary: {
           totalNodes: result.statistics.totalNodes,
           enabledNodes: result.statistics.enabledNodes,

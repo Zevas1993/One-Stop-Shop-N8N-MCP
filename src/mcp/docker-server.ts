@@ -125,26 +125,28 @@ export class DockerN8NServer {
       
       // Add simplified n8n management tools if API is configured
       if (isN8nApiConfigured()) {
-        tools.push(
+        const n8nTools = [
           {
             name: "n8n_list_workflows",
             description: "List workflows from n8n instance",
-            inputSchema: { type: "object", properties: {}, additionalProperties: false }
+            inputSchema: { type: "object" as const, properties: {}, additionalProperties: false }
           },
           {
             name: "n8n_create_workflow",
             description: "Create a new workflow",
             inputSchema: {
-              type: "object",
+              type: "object" as const,
               properties: {
-                name: { type: "string", description: "Workflow name" },
-                nodes: { type: "array", description: "Array of nodes" }
+                name: { type: "string" as const, description: "Workflow name" },
+                nodes: { type: "array" as const, description: "Array of nodes" },
+                connections: { type: "object" as const, description: "Node connections" }
               },
-              required: ["name", "nodes"],
+              required: ["name", "nodes", "connections"],
               additionalProperties: false
             }
           }
-        );
+        ];
+        tools.push(...n8nTools);
       }
       
       return { tools };
@@ -283,14 +285,27 @@ export class DockerN8NServer {
 
   private async handleN8nManagementTool(toolName: string, args: any) {
     // Simplified n8n handlers
+    let response;
     switch (toolName) {
       case 'n8n_list_workflows':
-        return await n8nHandlers.handleListWorkflows(args);
+        response = await n8nHandlers.handleListWorkflows(args);
+        break;
       case 'n8n_create_workflow':
-        return await n8nHandlers.handleCreateWorkflow(args);
+        response = await n8nHandlers.handleCreateWorkflow(args);
+        break;
       default:
         throw new Error(`n8n management tool '${toolName}' not implemented`);
     }
+    
+    // Convert McpToolResponse to MCP format
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(response, null, 2)
+        }
+      ]
+    };
   }
 
   async start(): Promise<void> {

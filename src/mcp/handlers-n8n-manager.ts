@@ -128,7 +128,35 @@ export async function handleCreateWorkflow(args: unknown): Promise<McpToolRespon
     const client = ensureApiConfigured();
     const input = createWorkflowSchema.parse(args);
     
-    // Validate workflow structure
+    // ENFORCE VALIDATION REQUIREMENT - Check validation cache first
+    const { validationCache } = await import('../utils/validation-cache');
+    const validationStatus = validationCache.isValidatedAndValid(input);
+    
+    if (!validationStatus.validated) {
+      return {
+        success: false,
+        error: '🚨 VALIDATION REQUIRED: You must run validate_workflow tool BEFORE creating workflows!',
+        details: {
+          requiredStep: 'Run validate_workflow tool first',
+          workflow: '1️⃣ validate_workflow → 2️⃣ Fix errors → 3️⃣ n8n_create_workflow',
+          message: 'This tool REQUIRES validation to prevent broken workflows. Use validate_workflow tool first.'
+        }
+      };
+    }
+    
+    if (!validationStatus.valid) {
+      return {
+        success: false,
+        error: '🚨 VALIDATION FAILED: Workflow has validation errors and cannot be created!',
+        details: {
+          errors: validationStatus.errors,
+          message: 'Fix all validation errors before creating workflow',
+          workflow: '1️⃣ validate_workflow → 2️⃣ Fix errors → 3️⃣ n8n_create_workflow'
+        }
+      };
+    }
+    
+    // Additional basic validation (keep existing for safety)
     const errors = validateWorkflowStructure(input);
     if (errors.length > 0) {
       return {

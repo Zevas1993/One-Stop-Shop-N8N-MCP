@@ -529,17 +529,17 @@ export class WorkflowValidator {
     
     // Add all target nodes
     Object.values(workflow.connections).forEach(outputs => {
-      if (outputs.main) {
+      if (outputs.main && Array.isArray(outputs.main)) {
         outputs.main.flat().forEach(conn => {
           if (conn) connectedNodes.add(conn.node);
         });
       }
-      if (outputs.error) {
+      if (outputs.error && Array.isArray(outputs.error)) {
         outputs.error.flat().forEach(conn => {
           if (conn) connectedNodes.add(conn.node);
         });
       }
-      if (outputs.ai_tool) {
+      if (outputs.ai_tool && Array.isArray(outputs.ai_tool)) {
         outputs.ai_tool.flat().forEach(conn => {
           if (conn) connectedNodes.add(conn.node);
         });
@@ -600,8 +600,10 @@ export class WorkflowValidator {
     result: WorkflowValidationResult,
     outputType: 'main' | 'error' | 'ai_tool'
   ): void {
+    if (!Array.isArray(outputs)) return;
+    
     outputs.forEach((outputConnections, outputIndex) => {
-      if (!outputConnections) return;
+      if (!outputConnections || !Array.isArray(outputConnections)) return;
       
       outputConnections.forEach(connection => {
         const targetNode = nodeMap.get(connection.node);
@@ -696,19 +698,19 @@ export class WorkflowValidator {
       if (connections) {
         const allTargets: string[] = [];
         
-        if (connections.main) {
+        if (connections.main && Array.isArray(connections.main)) {
           connections.main.flat().forEach(conn => {
             if (conn) allTargets.push(conn.node);
           });
         }
         
-        if (connections.error) {
+        if (connections.error && Array.isArray(connections.error)) {
           connections.error.flat().forEach(conn => {
             if (conn) allTargets.push(conn.node);
           });
         }
         
-        if (connections.ai_tool) {
+        if (connections.ai_tool && Array.isArray(connections.ai_tool)) {
           connections.ai_tool.flat().forEach(conn => {
             if (conn) allTargets.push(conn.node);
           });
@@ -915,9 +917,9 @@ export class WorkflowValidator {
       let maxLength = 0;
       const connections = workflow.connections[nodeName];
       
-      if (connections?.main) {
+      if (connections?.main && Array.isArray(connections.main)) {
         for (const outputConnections of connections.main) {
-          if (outputConnections) {
+          if (outputConnections && Array.isArray(outputConnections)) {
             for (const conn of outputConnections) {
               const length = getChainLength(conn.node);
               maxLength = Math.max(maxLength, length);

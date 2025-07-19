@@ -10,7 +10,7 @@ export const n8nManagementTools: ToolDefinition[] = [
   // Workflow Management Tools
   {
     name: 'n8n_create_workflow',
-    description: `🚨 STEP 3: CREATE WORKFLOW (after validate_workflow passes). Creates workflow in n8n instance. WORKFLOW: 1️⃣ validate_workflow 2️⃣ Fix errors 3️⃣ n8n_create_workflow. This tool WILL FAIL if validation found errors!`,
+    description: `🚨🚨 BLOCKED WITHOUT VALIDATION: Creates workflow in n8n instance. MANDATORY WORKFLOW: 1️⃣ validate_workflow FIRST 2️⃣ Fix ALL errors 3️⃣ ONLY THEN n8n_create_workflow. This tool WILL BE BLOCKED if you skip validate_workflow! Server enforces validation requirement.`,
     inputSchema: {
       type: 'object',
       properties: {

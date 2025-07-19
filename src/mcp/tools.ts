@@ -211,7 +211,7 @@ export const n8nDocumentationToolsFinal: ToolDefinition[] = [
   },
   {
     name: 'validate_workflow',
-    description: `🔍 CRITICAL: Always validate workflows BEFORE creating them! Catches credential placement errors, disconnected nodes, invalid connections, and other common issues. Use this tool before n8n_create_workflow to prevent broken workflows.`,
+    description: `🔍 REQUIRED FIRST STEP: MANDATORY before n8n_create_workflow! Validates workflow structure and ENABLES workflow creation. Server BLOCKS n8n_create_workflow unless validate_workflow passes first. Catches credential errors, disconnected nodes, invalid connections. ALWAYS RUN THIS FIRST!`,
     inputSchema: {
       type: 'object',
       properties: {
