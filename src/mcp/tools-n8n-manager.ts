@@ -10,7 +10,7 @@ export const n8nManagementTools: ToolDefinition[] = [
   // Workflow Management Tools
   {
     name: 'n8n_create_workflow',
-    description: `Create a new workflow in n8n. Requires workflow name, nodes array, and connections object. The workflow will be created in inactive state and must be manually activated in the UI. Returns the created workflow with its ID.`,
+    description: `⚠️ CRITICAL: MUST call validate_workflow FIRST before using this tool! Create a new workflow in n8n. Only use after validate_workflow returns no errors. This tool will FAIL if workflow has credential placement errors, disconnected nodes, or invalid structure. Always validate first to prevent failures.`,
     inputSchema: {
       type: 'object',
       properties: {
