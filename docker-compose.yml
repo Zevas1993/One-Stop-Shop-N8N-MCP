@@ -13,10 +13,10 @@ services:
     
     # Environment configuration
     environment:
-      # Mode configuration (http or simple-auto)
-      MCP_MODE: ${MCP_MODE:-http}
+      # Mode configuration (consolidated, http, or stdio)
+      MCP_MODE: ${MCP_MODE:-consolidated}
       USE_FIXED_HTTP: ${USE_FIXED_HTTP:-true}  # Use fixed implementation for stability
-      AUTH_TOKEN: ${AUTH_TOKEN:?AUTH_TOKEN is required for HTTP mode}
+      AUTH_TOKEN: ${AUTH_TOKEN:-}
       
       # Auto-update configuration (for simple-auto mode)
       # GITHUB_TOKEN: ${GITHUB_TOKEN:-}  # Disabled: no n8n packages in runtime image

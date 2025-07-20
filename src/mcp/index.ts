@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { N8NDocumentationMCPServer } from './server';
+import { SimpleConsolidatedMCPServer } from './server-simple-consolidated';
 // Simple auto server removed - use main server instead
 import { logger } from '../utils/logger';
 // import { GitHubMonitor } from '../services/github-monitor';
@@ -24,7 +25,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 async function main() {
-  let mode = process.env.MCP_MODE || 'stdio';
+  let mode = process.env.MCP_MODE || 'consolidated';
   
   try {
     // Simple auto mode removed - use main server instead
@@ -38,6 +39,10 @@ async function main() {
       console.error(`Starting n8n Documentation MCP Server in ${mode} mode...`);
       console.error('Current directory:', process.cwd());
       console.error('Node version:', process.version);
+    } else if (mode === 'consolidated') {
+      console.error('🚀 Starting n8n Consolidated MCP Server (8 tools)...');
+      console.error('📋 Eliminates AI agent choice paralysis');
+      console.error('⚡ Enforces validation-first workflow');
     }
     
     if (mode === 'http') {
@@ -62,8 +67,12 @@ async function main() {
         
         await server.start();
       }
+    } else if (mode === 'consolidated') {
+      // Consolidated mode - streamlined 8-tool interface
+      const server = new SimpleConsolidatedMCPServer();
+      await server.run();
     } else {
-      // Stdio mode - for local Claude Desktop
+      // Stdio mode - for local Claude Desktop (legacy 60+ tools)
       const server = new N8NDocumentationMCPServer();
       await server.run();
     }

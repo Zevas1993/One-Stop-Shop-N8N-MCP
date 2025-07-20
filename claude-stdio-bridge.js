@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 /**
- * Claude Desktop Bridge for n8n MCP Server
- * Runs the n8n MCP server in stdio mode for Claude Desktop integration
+ * Claude Desktop Bridge for n8n MCP Server - CONSOLIDATED VERSION
+ * Runs the n8n MCP server in consolidated mode (8 tools) for Claude Desktop integration
+ * Eliminates AI agent choice paralysis by providing streamlined tool interface
  * Excludes visual verification tools (browser automation) which require Docker environment
  */
 
 const { spawn } = require('child_process');
 const path = require('path');
 
-// Force stdio mode and remove conflicting environment variables
+// Force consolidated mode and remove conflicting environment variables
 const env = { ...process.env };
-env.MCP_MODE = 'stdio';
+env.MCP_MODE = 'consolidated';
 env.NODE_ENV = 'production';
 env.DISABLE_VISUAL_VERIFICATION = 'true'; // Disable browser automation tools
 env.LOG_LEVEL = 'error'; // Minimize logging to prevent stdout corruption

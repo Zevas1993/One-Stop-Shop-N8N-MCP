@@ -12,6 +12,7 @@
     "validate": "node dist/scripts/validate.js",
     "test-nodes": "node dist/scripts/test-nodes.js",
     "start": "node dist/mcp/index.js",
+    "start:consolidated": "node dist/consolidated-server.js",
     "start:http": "MCP_MODE=http node dist/mcp/index.js",
     "start:http:fixed": "MCP_MODE=http USE_FIXED_HTTP=true node dist/mcp/index.js",
     "http": "npm run build && npm run start:http:fixed",
