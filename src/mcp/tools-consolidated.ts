@@ -422,22 +422,35 @@ export const consolidatedTools: ToolDefinition[] = [
     name: 'workflow_diff',
     description: `🔄 ADVANCED WORKFLOW DIFF: Update workflows using precise diff operations. Specialized tool for incremental changes without sending entire workflow.
 
-🎯 OPERATIONS (Max 5 per request):
-• addNode - Add new node with full configuration
-• removeNode - Remove node by name/ID
-• updateNode - Update node properties with dot notation
-• moveNode - Change node position
-• enableNode/disableNode - Toggle node status
-• addConnection - Connect nodes (any order supported)
-• removeConnection - Disconnect nodes
-• updateSettings - Change workflow settings
-• updateName - Rename workflow
-• addTag/removeTag - Manage workflow tags
+🎯 REQUIRED PARAMETERS BY OPERATION:
 
-🚀 TRANSACTIONAL: All operations succeed or all fail
-🧠 SMART DEPENDENCIES: Engine handles node/connection order automatically
+📦 addNode:
+  - type: "addNode"
+  - node: { name: "string", type: "n8n-nodes-base.X", position: [x,y], parameters: {} }
 
-💡 More efficient than full updates for small changes!`,
+🗑️ removeNode:
+  - type: "removeNode"  
+  - nodeId: "string" OR nodeName: "string" (one required)
+
+✏️ updateNode:
+  - type: "updateNode"
+  - nodeId: "string" OR nodeName: "string" (one required)  
+  - changes: { "parameters.field": newValue, "name": "newName" }
+
+🔗 addConnection:
+  - type: "addConnection"
+  - source: "sourceNodeName" (required)
+  - target: "targetNodeName" (required)
+  - sourceOutput: "main" (optional, default: "main")
+  - targetInput: "main" (optional, default: "main")
+
+📋 EXAMPLES:
+Add Slack node: {"type":"addNode","node":{"name":"Send Alert","type":"n8n-nodes-base.slack","position":[400,200],"parameters":{"channel":"#alerts"}}}
+Update webhook path: {"type":"updateNode","nodeName":"Webhook","changes":{"parameters.path":"new-path"}}
+Connect nodes: {"type":"addConnection","source":"Webhook","target":"Send Alert"}
+
+🚀 TRANSACTIONAL: All operations succeed or all fail (max 5 operations)
+🧠 SMART DEPENDENCIES: Engine handles node/connection order automatically`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -450,15 +463,203 @@ export const consolidatedTools: ToolDefinition[] = [
           description: 'Array of diff operations (max 5)',
           maxItems: 5,
           items: {
-            type: 'object',
-            properties: {
-              type: {
-                type: 'string',
-                enum: ['addNode', 'removeNode', 'updateNode', 'moveNode', 'enableNode', 'disableNode', 'addConnection', 'removeConnection', 'updateSettings', 'updateName', 'addTag', 'removeTag']
+            oneOf: [
+              {
+                type: 'object',
+                description: 'Add new node with full configuration',
+                properties: {
+                  type: { const: 'addNode' },
+                  description: { type: 'string' },
+                  node: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string', description: 'Unique node name' },
+                      type: { type: 'string', description: 'Node type (e.g., n8n-nodes-base.slack)' },
+                      position: { 
+                        type: 'array', 
+                        items: { type: 'number' }, 
+                        minItems: 2, 
+                        maxItems: 2,
+                        description: 'Node position [x, y]'
+                      },
+                      parameters: { type: 'object', description: 'Node configuration parameters' }
+                    },
+                    required: ['name', 'type', 'position'],
+                    additionalProperties: true
+                  }
+                },
+                required: ['type', 'node'],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Remove node by ID or name',
+                properties: {
+                  type: { const: 'removeNode' },
+                  description: { type: 'string' },
+                  nodeId: { type: 'string', description: 'Node ID (alternative to nodeName)' },
+                  nodeName: { type: 'string', description: 'Node name (alternative to nodeId)' }
+                },
+                required: ['type'],
+                anyOf: [
+                  { required: ['nodeId'] },
+                  { required: ['nodeName'] }
+                ],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Update node properties with changes object',
+                properties: {
+                  type: { const: 'updateNode' },
+                  description: { type: 'string' },
+                  nodeId: { type: 'string', description: 'Node ID (alternative to nodeName)' },
+                  nodeName: { type: 'string', description: 'Node name (alternative to nodeId)' },
+                  changes: { 
+                    type: 'object', 
+                    description: 'Object with property paths and new values (e.g., {"parameters.field": "value"})' 
+                  }
+                },
+                required: ['type', 'changes'],
+                anyOf: [
+                  { required: ['nodeId'] },
+                  { required: ['nodeName'] }
+                ],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Move node to new position',
+                properties: {
+                  type: { const: 'moveNode' },
+                  description: { type: 'string' },
+                  nodeId: { type: 'string', description: 'Node ID (alternative to nodeName)' },
+                  nodeName: { type: 'string', description: 'Node name (alternative to nodeId)' },
+                  position: { 
+                    type: 'array', 
+                    items: { type: 'number' }, 
+                    minItems: 2, 
+                    maxItems: 2,
+                    description: 'New position [x, y]'
+                  }
+                },
+                required: ['type', 'position'],
+                anyOf: [
+                  { required: ['nodeId'] },
+                  { required: ['nodeName'] }
+                ],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Add connection between nodes',
+                properties: {
+                  type: { const: 'addConnection' },
+                  description: { type: 'string' },
+                  source: { type: 'string', description: 'Source node name (required)' },
+                  target: { type: 'string', description: 'Target node name (required)' },
+                  sourceOutput: { type: 'string', description: 'Source output type (default: main)', default: 'main' },
+                  targetInput: { type: 'string', description: 'Target input type (default: main)', default: 'main' },
+                  sourceOutputIndex: { type: 'number', description: 'Source output index (default: 0)', default: 0 },
+                  targetInputIndex: { type: 'number', description: 'Target input index (default: 0)', default: 0 }
+                },
+                required: ['type', 'source', 'target'],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Remove connection between nodes',
+                properties: {
+                  type: { const: 'removeConnection' },
+                  description: { type: 'string' },
+                  source: { type: 'string', description: 'Source node name (required)' },
+                  target: { type: 'string', description: 'Target node name (required)' },
+                  sourceOutput: { type: 'string', description: 'Source output type (default: main)', default: 'main' },
+                  targetInput: { type: 'string', description: 'Target input type (default: main)', default: 'main' }
+                },
+                required: ['type', 'source', 'target'],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Enable node for execution',
+                properties: {
+                  type: { const: 'enableNode' },
+                  description: { type: 'string' },
+                  nodeId: { type: 'string', description: 'Node ID (alternative to nodeName)' },
+                  nodeName: { type: 'string', description: 'Node name (alternative to nodeId)' }
+                },
+                required: ['type'],
+                anyOf: [
+                  { required: ['nodeId'] },
+                  { required: ['nodeName'] }
+                ],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Disable node from execution',
+                properties: {
+                  type: { const: 'disableNode' },
+                  description: { type: 'string' },
+                  nodeId: { type: 'string', description: 'Node ID (alternative to nodeName)' },
+                  nodeName: { type: 'string', description: 'Node name (alternative to nodeId)' }
+                },
+                required: ['type'],
+                anyOf: [
+                  { required: ['nodeId'] },
+                  { required: ['nodeName'] }
+                ],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Update workflow settings',
+                properties: {
+                  type: { const: 'updateSettings' },
+                  description: { type: 'string' },
+                  settings: { 
+                    type: 'object',
+                    description: 'Workflow settings object'
+                  }
+                },
+                required: ['type', 'settings'],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Update workflow name',
+                properties: {
+                  type: { const: 'updateName' },
+                  description: { type: 'string' },
+                  name: { type: 'string', description: 'New workflow name' }
+                },
+                required: ['type', 'name'],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Add tag to workflow',
+                properties: {
+                  type: { const: 'addTag' },
+                  description: { type: 'string' },
+                  tag: { type: 'string', description: 'Tag to add' }
+                },
+                required: ['type', 'tag'],
+                additionalProperties: false
+              },
+              {
+                type: 'object',
+                description: 'Remove tag from workflow',
+                properties: {
+                  type: { const: 'removeTag' },
+                  description: { type: 'string' },
+                  tag: { type: 'string', description: 'Tag to remove' }
+                },
+                required: ['type', 'tag'],
+                additionalProperties: false
               }
-            },
-            required: ['type'],
-            additionalProperties: true
+            ]
           }
         },
         validateOnly: {
