@@ -10,6 +10,7 @@ import { consolidatedTools } from './tools-consolidated';
 import { isN8nApiConfigured } from '../config/n8n-api';
 import * as n8nHandlers from './handlers-n8n-manager';
 import { handleUpdatePartialWorkflow } from './handlers-workflow-diff';
+import { N8NDocumentationMCPServer } from './server';
 
 /**
  * Simple Consolidated MCP Server - 8 Essential Tools
@@ -19,6 +20,7 @@ import { handleUpdatePartialWorkflow } from './handlers-workflow-diff';
  */
 export class SimpleConsolidatedMCPServer {
   private server: Server;
+  private mainServer: N8NDocumentationMCPServer;
 
   constructor() {
     this.server = new Server(
@@ -33,6 +35,8 @@ export class SimpleConsolidatedMCPServer {
       }
     );
 
+    // Initialize the main server for real functionality
+    this.mainServer = new N8NDocumentationMCPServer();
     this.setupToolHandlers();
   }
 
@@ -118,27 +122,79 @@ export class SimpleConsolidatedMCPServer {
   }
 
   private async handleNodeDiscovery(args: any): Promise<any> {
-    const { action } = args;
+    const { action, query, category, package: pkg, limit, nodeType, includeDocumentation } = args;
     
-    return {
-      tool: 'node_discovery',
-      action,
-      message: 'Consolidated node discovery - prototype response',
-      success: true,
-      note: 'This is a simplified response from the consolidated architecture'
-    };
+    try {
+      // Route to actual server functionality based on action
+      switch (action) {
+        case 'search':
+          if (!query) throw new Error('query is required for search action');
+          return await this.mainServer.executeTool('search_nodes', { query, limit });
+          
+        case 'list':
+          return await this.mainServer.executeTool('list_nodes', { category, package: pkg, limit });
+          
+        case 'get_info':
+          if (!nodeType) throw new Error('nodeType is required for get_info action');
+          return await this.mainServer.executeTool('get_node_essentials', { nodeType });
+          
+        case 'get_documentation':
+          if (!nodeType) throw new Error('nodeType is required for get_documentation action');
+          return await this.mainServer.executeTool('get_node_documentation', { nodeType });
+          
+        case 'search_properties':
+          if (!nodeType || !query) throw new Error('nodeType and query are required for search_properties action');
+          return await this.mainServer.executeTool('search_node_properties', { nodeType, query });
+          
+        default:
+          throw new Error(`Unknown node_discovery action: ${action}. Available: search, list, get_info, get_documentation, search_properties`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        tool: 'node_discovery',
+        action
+      };
+    }
   }
 
   private async handleNodeValidation(args: any): Promise<any> {
-    const { action, nodeType } = args;
+    const { action, nodeType, configuration, profile, options } = args;
     
-    return {
-      tool: 'node_validation',
-      action,
-      nodeType,
-      message: 'Consolidated node validation - prototype response',
-      success: true
-    };
+    try {
+      // Route to actual validation functionality based on action
+      switch (action) {
+        case 'validate_minimal':
+          if (!nodeType) throw new Error('nodeType is required for validate_minimal action');
+          return await this.mainServer.executeTool('validate_node_minimal', { nodeType, configuration, options });
+          
+        case 'validate_operation':
+          if (!nodeType) throw new Error('nodeType is required for validate_operation action');
+          return await this.mainServer.executeTool('validate_node_operation', { nodeType, configuration, profile, options });
+          
+        case 'get_dependencies':
+          if (!nodeType) throw new Error('nodeType is required for get_dependencies action');
+          return await this.mainServer.executeTool('get_property_dependencies', { nodeType, property: options?.property });
+          
+        case 'get_for_task':
+          if (!args.task) throw new Error('task is required for get_for_task action');
+          return await this.mainServer.executeTool('get_node_for_task', { task: args.task });
+          
+        case 'list_tasks':
+          return await this.mainServer.executeTool('list_tasks', {});
+          
+        default:
+          throw new Error(`Unknown node_validation action: ${action}. Available: validate_minimal, validate_operation, get_dependencies, get_for_task, list_tasks`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        tool: 'node_validation',
+        action
+      };
+    }
   }
 
   private async handleWorkflowManager(args: any): Promise<any> {
@@ -233,14 +289,46 @@ export class SimpleConsolidatedMCPServer {
   }
 
   private async handleTemplatesAndGuides(args: any): Promise<any> {
-    const { action } = args;
+    const { action, templateId, nodeTypes, task, query, limit } = args;
     
-    return {
-      tool: 'templates_and_guides',
-      action,
-      message: 'Templates and guides - unified interface',
-      success: true
-    };
+    try {
+      // Route to actual template and guide functionality based on action
+      switch (action) {
+        case 'get_template':
+          if (!templateId) throw new Error('templateId is required for get_template action');
+          return await this.mainServer.executeTool('get_template', { templateId });
+          
+        case 'search_templates':
+          if (!query) throw new Error('query is required for search_templates action');
+          return await this.mainServer.executeTool('search_templates', { query, limit });
+          
+        case 'list_node_templates':
+          return await this.mainServer.executeTool('list_node_templates', { nodeTypes, limit });
+          
+        case 'get_templates_for_task':
+          if (!task) throw new Error('task is required for get_templates_for_task action');
+          return await this.mainServer.executeTool('get_templates_for_task', { task });
+          
+        case 'get_workflow_guide':
+          return await this.mainServer.executeTool('start_here_workflow_guide', {});
+          
+        case 'get_ai_tools':
+          return await this.mainServer.executeTool('list_ai_tools', { limit });
+          
+        case 'get_database_stats':
+          return await this.mainServer.executeTool('get_database_statistics', { includePerformance: args.includePerformance });
+          
+        default:
+          throw new Error(`Unknown templates_and_guides action: ${action}. Available: get_template, search_templates, list_node_templates, get_templates_for_task, get_workflow_guide, get_ai_tools, get_database_stats`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        tool: 'templates_and_guides',
+        action
+      };
+    }
   }
 
   private async handleVisualVerification(args: any): Promise<any> {
