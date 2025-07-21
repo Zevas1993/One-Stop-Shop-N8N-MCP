@@ -11,24 +11,46 @@ export const consolidatedTools: ToolDefinition[] = [
     name: 'node_discovery',
     description: `🔍 UNIFIED NODE DISCOVERY: Find, search, and get information about n8n nodes. Replaces 12 separate tools with one powerful interface.
 
-🎯 ACTIONS:
-• "search" - Find nodes by service/task (e.g., "slack", "email") 
-• "list" - Browse nodes by category (trigger, AI, transform, etc.)
-• "info" - Get node configuration details (summary/essentials/complete/ai_tool/docs)
-• "ai_tools" - List all AI-capable nodes with usage guidance
-• "find_property" - Search for specific settings within a node  
-• "get_task" - Get pre-configured settings for common tasks
+🎯 ACTIONS & REQUIRED PARAMETERS:
+
+📦 "search" - Find nodes by keyword
+   Required: query (string)
+   Optional: limit (number)
+   Example: {action: "search", query: "slack"}
+
+📋 "list" - Browse nodes by category or AI capability  
+   Optional: category ("trigger"|"transform"|"output"|"input"), isAITool (boolean), limit (number)
+   Examples: 
+   - {action: "list", category: "trigger"}
+   - {action: "list", isAITool: true}  ← FOR AI TOOLS USE THIS
+   - {action: "list"} (defaults to triggers)
+
+ℹ️ "get_info" - Get node configuration details
+   Required: nodeType (e.g., "nodes-base.slack")
+   Example: {action: "get_info", nodeType: "nodes-base.slack"}
+
+📄 "get_documentation" - Get detailed documentation
+   Required: nodeType (e.g., "nodes-base.slack")
+   Example: {action: "get_documentation", nodeType: "nodes-base.slack"}
+
+🔍 "search_properties" - Find specific settings within a node
+   Required: nodeType, query
+   Example: {action: "search_properties", nodeType: "nodes-base.slack", query: "auth"}
+
+🚨 IMPORTANT FOR AI TOOLS:
+- Use {action: "list", isAITool: true} NOT category: "AI"
+- Or use templates_and_guides({action: "get_ai_tools"})
 
 📋 WORKFLOW: Use this FIRST for any workflow building!
 1️⃣ node_discovery({action: "search", query: "slack"}) 
-2️⃣ node_discovery({action: "info", nodeType: "nodes-base.slack", detail: "essentials"})
-3️⃣ node_discovery({action: "get_task", task: "send_slack_message"})`,
+2️⃣ node_discovery({action: "get_info", nodeType: "nodes-base.slack"})
+3️⃣ node_validation({action: "get_for_task", task: "send_slack_message"})`,
     inputSchema: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['search', 'list', 'info', 'ai_tools', 'find_property', 'get_task'],
+          enum: ['search', 'list', 'get_info', 'get_documentation', 'search_properties'],
           description: 'Discovery action to perform'
         },
         query: {
@@ -37,22 +59,16 @@ export const consolidatedTools: ToolDefinition[] = [
         },
         category: {
           type: 'string',
-          enum: ['trigger', 'transform', 'output', 'input', 'AI', 'ai_tools'],
+          enum: ['trigger', 'transform', 'output', 'input'],
           description: 'Node category filter for "list" action'
+        },
+        isAITool: {
+          type: 'boolean',
+          description: 'Filter for AI-capable nodes (use for AI tools instead of category)'
         },
         nodeType: {
           type: 'string',
-          description: 'Full node type for "info" or "find_property" actions (e.g., "nodes-base.slack")'
-        },
-        detail: {
-          type: 'string',
-          enum: ['summary', 'essentials', 'complete', 'ai_tool', 'documentation'],
-          description: 'Information detail level for "info" action',
-          default: 'essentials'
-        },
-        task: {
-          type: 'string',
-          description: 'Task name for "get_task" action (e.g., "send_slack_message")'
+          description: 'Full node type for "get_info", "get_documentation", or "search_properties" actions (e.g., "nodes-base.slack")'
         },
         limit: {
           type: 'number',
@@ -275,15 +291,38 @@ export const consolidatedTools: ToolDefinition[] = [
     name: 'templates_and_guides',
     description: `📋 UNIFIED TEMPLATES & GUIDES: Get workflow templates, guides, and examples. Replaces 6 separate tools.
 
-🎯 ACTIONS:
-• "guide" - Get workflow building guidance for scenarios
-• "template" - Download complete workflow template by ID
-• "search_templates" - Find templates using specific nodes
-• "task_templates" - Get curated templates for common tasks
-• "list_tasks" - Show all available task templates
-• "stats" - Get database statistics and metrics
+🎯 ACTIONS & REQUIRED PARAMETERS:
 
-🎯 SCENARIOS: webhook_to_api, ai_agent_tools, data_processing, notification_system, database_operations, file_handling
+📄 "get_template" - Download complete workflow template
+   Required: templateId (number)
+   Example: {action: "get_template", templateId: 123}
+
+🔍 "search_templates" - Find templates by keywords
+   Required: query (string)
+   Optional: limit (number)
+   Example: {action: "search_templates", query: "slack"}
+
+📋 "list_node_templates" - Find templates using specific nodes
+   Optional: nodeTypes (array), limit (number)
+   Example: {action: "list_node_templates", nodeTypes: ["nodes-base.slack"]}
+
+🎯 "get_templates_for_task" - Get curated templates for specific tasks
+   Required: task (string)
+   Example: {action: "get_templates_for_task", task: "send_notifications"}
+
+📖 "get_workflow_guide" - Get comprehensive workflow building guide
+   No parameters required
+   Example: {action: "get_workflow_guide"}
+
+🤖 "get_ai_tools" - List all AI-capable nodes (USE THIS FOR AI TOOLS!)
+   Optional: limit (number)
+   Example: {action: "get_ai_tools"}
+
+📊 "get_database_stats" - Get database statistics and metrics
+   Optional: includePerformance (boolean)
+   Example: {action: "get_database_stats"}
+
+🚨 FOR AI TOOLS: Use {action: "get_ai_tools"} - this is the correct way!
 
 📋 PERFECT starting point for workflow building!`,
     inputSchema: {
@@ -291,37 +330,34 @@ export const consolidatedTools: ToolDefinition[] = [
       properties: {
         action: {
           type: 'string',
-          enum: ['guide', 'template', 'search_templates', 'task_templates', 'list_tasks', 'stats'],
+          enum: ['get_template', 'search_templates', 'list_node_templates', 'get_templates_for_task', 'get_workflow_guide', 'get_ai_tools', 'get_database_stats'],
           description: 'Template/guide action to perform'
-        },
-        scenario: {
-          type: 'string',
-          enum: ['webhook_to_api', 'ai_agent_tools', 'data_processing', 'notification_system', 'database_operations', 'file_handling'],
-          description: 'Workflow scenario for "guide" action'
         },
         templateId: {
           type: 'number',
-          description: 'Template ID for "template" action'
+          description: 'Template ID for "get_template" action'
+        },
+        query: {
+          type: 'string',
+          description: 'Search query for "search_templates" action'
         },
         nodeTypes: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Node types to search for in "search_templates" action'
+          description: 'Node types to search for in "list_node_templates" action'
         },
         task: {
           type: 'string',
-          enum: ['ai_automation', 'data_sync', 'webhook_processing', 'email_automation', 'slack_integration', 'data_transformation', 'file_processing', 'scheduling', 'api_integration', 'database_operations'],
-          description: 'Task category for "task_templates" action'
+          description: 'Task name for "get_templates_for_task" action (e.g., "send_notifications")'
+        },
+        includePerformance: {
+          type: 'boolean',
+          description: 'Include performance metrics in "get_database_stats" action'
         },
         limit: {
           type: 'number',
           description: 'Results limit (default: 20)',
           default: 20
-        },
-        includePerformance: {
-          type: 'boolean',
-          description: 'Include performance metrics for "stats" action',
-          default: true
         }
       },
       required: ['action']
