@@ -31,80 +31,55 @@ This is the **only MCP server** that provides AI agents with:
 
 ## 🚀 Quick Start Guide
 
-### 🐳 Docker Deployment (Recommended)
+**Get started in 3 minutes with ONE command:**
 
-**Prerequisites:** Docker and Docker Compose installed on your system
-
-#### Step 1: Clone the Repository
 ```bash
 git clone https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP.git
 cd One-Stop-Shop-N8N-MCP
+npm run setup
 ```
 
-#### Step 2: Configure Environment
+The interactive setup wizard will:
+- ✅ Install dependencies
+- ✅ Build the server
+- ✅ Create the node database
+- ✅ Configure for your use case (Claude Desktop, HTTP server, or Docker)
+- ✅ Test the connection
+
+**That's it!** No manual configuration, no editing JSON files.
+
+### 📖 Need More Details?
+
+See the complete **[GETTING-STARTED.md](GETTING-STARTED.md)** guide for:
+- Prerequisites
+- Deployment options
+- Configuration details
+- Troubleshooting
+
+### 🎯 Quick Setup Options
+
 ```bash
-# Copy the example environment file
-cp .env.example .env
+# Interactive setup (recommended - asks questions)
+npm run setup
 
-# Edit with your settings (optional - defaults work fine)
-nano .env
+# Claude Desktop (automatic configuration)
+npm run setup:claude-desktop
 
-# Key settings to configure:
-# AUTH_TOKEN=your-secure-token-here (generate with: openssl rand -base64 32)
-# MCP_MODE=http (for Docker) or stdio (for local)
-# N8N_API_URL=http://localhost:5678 (optional, for workflow management)
-# N8N_API_KEY=your-n8n-api-key (optional, for workflow management)
+# Remote/HTTP server
+npm run setup:http
+
+# Docker deployment
+npm run setup:docker
 ```
 
-#### Step 3: Run with Docker Compose
-```bash
-# Start the server
-docker compose up -d
+### 🔍 Verify Installation
 
-# Check server status
-docker compose logs -f
+**For Claude Desktop:**
+1. Restart Claude Desktop
+2. Ask: "What n8n tools do you have?"
+3. You should see 8 tools available
 
-# You should see: "n8n MCP Fixed HTTP Server running on 0.0.0.0:3000"
-```
-
-#### Step 4: Test the Server
-```bash
-# Test health endpoint
-curl http://localhost:3000/health
-
-# Test tool count
-curl -H "Authorization: Bearer test-browser-automation-token" \
-  http://localhost:3000/mcp -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' \
-  | grep -o '"name"' | wc -l
-
-# Should return: 39
-```
-
-#### Step 5: Connect to Claude Desktop
-Add to your `~/.claude_desktop_config.json`:
-
-**For Local Development (stdio mode - Current Working Setup):**
-```json
-{
-  "mcpServers": {
-    "n8n-mcp": {
-      "command": "node",
-      "args": [
-        "C:\\Users\\YourUsername\\Documents\\MCP-Servers\\One-Stop-Shop-N8N-MCP\\claude-stdio-bridge.js"
-      ],
-      "env": {
-        "NODE_DB_PATH": "C:\\Users\\YourUsername\\Documents\\MCP-Servers\\One-Stop-Shop-N8N-MCP\\data\\nodes.db",
-        "N8N_API_URL": "http://localhost:5678",
-        "N8N_API_KEY": "your-n8n-api-key-here"
-      }
-    }
-  }
-}
-```
-
-**For Docker (HTTP mode - Alternative):**
+**For HTTP/Docker:**
 ```json
 {
   "mcpServers": {

@@ -34,7 +34,9 @@ class Logger {
 
   constructor(options?: { prefix?: string }) {
     this.currentLevel = this.getLogLevelFromEnv();
-    this.enableConsole = process.env.NODE_ENV !== 'production';
+    // Disable console logging for MCP stdio mode to prevent JSON-RPC interference
+    const isMcpStdio = process.argv.some(arg => arg.includes('consolidated-server.js'));
+    this.enableConsole = !isMcpStdio && process.env.NODE_ENV !== 'production' && process.env.DISABLE_CONSOLE_LOGGING !== 'true';
     this.enableFile = process.env.ENABLE_FILE_LOGGING === 'true';
     this.prefix = options?.prefix || '';
     

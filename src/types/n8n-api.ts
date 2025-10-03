@@ -278,4 +278,8 @@ export interface McpToolResponse {
   message?: string;
   code?: string;
   details?: Record<string, unknown>;
+  // v3.0.0 additions
+  suggestion?: string;
+  suggestions?: string[];
+  hint?: string;
 }

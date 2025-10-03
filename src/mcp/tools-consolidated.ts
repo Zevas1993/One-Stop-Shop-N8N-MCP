@@ -11,6 +11,13 @@ export const consolidatedTools: ToolDefinition[] = [
     name: 'node_discovery',
     description: `🔍 UNIFIED NODE DISCOVERY: Find, search, and get information about n8n nodes. Replaces 12 separate tools with one powerful interface.
 
+⛔ CRITICAL: ONLY USE EXISTING N8N NODES!
+❌ DO NOT create custom nodes or write custom code
+❌ DO NOT use "Function" or "Code" nodes unless specifically requested
+❌ DO NOT invent node types - they must exist in the n8n database (525 verified nodes)
+✅ ALWAYS search for existing nodes first before assuming you need custom code
+✅ n8n has built-in nodes for almost everything - use them!
+
 🎯 ACTIONS & REQUIRED PARAMETERS:
 
 📦 "search" - Find nodes by keyword
@@ -151,6 +158,15 @@ export const consolidatedTools: ToolDefinition[] = [
     name: 'workflow_manager',
     description: `🚨 UNIFIED WORKFLOW MANAGER: Validate, create, and manage workflows. Replaces 10+ workflow tools. ENFORCES validation-first workflow!
 
+⛔ CRITICAL WORKFLOW BUILDING RULES:
+❌ DO NOT create workflows with custom/invented node types
+❌ DO NOT use Code/Function nodes unless user explicitly requests custom code
+❌ DO NOT skip validation - it catches broken node configurations
+✅ ALWAYS use node_discovery to find existing nodes FIRST
+✅ ALWAYS validate workflows before creation (enforced by server)
+✅ ALWAYS use built-in n8n nodes (525 available) before considering custom code
+✅ If a built-in node exists for the task, USE IT instead of Code node
+
 🎯 ACTIONS:
 • "validate" - MANDATORY FIRST STEP before create! (full/quick/connections/expressions modes)
 • "create" - Create workflow (BLOCKED without validation!)
@@ -232,17 +248,26 @@ export const consolidatedTools: ToolDefinition[] = [
 • "get" - Get execution details by ID
 • "list" - List executions with filters
 • "delete" - Delete execution records
+• "retry" - 🆕 Retry failed/stopped execution (v3.0.0)
+• "monitor_running" - 🆕 Monitor active executions (v3.0.0)
+• "list_mcp" - 🆕 List MCP-managed workflows (v3.0.0)
 
 🚀 PREREQUISITES:
 • Workflow must be ACTIVE in n8n
 • Must have webhook trigger node for "trigger" action
-• HTTP method must match webhook configuration`,
+• HTTP method must match webhook configuration
+
+🆕 v3.0.0 FEATURES:
+• Adaptive response sizing (80-90% smaller)
+• Smart retry suggestions
+• Running execution monitoring
+• MCP workflow filtering`,
     inputSchema: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['trigger', 'get', 'list', 'delete'],
+          enum: ['trigger', 'get', 'list', 'delete', 'retry', 'monitor_running', 'list_mcp'],
           description: 'Execution action to perform'
         },
         webhookUrl: {
@@ -265,7 +290,7 @@ export const consolidatedTools: ToolDefinition[] = [
         },
         id: {
           type: 'string',
-          description: 'Execution ID for "get" or "delete" actions'
+          description: 'Execution ID for "get", "delete", or "retry" actions'
         },
         filters: {
           type: 'object',
@@ -281,6 +306,27 @@ export const consolidatedTools: ToolDefinition[] = [
           type: 'boolean',
           description: 'Wait for completion for "trigger" action (default: true)',
           default: true
+        },
+        loadWorkflow: {
+          type: 'boolean',
+          description: 'Reload workflow definition for "retry" action (default: false)',
+          default: false
+        },
+        workflowId: {
+          type: 'string',
+          description: 'Workflow ID for "monitor_running" or "list_mcp" actions'
+        },
+        includeStats: {
+          type: 'boolean',
+          description: 'Include execution statistics for "monitor_running" or "list_mcp" actions',
+          default: false
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results for "list_mcp" action (1-100, default: 20)',
+          minimum: 1,
+          maximum: 100,
+          default: 20
         }
       },
       required: ['action']
@@ -457,6 +503,13 @@ export const consolidatedTools: ToolDefinition[] = [
   {
     name: 'workflow_diff',
     description: `🔄 ADVANCED WORKFLOW DIFF: Update workflows using precise diff operations. Specialized tool for incremental changes without sending entire workflow.
+
+⛔ CRITICAL: USE REAL N8N NODES ONLY!
+❌ DO NOT add nodes with invented/custom types
+❌ DO NOT use type: "custom.myNode" or similar - these will fail
+✅ ALWAYS verify node type exists using node_discovery BEFORE adding
+✅ Use format: "n8n-nodes-base.nodeName" or "@n8n/n8n-nodes-langchain.chatOpenAi"
+✅ Example valid types: "n8n-nodes-base.slack", "n8n-nodes-base.httpRequest", "n8n-nodes-base.webhook"
 
 🎯 REQUIRED PARAMETERS BY OPERATION:
 
@@ -710,26 +763,100 @@ Connect nodes: {"type":"addConnection","source":"Webhook","target":"Send Alert"}
 ];
 
 /**
- * QUICK REFERENCE for AI Agents:
- * 
+ * ⛔ CRITICAL GUIDELINES FOR AI AGENTS - READ THIS FIRST! ⛔
+ *
+ * 🚨 GOLDEN RULE: USE EXISTING N8N NODES, NOT CUSTOM CODE!
+ *
+ * ❌ NEVER DO THIS:
+ * - Create workflows with made-up node types like "custom.myNode"
+ * - Use Code/Function nodes as first choice (only when NO built-in exists)
+ * - Skip node_discovery search - ALWAYS search first!
+ * - Guess node type names - verify they exist in database
+ * - Create workflows without validation
+ *
+ * ✅ ALWAYS DO THIS:
+ * - Search for existing nodes FIRST: node_discovery({action: "search", query: "..."})
+ * - Verify node exists before using it in workflows
+ * - Use built-in nodes (525 available!) instead of custom code
+ * - Validate ALL workflows before creation (enforced by server)
+ * - Check node_discovery for proper node type format
+ *
+ * 📋 CORRECT WORKFLOW (MANDATORY STEPS):
+ *
+ * Step 1: SEARCH for existing nodes
+ *   node_discovery({action: "search", query: "slack notifications"})
+ *   → Returns: "n8n-nodes-base.slack" ✅ USE THIS!
+ *
+ * Step 2: GET node configuration details
+ *   node_discovery({action: "get_info", nodeType: "n8n-nodes-base.slack"})
+ *   → Returns: properties, operations, parameters
+ *
+ * Step 3: VALIDATE node configuration
+ *   node_validation({action: "validate", nodeType: "n8n-nodes-base.slack", config: {...}})
+ *   → Catches configuration errors before workflow creation
+ *
+ * Step 4: BUILD workflow JSON using VERIFIED node types
+ *   Use exact node type from Step 1: "n8n-nodes-base.slack"
+ *   NOT: "slack", "Slack", "custom.slack" ❌
+ *
+ * Step 5: VALIDATE complete workflow (MANDATORY)
+ *   workflow_manager({action: "validate", workflow: {...}})
+ *   → Server enforces this - CREATE will fail without validation!
+ *
+ * Step 6: CREATE workflow (only after validation passes)
+ *   workflow_manager({action: "create", workflow: {...}})
+ *
+ * 🎯 EXAMPLE: Send Slack notification workflow
+ *
+ * // ❌ WRONG - Made-up node type
+ * {
+ *   "nodes": [{
+ *     "type": "slackNotification",  // ❌ NOT A REAL NODE TYPE!
+ *     "parameters": {...}
+ *   }]
+ * }
+ *
+ * // ✅ CORRECT - Using real n8n node
+ * {
+ *   "nodes": [{
+ *     "type": "n8n-nodes-base.slack",  // ✅ VERIFIED WITH node_discovery!
+ *     "parameters": {
+ *       "resource": "message",
+ *       "operation": "post",
+ *       "channel": "#general",
+ *       "text": "Hello!"
+ *     }
+ *   }]
+ * }
+ *
  * 🔥 STREAMLINED WORKFLOW (8 tools only!):
  * 1️⃣ node_discovery({action: "search", query: "slack"}) - Find nodes
- * 2️⃣ node_discovery({action: "info", nodeType: "nodes-base.slack", detail: "essentials"}) - Get config
+ * 2️⃣ node_discovery({action: "get_info", nodeType: "n8n-nodes-base.slack"}) - Get config
  * 3️⃣ node_validation({action: "validate", nodeType: "...", config: {...}}) - Validate node
  * 4️⃣ workflow_manager({action: "validate", workflow: {...}}) - MANDATORY validation
  * 5️⃣ workflow_manager({action: "create", workflow: {...}}) - Create (only after validation!)
  * 6️⃣ workflow_execution({action: "trigger", webhookUrl: "..."}) - Execute
- * 
+ *
  * 🚨 VALIDATION ENFORCEMENT:
  * - workflow_manager CREATE is BLOCKED without prior validation
  * - Server enforces validation-first workflow
  * - No more bypassing validation!
- * 
- * 📋 CAPABILITIES PRESERVED:
- * - All 60+ original capabilities available through unified interfaces
- * - Progressive disclosure - start simple, add complexity as needed
- * - Clear action-based organization eliminates choice paralysis
- * 
+ * - Prevents broken workflows from being created
+ *
+ * 📋 525 BUILT-IN NODES AVAILABLE:
+ * - HTTP Request, Webhooks, Schedules
+ * - Slack, Discord, Teams, Email
+ * - Database (MySQL, Postgres, MongoDB)
+ * - Cloud (AWS, Azure, Google Cloud)
+ * - AI (OpenAI, Anthropic, Pinecone, LangChain)
+ * - And 500+ more!
+ *
+ * 💡 WHEN TO USE CODE NODE:
+ * - User explicitly requests custom JavaScript/Python code
+ * - NO built-in node exists for the specific task (rare!)
+ * - You've searched node_discovery and found nothing suitable
+ * - NEVER as first choice - always search for built-in nodes first!
+ *
  * ⚡ PERFORMANCE:
  * - node_discovery with "essentials" - Fast configuration
  * - workflow_manager with "quick" validation - Basic checks

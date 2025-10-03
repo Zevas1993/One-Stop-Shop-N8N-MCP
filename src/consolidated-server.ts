@@ -11,11 +11,7 @@ import { SimpleConsolidatedMCPServer } from './mcp/server-simple-consolidated.js
 
 async function main() {
   try {
-    console.error('🚀 Starting n8n Consolidated MCP Server...');
-    console.error('📋 Tools: 8 unified tools replacing 60+ individual tools');
-    console.error('🎯 Goal: Eliminate AI agent choice paralysis');
-    console.error('⚡ Validation: Enforced workflow validation');
-    
+    // Removed console output to prevent JSON-RPC parsing errors in Claude Desktop
     const server = new SimpleConsolidatedMCPServer();
     await server.run();
   } catch (error) {

@@ -40,9 +40,7 @@ async function main() {
       console.error('Current directory:', process.cwd());
       console.error('Node version:', process.version);
     } else if (mode === 'consolidated') {
-      console.error('🚀 Starting n8n Consolidated MCP Server (8 tools)...');
-      console.error('📋 Eliminates AI agent choice paralysis');
-      console.error('⚡ Enforces validation-first workflow');
+      // Removed console output to prevent JSON-RPC parsing errors
     }
     
     if (mode === 'http') {

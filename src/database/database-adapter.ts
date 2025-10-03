@@ -42,20 +42,43 @@ export interface ColumnDefinition {
 
 /**
  * Factory function to create a database adapter
- * Uses sql.js for universal compatibility (pure JavaScript, no native dependencies)
+ *
+ * Strategy (v3.0.0):
+ * 1. For DB builds/rebuilds: Try better-sqlite3 first (supports FTS5)
+ * 2. For runtime: Fall back to sql.js for universal compatibility
  */
 export async function createDatabaseAdapter(dbPath: string): Promise<DatabaseAdapter> {
   // Log Node.js version information
   // Only log in non-stdio mode
   if (process.env.MCP_MODE !== 'stdio') {
     logger.info(`Node.js version: ${process.version}`);
-  }
-  // Only log in non-stdio mode
-  if (process.env.MCP_MODE !== 'stdio') {
     logger.info(`Platform: ${process.platform} ${process.arch}`);
   }
-  
-  // Use sql.js for universal compatibility
+
+  // For database builds, prefer better-sqlite3 (supports FTS5)
+  // Check if we're in a build/rebuild context
+  const isDbBuild = process.argv.some(arg =>
+    arg.includes('rebuild') ||
+    arg.includes('build') && !arg.includes('dist')
+  );
+
+  if (isDbBuild) {
+    // Try better-sqlite3 first for builds (FTS5 support needed)
+    try {
+      const adapter = createBetterSQLite3Adapter(dbPath);
+      if (process.env.MCP_MODE !== 'stdio') {
+        logger.info('Successfully initialized better-sqlite3 adapter (optimal performance, FTS5 support)');
+      }
+      return adapter;
+    } catch (betterSqliteError) {
+      if (process.env.MCP_MODE !== 'stdio') {
+        logger.warn('better-sqlite3 not available, falling back to sql.js');
+        logger.debug('better-sqlite3 error:', betterSqliteError);
+      }
+    }
+  }
+
+  // Runtime: Use sql.js for universal compatibility
   try {
     const adapter = await createSQLJSAdapter(dbPath);
     if (process.env.MCP_MODE !== 'stdio') {
@@ -68,6 +91,33 @@ export async function createDatabaseAdapter(dbPath: string): Promise<DatabaseAda
     }
     throw new Error('Failed to initialize database adapter');
   }
+}
+
+/**
+ * Create better-sqlite3 adapter (for database builds, FTS5 support)
+ */
+function createBetterSQLite3Adapter(dbPath: string): DatabaseAdapter {
+  const Database = require('better-sqlite3');
+  const db = new Database(dbPath);
+
+  // Enable WAL mode for better performance
+  db.pragma('journal_mode = WAL');
+
+  return {
+    prepare: (sql: string) => db.prepare(sql),
+    exec: (sql: string) => db.exec(sql),
+    close: () => db.close(),
+    pragma: (key: string, value?: any) => {
+      if (value !== undefined) {
+        return db.pragma(`${key} = ${value}`);
+      }
+      return db.pragma(key);
+    },
+    get inTransaction() {
+      return db.inTransaction;
+    },
+    transaction: <T>(fn: () => T) => db.transaction(fn)()
+  };
 }
 
 

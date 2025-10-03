@@ -15,6 +15,9 @@ if [ "$MCP_MODE" = "consolidated" ]; then
 elif [ "$MCP_MODE" = "stdio" ]; then
     echo "⚠️  Using legacy server (60+ tools)"
     exec node /app/dist/mcp/index.js
+elif [ "$MCP_MODE" = "http" ]; then
+    echo "🌐 Using HTTP server mode on port ${PORT:-3000}"
+    exec node /app/dist/http-server-single-session.js
 else
     echo "🎯 Using consolidated server (8 tools) - default"
     exec node /app/dist/consolidated-server.js

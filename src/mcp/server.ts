@@ -29,6 +29,7 @@ import * as n8nHandlers from './handlers-n8n-manager';
 import { handleUpdatePartialWorkflow } from './handlers-workflow-diff';
 import { HandlerRegistry } from './handlers/handler-registry';
 import { PROJECT_VERSION } from '../utils/version';
+import { LazyInitializationManager } from './lazy-initialization-manager';
 
 interface NodeRow {
   node_type: string;
@@ -50,11 +51,12 @@ interface NodeRow {
 
 export class N8NDocumentationMCPServer {
   private server: Server;
+  private initManager: LazyInitializationManager;
+  // Legacy properties (kept for compatibility, but using initManager now)
   private db: DatabaseAdapter | null = null;
   private repository: NodeRepository | null = null;
   private templateService: TemplateService | null = null;
   private handlerRegistry: HandlerRegistry | null = null;
-  private initialized: Promise<void>;
   private cache = new SimpleCache({ enabled: false, ttl: 300, maxSize: 10 }); // Disabled cache to prevent memory pressure
   private nodeListCache = new Map<string, any>();
   private nodeInfoCache = new Map<string, any>();
@@ -65,43 +67,31 @@ export class N8NDocumentationMCPServer {
   };
 
   constructor() {
-    // Try multiple database paths
-    const possiblePaths = [
-      path.join(process.cwd(), 'data', 'nodes.db'),
-      path.join(__dirname, '../../data', 'nodes.db'),
-      './data/nodes.db'
-    ];
-    
-    let dbPath: string | null = null;
-    for (const p of possiblePaths) {
-      if (existsSync(p)) {
-        dbPath = p;
-        break;
-      }
-    }
-    
-    if (!dbPath) {
-      logger.error('Database not found in any of the expected locations:', possiblePaths);
-      throw new Error('Database nodes.db not found. Please run npm run rebuild first.');
-    }
-    
-    // Initialize database asynchronously 
-    this.initialized = this.initializeDatabase(dbPath, false); // Full mode but optimized
-    
-    logger.info('Initializing n8n Documentation MCP server');
-    
+    // v3.0.0: Lazy Initialization Manager
+    // MCP server now starts in <500ms, database loads in background
+    const dbPath = this.findDatabasePath();
+
+    // Create lazy initialization manager
+    this.initManager = new LazyInitializationManager();
+
+    // Start background initialization (non-blocking!)
+    this.initManager.startBackgroundInit(dbPath);
+
+    logger.info('[v3.0.0] MCP server starting with lazy initialization');
+
     // Log n8n API configuration status at startup
     const apiConfigured = isN8nApiConfigured();
-    const totalTools = apiConfigured ? 
-      n8nDocumentationToolsFinal.length + enhancedVisualVerificationTools.length + n8nManagementTools.length : 
+    const totalTools = apiConfigured ?
+      n8nDocumentationToolsFinal.length + enhancedVisualVerificationTools.length + n8nManagementTools.length :
       n8nDocumentationToolsFinal.length + enhancedVisualVerificationTools.length;
-    
-    logger.info(`MCP server initialized with ${totalTools} tools (n8n API: ${apiConfigured ? 'configured' : 'not configured'}, Enhanced Visual: enabled)`);
-    
+
+    logger.info(`MCP server created with ${totalTools} tools (n8n API: ${apiConfigured ? 'configured' : 'not configured'}, Enhanced Visual: enabled)`);
+
+    // Create MCP server immediately (doesn't wait for DB!)
     this.server = new Server(
       {
         name: 'n8n-documentation-mcp',
-        version: '1.0.0',
+        version: PROJECT_VERSION, // v3.0.0
       },
       {
         capabilities: {
@@ -112,39 +102,64 @@ export class N8NDocumentationMCPServer {
 
     this.setupHandlers();
   }
-  
-  private async initializeDatabase(dbPath: string, fastMode: boolean = false): Promise<void> {
-    try {
-      this.db = await createDatabaseAdapter(dbPath);
-      this.repository = new NodeRepository(this.db);
-      
-      // Always do full initialization but with optimized cache
-      this.templateService = new TemplateService(this.db);
-      this.handlerRegistry = new HandlerRegistry(this.repository, this.templateService, this.cache);
-      
-      logger.info(`Initialized database from: ${dbPath} (fast mode: ${fastMode})`);
-    } catch (error) {
-      logger.error('Failed to initialize database:', error);
-      throw new Error(`Failed to open database: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+  /**
+   * Find database path from multiple possible locations
+   */
+  private findDatabasePath(): string {
+    const possiblePaths = [
+      path.join(process.cwd(), 'data', 'nodes.db'),
+      path.join(__dirname, '../../data', 'nodes.db'),
+      './data/nodes.db'
+    ];
+
+    for (const p of possiblePaths) {
+      if (existsSync(p)) {
+        logger.debug(`Found database at: ${p}`);
+        return p;
+      }
     }
+
+    logger.error('Database not found in any of the expected locations:', possiblePaths);
+    throw new Error('Database nodes.db not found. Please run npm run rebuild first.');
   }
   
+  /**
+   * v3.0.0: Wait for repository to be ready (with graceful timeout)
+   * This replaces the old ensureInitialized() method
+   */
   private async ensureInitialized(): Promise<void> {
-    await this.initialized;
-    if (!this.db || !this.repository) {
-      throw new Error('Database not initialized');
+    try {
+      // Wait for repository (max 30 seconds)
+      this.repository = await this.initManager.waitForComponent<NodeRepository>('repository', 30000);
+      this.db = this.initManager.getDb();
+    } catch (error) {
+      // If still initializing, throw helpful error
+      const status = this.initManager.getStatus();
+      if (status.phase !== 'ready' && status.phase !== 'failed') {
+        throw new Error(this.initManager.getWaitMessage());
+      }
+      throw error;
     }
   }
-  
+
+  /**
+   * v3.0.0: Wait for all services to be ready
+   */
   private async ensureFullyInitialized(): Promise<void> {
-    await this.ensureInitialized();
-    
-    // Lazy initialization of heavy services
-    if (!this.templateService && this.db) {
-      this.templateService = new TemplateService(this.db);
-    }
-    if (!this.handlerRegistry && this.repository && this.templateService) {
-      this.handlerRegistry = new HandlerRegistry(this.repository, this.templateService, this.cache);
+    try {
+      // Wait for all services (max 30 seconds)
+      this.handlerRegistry = await this.initManager.waitForComponent<HandlerRegistry>('services', 30000);
+      this.repository = this.initManager.getRepository();
+      this.templateService = this.initManager.getTemplateService();
+      this.db = this.initManager.getDb();
+    } catch (error) {
+      // If still initializing, throw helpful error
+      const status = this.initManager.getStatus();
+      if (status.phase !== 'ready' && status.phase !== 'failed') {
+        throw new Error(this.initManager.getWaitMessage());
+      }
+      throw error;
     }
   }
 
@@ -646,33 +661,162 @@ export class N8NDocumentationMCPServer {
   private async listAITools(): Promise<any> {
     await this.ensureInitialized();
     if (!this.repository) throw new Error('Repository not initialized');
-    const tools = this.repository.getAITools();
     
-    // Debug: Check if is_ai_tool column is populated
-    const aiCount = this.db!.prepare('SELECT COUNT(*) as ai_count FROM nodes WHERE is_ai_tool = 1').get() as any;
-    // console.log('DEBUG list_ai_tools:', { 
-    //   toolsLength: tools.length, 
-    //   aiCountInDB: aiCount.ai_count,
-    //   sampleTools: tools.slice(0, 3)
-    // }); // Removed to prevent stdout interference
+    // Define priority AI agent nodes (these should appear first)
+    // Prioritizing cluster/executor agents over basic agents
+    const priorityAgentNodes = [
+      '@n8n/n8n-nodes-langchain.agentExecutor',
+      'n8n-nodes-langchain.agentExecutor',
+      '@n8n/n8n-nodes-langchain.clusterAgent',
+      'n8n-nodes-langchain.clusterAgent',
+      '@n8n/n8n-nodes-langchain.agent',
+      'n8n-nodes-langchain.agent', 
+      'nodes-langchain.agentExecutor',
+      'nodes-langchain.clusterAgent',
+      'nodes-langchain.agent'
+    ];
+    
+    // Get recommended AI agent nodes with complete data
+    const recommendedAgents = [];
+    for (const nodeType of priorityAgentNodes) {
+      try {
+        const agent = this.repository.getNode(nodeType);
+        if (agent) {
+          recommendedAgents.push({
+            ...agent,
+            category: 'AI Agent (Recommended)',
+            priority: 1,
+            description: `${agent.description || 'AI Agent node for orchestrating AI-powered workflows'} - RECOMMENDED for AI workflows`,
+            connectors: this.getNodeConnectors(agent),
+            usage: {
+              role: 'AI Agent/Orchestrator',
+              purpose: 'Main AI agent that can use other nodes as tools',
+              toolPorts: ['ai_tool'],
+              requirements: 'Requires API key for chosen AI model (OpenAI, Anthropic, etc.)'
+            }
+          });
+        }
+      } catch (error) {
+        // Node not found, continue
+      }
+    }
+    
+    // Get other AI-capable tools (excluding agents to avoid duplicates)
+    const allAITools = this.repository.getAITools();
+    const otherTools = allAITools
+      .filter(tool => !priorityAgentNodes.includes(tool.nodeType))
+      .map(tool => {
+        try {
+          const fullNode = this.repository?.getNode(tool.nodeType);
+          return {
+            ...tool,
+            ...(fullNode || {}),
+            category: 'AI Tool',
+            priority: 2,
+            connectors: fullNode ? this.getNodeConnectors(fullNode) : undefined,
+            usage: {
+              role: 'AI Tool',
+              purpose: 'Can be connected to AI Agent as a tool',
+              connection: 'Connect to AI Agent\'s ai_tool port'
+            }
+          };
+        } catch (error) {
+          // Return basic data if full node not found
+          return {
+            ...tool,
+            category: 'AI Tool',
+            priority: 2,
+            usage: {
+              role: 'AI Tool',
+              purpose: 'Can be connected to AI Agent as a tool'
+            }
+          };
+        }
+      });
+    
+    // Combine and sort: recommended agents first, then other tools
+    const allTools = [...recommendedAgents, ...otherTools]
+      .sort((a, b) => (a.priority || 3) - (b.priority || 3));
     
     return {
-      tools,
-      totalCount: tools.length,
+      recommendedAgents: recommendedAgents.length,
+      tools: allTools,
+      totalCount: allTools.length,
+      categories: {
+        'AI Agent (Recommended)': recommendedAgents.length,
+        'AI Tool': otherTools.length
+      },
+      quickStart: {
+        step1: 'Use a recommended AI Agent node as your main orchestrator',
+        step2: 'Connect other nodes to the AI Agent\'s ai_tool port',
+        step3: 'Configure each tool with $fromAI() expressions for dynamic values',
+        defaultAgent: recommendedAgents.length > 0 ? recommendedAgents[0].nodeType : null
+      },
       requirements: {
-        environmentVariable: 'N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE=true',
-        nodeProperty: 'usableAsTool: true',
+        environmentVariable: 'N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE=true (for community nodes)',
+        nodeProperty: 'usableAsTool: true (for optimized tools)',
       },
       usage: {
-        description: 'These nodes have the usableAsTool property set to true, making them optimized for AI agent usage.',
+        description: 'AI Agent nodes orchestrate workflows, while AI Tool nodes can be connected as tools.',
         note: 'ANY node in n8n can be used as an AI tool by connecting it to the ai_tool port of an AI Agent node.',
         examples: [
-          'Regular nodes like Slack, Google Sheets, or HTTP Request can be used as tools',
-          'Connect any node to an AI Agent\'s tool port to make it available for AI-driven automation',
-          'Community nodes require the environment variable to be set'
+          'AI Agent + Slack tool = AI can send messages',
+          'AI Agent + HTTP Request tool = AI can call APIs',
+          'AI Agent + Google Sheets tool = AI can read/write data'
         ]
       }
     };
+  }
+
+  private getNodeConnectors(node: any): any {
+    // Extract connector information from node data
+    const connectors: {
+      inputs: string[];
+      outputs: string[];
+      total: number;
+      specialPorts?: Record<string, string>;
+    } = {
+      inputs: [],
+      outputs: [],
+      total: 0
+    };
+    
+    if (node.properties) {
+      try {
+        const properties = typeof node.properties === 'string' ? JSON.parse(node.properties) : node.properties;
+        
+        // Look for input/output definitions in properties
+        if (properties.inputs) {
+          connectors.inputs = Array.isArray(properties.inputs) ? properties.inputs : [properties.inputs];
+        }
+        if (properties.outputs) {
+          connectors.outputs = Array.isArray(properties.outputs) ? properties.outputs : [properties.outputs];
+        }
+        
+        // For AI agents, typically have: main input, main output, ai_tool output
+        if (node.nodeType?.includes('agent') || node.nodeType?.includes('Agent')) {
+          connectors.inputs = ['main'];
+          connectors.outputs = ['main', 'ai_tool'];
+          connectors.specialPorts = {
+            ai_tool: 'Connect other nodes here to use as AI tools'
+          };
+        }
+        
+        connectors.total = (connectors.inputs?.length || 0) + (connectors.outputs?.length || 0);
+      } catch (error) {
+        // Default connector setup for unknown nodes
+        connectors.inputs = ['main'];
+        connectors.outputs = ['main'];
+        connectors.total = 2;
+      }
+    } else {
+      // Default setup
+      connectors.inputs = ['main'];
+      connectors.outputs = ['main'];
+      connectors.total = 2;
+    }
+    
+    return connectors;
   }
 
   private async getNodeDocumentation(nodeType: string): Promise<any> {
@@ -2784,12 +2928,11 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
   }
 
   async run(): Promise<void> {
-    // Ensure database is initialized before starting server
-    await this.ensureInitialized();
-    
+    // v3.0.0: Start stdio transport IMMEDIATELY (doesn't wait for DB!)
+    // This is the key performance improvement: <500ms to MCP ready
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    
+
     // Force flush stdout for Docker environments
     // Docker uses block buffering which can delay MCP responses
     if (!process.stdout.isTTY || process.env.IS_DOCKER) {
@@ -2802,9 +2945,30 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
         return result;
       };
     }
-    
-    logger.info('n8n Documentation MCP Server running on stdio transport');
-    
+
+    logger.info('[v3.0.0] MCP server running on stdio (initialization in background)');
+
+    // Log when initialization completes (non-blocking)
+    this.initManager.waitForComponent('services', 60000)
+      .then(() => {
+        const status = this.initManager.getStatus();
+        const initTime = this.initManager.getInitTime();
+        logger.info(`[v3.0.0] ✅ Fully initialized in ${initTime}ms`);
+
+        // Log success metrics
+        if (status.phase === 'ready') {
+          logger.info('[v3.0.0] Background initialization complete - all tools ready');
+        }
+      })
+      .catch(error => {
+        logger.error('[v3.0.0] ❌ Initialization failed:', error);
+        const status = this.initManager.getStatus();
+        logger.error(`[v3.0.0] Failed at phase: ${status.phase} (${status.progress}%)`);
+        if (status.error) {
+          logger.error(`[v3.0.0] Error: ${status.error}`);
+        }
+      });
+
     // Keep the process alive and listening
     process.stdin.resume();
   }

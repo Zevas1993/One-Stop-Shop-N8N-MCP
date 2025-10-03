@@ -259,7 +259,23 @@ export class SimpleConsolidatedMCPServer {
   }
 
   private async handleWorkflowExecution(args: any): Promise<any> {
-    const { action, webhookUrl, httpMethod = 'POST', data, headers, id, filters, waitForResponse = true } = args;
+    const {
+      action,
+      webhookUrl,
+      httpMethod = 'POST',
+      data,
+      headers,
+      id,
+      filters,
+      waitForResponse = true,
+      loadWorkflow = false,
+      workflowId,
+      includeStats = false,
+      limit = 20
+    } = args;
+
+    // Import v3 handlers dynamically
+    const v3Handlers = await import('./handlers-v3-tools');
 
     switch (action) {
       case 'trigger':
@@ -283,8 +299,19 @@ export class SimpleConsolidatedMCPServer {
         if (!id) throw new Error('id is required for delete action');
         return await n8nHandlers.handleDeleteExecution({ id });
 
+      // v3.0.0 actions
+      case 'retry':
+        if (!id) throw new Error('id (executionId) is required for retry action');
+        return await v3Handlers.handleRetryExecution({ executionId: id, loadWorkflow });
+
+      case 'monitor_running':
+        return await v3Handlers.handleMonitorRunningExecutions({ workflowId, includeStats });
+
+      case 'list_mcp':
+        return await v3Handlers.handleListMcpWorkflows({ limit, includeStats });
+
       default:
-        throw new Error(`Unknown workflow_execution action: ${action}`);
+        throw new Error(`Unknown workflow_execution action: ${action}. Available: trigger, get, list, delete, retry, monitor_running, list_mcp`);
     }
   }
 
@@ -487,9 +514,7 @@ export class SimpleConsolidatedMCPServer {
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('🚀 n8n Simple Consolidated MCP Server (8 tools) running on stdio');
-    console.error('📋 Demonstrating streamlined architecture');
-    console.error('⚡ Validation enforcement active');
+    // Removed console output to prevent JSON-RPC parsing errors in Claude Desktop
   }
 }
 

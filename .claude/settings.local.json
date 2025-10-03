@@ -68,7 +68,17 @@
       "Bash(export AUTH_TOKEN=testtoken123456789012345678901234567890)",
       "Bash(export PORT=3001)",
       "Bash(export PORT=3002)",
-      "Bash(export PORT=3003)"
+      "Bash(export PORT=3003)",
+      "Bash(npm view:*)",
+      "Bash(npm info:*)",
+      "Bash(npm install)",
+      "Bash(tasklist)",
+      "Bash(findstr:*)",
+      "Bash(npm install:*)",
+      "Read(//c/Users/Chris Boyd/n8n-test/**)",
+      "Read(//c/Users/Chris Boyd/.n8n/**)",
+      "Read(//c/Users/Chris Boyd/Documents/MCP-Servers/**)",
+      "Bash(/tmp/run-api-gen.sh:*)"
     ],
     "deny": []
   }
