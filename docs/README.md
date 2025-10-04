@@ -14,10 +14,18 @@ Welcome to the n8n-MCP documentation. This directory contains comprehensive guid
 - **[Docker Deployment](./DOCKER_README.md)** - Complete Docker deployment and configuration guide
 - **[Release Guide](./RELEASE_GUIDE.md)** - How to create releases and manage Docker tags
 
+### Features & Advanced Topics
+- **[Plugin Development](./PLUGIN_DEVELOPMENT.md)** - Create custom plugins to extend functionality
+- **[Performance Benchmarking](./benchmarking.md)** - Measure and optimize performance
+- **[Health Checks & Monitoring](./health-monitoring.md)** - Health endpoints and Prometheus metrics
+- **[Configuration Dashboard](./dashboard.md)** - Web-based management UI
+
 ### Reference
 - **[Troubleshooting Guide](./TROUBLESHOOTING.md)** - Solutions for common issues and errors
 - **[HTTP Server Fix Documentation](./HTTP_SERVER_FINAL_FIX.md)** - Technical details of v2.3.2 HTTP server fixes
 - **[Docker Optimization Guide](./DOCKER_OPTIMIZATION_GUIDE.md)** - Reference for optimized Docker builds (~150MB)
+- **[Security Audit Report](../SECURITY-AUDIT-REPORT.md)** - Latest security assessment (B+ rating)
+- **[Contributing Guide](../CONTRIBUTING.md)** - How to contribute to the project
 - **[Changelog](./CHANGELOG.md)** - Version history and release notes
 
 ## 🚀 Quick Links

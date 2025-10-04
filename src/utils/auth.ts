@@ -11,6 +11,7 @@ export class AuthManager {
 
   /**
    * Validate an authentication token
+   * Uses timing-safe comparison to prevent timing attacks
    */
   validateToken(token: string | undefined, expectedToken?: string): boolean {
     if (!expectedToken) {
@@ -22,8 +23,8 @@ export class AuthManager {
       return false;
     }
 
-    // Check static token
-    if (token === expectedToken) {
+    // Check static token using timing-safe comparison
+    if (this.timingSafeEqual(token, expectedToken)) {
       return true;
     }
 
@@ -41,6 +42,29 @@ export class AuthManager {
     }
 
     return false;
+  }
+
+  /**
+   * Timing-safe string comparison to prevent timing attacks
+   */
+  private timingSafeEqual(a: string, b: string): boolean {
+    try {
+      // Ensure both strings are the same length to prevent timing leaks
+      const bufA = Buffer.from(a);
+      const bufB = Buffer.from(b);
+
+      // If lengths don't match, compare against a dummy buffer
+      // to maintain constant time
+      if (bufA.length !== bufB.length) {
+        const dummy = Buffer.alloc(bufA.length);
+        crypto.timingSafeEqual(bufA, dummy);
+        return false;
+      }
+
+      return crypto.timingSafeEqual(bufA, bufB);
+    } catch {
+      return false;
+    }
   }
 
   /**

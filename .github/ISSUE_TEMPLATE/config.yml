@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP/blob/main/GETTING-STARTED.md
+    about: Check out our comprehensive getting started guide
+  - name: 💬 Discussions
+    url: https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 🔒 Security Issue
+    url: https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP/security/advisories/new
+    about: Report a security vulnerability (private)

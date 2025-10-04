@@ -48,6 +48,9 @@
     "test:update-partial:debug": "node dist/scripts/test-update-partial-debug.js",
     "test:v3": "node dist/scripts/test-v3-implementation.js",
     "test:v3:runtime": "node scripts/test-v3-runtime.js",
+    "benchmark": "node scripts/benchmark.js",
+    "dashboard": "node dist/dashboard/dashboard-server.js",
+    "dashboard:dev": "nodemon --watch src/dashboard --ext ts --exec 'npm run build && npm run dashboard'",
     "db:rebuild": "node dist/scripts/rebuild-database.js",
     "db:init": "node -e \"new (require('./dist/services/sqlite-storage-service').SQLiteStorageService)(); console.log('Database initialized')\"",
     "docs:rebuild": "ts-node src/scripts/rebuild-database.ts",
@@ -110,7 +113,6 @@
     "sql.js": "^1.13.0",
     "tesseract.js": "^6.0.1",
     "typescript": "^5.8.3",
-    "uuid": "^10.0.0",
-    "vm2": "^3.9.19"
+    "uuid": "^10.0.0"
   }
 }

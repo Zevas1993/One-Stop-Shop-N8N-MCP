@@ -78,7 +78,16 @@
       "Read(//c/Users/Chris Boyd/n8n-test/**)",
       "Read(//c/Users/Chris Boyd/.n8n/**)",
       "Read(//c/Users/Chris Boyd/Documents/MCP-Servers/**)",
-      "Bash(/tmp/run-api-gen.sh:*)"
+      "Bash(/tmp/run-api-gen.sh:*)",
+      "Bash(npm audit:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm ls:*)",
+      "Bash(export:*)",
+      "Bash(for:*)",
+      "Bash(do echo \"=== $db ===\")",
+      "Bash(done)",
+      "Bash(ENABLE_FILE_LOGGING=true node search-agent-nodes.js)",
+      "Bash(awk:*)"
     ],
     "deny": []
   }

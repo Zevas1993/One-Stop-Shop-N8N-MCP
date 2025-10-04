@@ -123,7 +123,7 @@ export class SimpleConsolidatedMCPServer {
 
   private async handleNodeDiscovery(args: any): Promise<any> {
     const { action, query, category, package: pkg, limit, nodeType, includeDocumentation } = args;
-    
+
     try {
       // Route to actual server functionality based on action
       switch (action) {

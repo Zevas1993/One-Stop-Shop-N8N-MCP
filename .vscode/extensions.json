@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-typescript-next",
+    "orta.vscode-jest",
+    "christian-kohler.npm-intellisense",
+    "eg2.vscode-npm-script",
+    "usernamehw.errorlens",
+    "eamodio.gitlens",
+    "mikestead.dotenv",
+    "redhat.vscode-yaml",
+    "streetsidesoftware.code-spell-checker"
+  ],
+  "unwantedRecommendations": []
+}

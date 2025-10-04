@@ -1,0 +1,47 @@
+# Code Owners for n8n-mcp
+# These owners will be automatically requested for review when someone opens a pull request.
+# More info: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @Zevas1993
+
+# Core server and MCP protocol
+/src/mcp/ @Zevas1993
+/src/consolidated-server.ts @Zevas1993
+
+# Database and node parsing
+/src/database/ @Zevas1993
+/src/loaders/ @Zevas1993
+/src/parsers/ @Zevas1993
+
+# Services and business logic
+/src/services/ @Zevas1993
+
+# Configuration and setup
+/setup.js @Zevas1993
+/.env.example @Zevas1993
+/GETTING-STARTED.md @Zevas1993
+
+# Documentation
+/docs/ @Zevas1993
+/*.md @Zevas1993
+
+# CI/CD and workflows
+/.github/ @Zevas1993
+
+# Docker and deployment
+/docker/ @Zevas1993
+/Dockerfile @Zevas1993
+/docker-compose.yml @Zevas1993
+
+# Security-sensitive files
+/SECURITY.md @Zevas1993
+/src/utils/auth.ts @Zevas1993
+/src/utils/http-security.ts @Zevas1993
+
+# Package dependencies
+/package.json @Zevas1993
+/package-lock.json @Zevas1993
+
+# TypeScript configuration
+/tsconfig*.json @Zevas1993

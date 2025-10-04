@@ -1,0 +1,51 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "build",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "label": "npm: build",
+      "detail": "tsc"
+    },
+    {
+      "type": "npm",
+      "script": "test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "label": "npm: test",
+      "detail": "jest"
+    },
+    {
+      "type": "npm",
+      "script": "rebuild:local",
+      "label": "npm: rebuild:local",
+      "detail": "Rebuild node database",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build and Rebuild",
+      "dependsOn": ["npm: build", "npm: rebuild:local"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Watch Tests",
+      "type": "shell",
+      "command": "npm run test:watch",
+      "problemMatcher": [],
+      "isBackground": true
+    },
+    {
+      "label": "Start n8n (Dev)",
+      "type": "shell",
+      "command": "npx n8n",
+      "problemMatcher": [],
+      "isBackground": true
+    }
+  ]
+}

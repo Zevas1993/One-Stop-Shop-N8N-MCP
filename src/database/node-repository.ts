@@ -137,29 +137,55 @@ export class NodeRepository {
    * List nodes with optional filtering
    */
   listNodes(options: any = {}): any[] {
-    let query = 'SELECT * FROM nodes';
+    let query = 'SELECT * FROM nodes WHERE 1=1';
     const params: any[] = [];
-    
+
+    // Package filter - support multiple package name formats
+    if (options.package) {
+      const packageVariants = [
+        options.package,
+        `@n8n/${options.package}`,
+        options.package.replace('@n8n/', '')
+      ];
+      query += ' AND package_name IN (' + packageVariants.map(() => '?').join(',') + ')';
+      params.push(...packageVariants);
+    }
+
+    // Category filter
     if (options.category) {
-      query += ' WHERE category = ?';
+      query += ' AND category = ?';
       params.push(options.category);
     }
-    
-    if (options.isAITool) {
-      query += params.length ? ' AND' : ' WHERE';
-      query += ' is_ai_tool = 1';
+
+    // Development style filter
+    if (options.developmentStyle) {
+      query += ' AND development_style = ?';
+      params.push(options.developmentStyle);
     }
-    
+
+    // AI tool filter
+    if (options.isAITool !== undefined) {
+      query += ' AND is_ai_tool = ?';
+      params.push(options.isAITool ? 1 : 0);
+    }
+
     query += ' ORDER BY display_name';
-    
+
+    // Limit results
+    if (options.limit) {
+      query += ' LIMIT ?';
+      params.push(options.limit);
+    }
+
     const rows = this.db.prepare(query).all(...params) as any[];
-    
+
     return rows.map(row => ({
       nodeType: row.node_type,
       displayName: row.display_name,
       description: row.description,
       category: row.category,
       package: row.package_name,
+      developmentStyle: row.development_style,
       isAITool: !!row.is_ai_tool,
       isTrigger: !!row.is_trigger,
       isWebhook: !!row.is_webhook,

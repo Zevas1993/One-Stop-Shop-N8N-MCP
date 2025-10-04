@@ -486,59 +486,13 @@ export class N8NDocumentationMCPServer {
   
   private async listNodes(filters: any = {}): Promise<any> {
     await this.ensureInitialized();
-    
-    let query = 'SELECT * FROM nodes WHERE 1=1';
-    const params: any[] = [];
-    
-    // console.log('DEBUG list_nodes:', { filters, query, params }); // Removed to prevent stdout interference
+    if (!this.repository) throw new Error('Repository not initialized');
 
-    if (filters.package) {
-      // Handle both formats
-      const packageVariants = [
-        filters.package,
-        `@n8n/${filters.package}`,
-        filters.package.replace('@n8n/', '')
-      ];
-      query += ' AND package_name IN (' + packageVariants.map(() => '?').join(',') + ')';
-      params.push(...packageVariants);
-    }
+    // Use repository's listNodes method with all filter support
+    const nodes = this.repository.listNodes(filters);
 
-    if (filters.category) {
-      query += ' AND category = ?';
-      params.push(filters.category);
-    }
-
-    if (filters.developmentStyle) {
-      query += ' AND development_style = ?';
-      params.push(filters.developmentStyle);
-    }
-
-    if (filters.isAITool !== undefined) {
-      query += ' AND is_ai_tool = ?';
-      params.push(filters.isAITool ? 1 : 0);
-    }
-
-    query += ' ORDER BY display_name';
-
-    if (filters.limit) {
-      query += ' LIMIT ?';
-      params.push(filters.limit);
-    }
-
-    const nodes = this.db!.prepare(query).all(...params) as NodeRow[];
-    
     return {
-      nodes: nodes.map(node => ({
-        nodeType: node.node_type,
-        displayName: node.display_name,
-        description: node.description,
-        category: node.category,
-        package: node.package_name,
-        developmentStyle: node.development_style,
-        isAITool: !!node.is_ai_tool,
-        isTrigger: !!node.is_trigger,
-        isVersioned: !!node.is_versioned,
-      })),
+      nodes,
       totalCount: nodes.length,
     };
   }
@@ -590,72 +544,23 @@ export class N8NDocumentationMCPServer {
 
   private async searchNodes(query: string, limit: number = 20): Promise<any> {
     await this.ensureInitialized();
-    if (!this.db) throw new Error('Database not initialized');
-    
-    // Handle exact phrase searches with quotes
-    if (query.startsWith('"') && query.endsWith('"')) {
-      const exactPhrase = query.slice(1, -1);
-      const nodes = this.db!.prepare(`
-        SELECT * FROM nodes 
-        WHERE node_type LIKE ? OR display_name LIKE ? OR description LIKE ?
-        ORDER BY display_name
-        LIMIT ?
-      `).all(`%${exactPhrase}%`, `%${exactPhrase}%`, `%${exactPhrase}%`, limit) as NodeRow[];
-      
-      return { 
-        query, 
-        results: nodes.map(node => ({
-          nodeType: node.node_type,
-          displayName: node.display_name,
-          description: node.description,
-          category: node.category,
-          package: node.package_name
-        })), 
-        totalCount: nodes.length 
-      };
-    }
-    
-    // Split into words for normal search
-    const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 0);
-    
-    if (words.length === 0) {
-      return { query, results: [], totalCount: 0 };
-    }
-    
-    // Build conditions for each word
-    const conditions = words.map(() => 
-      '(node_type LIKE ? OR display_name LIKE ? OR description LIKE ?)'
-    ).join(' OR ');
-    
-    const params: any[] = words.flatMap(w => [`%${w}%`, `%${w}%`, `%${w}%`]);
-    params.push(limit);
-    
-    const nodes = this.db!.prepare(`
-      SELECT DISTINCT * FROM nodes 
-      WHERE ${conditions}
-      ORDER BY display_name
-      LIMIT ?
-    `).all(...params) as NodeRow[];
-    
+    if (!this.repository) throw new Error('Repository not initialized');
+
+    // Use repository's search method for consistency
+    const nodes = this.repository.searchNodes(query, { limit });
+
     return {
       query,
       results: nodes.map(node => ({
-        nodeType: node.node_type,
-        displayName: node.display_name,
+        nodeType: node.nodeType,
+        name: node.displayName,
+        displayName: node.displayName,
         description: node.description,
         category: node.category,
-        package: node.package_name
+        package: node.package
       })),
       totalCount: nodes.length
     };
-  }
-
-  private calculateRelevance(node: NodeRow, query: string): string {
-    const lowerQuery = query.toLowerCase();
-    if (node.node_type.toLowerCase().includes(lowerQuery)) return 'high';
-    if (node.display_name.toLowerCase().includes(lowerQuery)) return 'high';
-    if (node.description?.toLowerCase().includes(lowerQuery)) return 'medium';
-    return 'low';
   }
 
   private async listAITools(): Promise<any> {
@@ -821,32 +726,32 @@ export class N8NDocumentationMCPServer {
 
   private async getNodeDocumentation(nodeType: string): Promise<any> {
     await this.ensureInitialized();
-    if (!this.db) throw new Error('Database not initialized');
-    const node = this.db!.prepare(`
-      SELECT node_type, display_name, documentation, description 
-      FROM nodes 
-      WHERE node_type = ?
-    `).get(nodeType) as NodeRow | undefined;
-    
+    if (!this.repository) throw new Error('Repository not initialized');
+
+    // Get node info first
+    const node = this.repository.getNode(nodeType);
     if (!node) {
       throw new Error(`Node ${nodeType} not found`);
     }
-    
+
+    // Try to get documentation from repository
+    const documentation = this.repository.getNodeDocumentation(nodeType);
+
     // If no documentation, generate fallback
-    if (!node.documentation) {
+    if (!documentation) {
       const essentials = await this.getNodeEssentials(nodeType);
-      
+
       return {
-        nodeType: node.node_type,
-        displayName: node.display_name,
+        nodeType: node.nodeType,
+        displayName: node.displayName,
         documentation: `
-# ${node.display_name}
+# ${node.displayName}
 
 ${node.description || 'No description available.'}
 
 ## Common Properties
 
-${essentials.commonProperties.map((p: any) => 
+${essentials.commonProperties.map((p: any) =>
   `### ${p.displayName}\n${p.description || `Type: ${p.type}`}`
 ).join('\n\n')}
 
@@ -856,52 +761,21 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
         hasDocumentation: false
       };
     }
-    
+
     return {
-      nodeType: node.node_type,
-      displayName: node.display_name,
-      documentation: node.documentation,
+      nodeType: node.nodeType,
+      displayName: node.displayName,
+      documentation,
       hasDocumentation: true,
     };
   }
 
   private async getDatabaseStatistics(includePerformance: boolean = true): Promise<any> {
     await this.ensureInitialized();
-    if (!this.db) throw new Error('Database not initialized');
-    const stats = this.db!.prepare(`
-      SELECT 
-        COUNT(*) as total,
-        SUM(is_ai_tool) as ai_tools,
-        SUM(is_trigger) as triggers,
-        SUM(is_versioned) as versioned,
-        SUM(CASE WHEN documentation IS NOT NULL THEN 1 ELSE 0 END) as with_docs,
-        COUNT(DISTINCT package_name) as packages,
-        COUNT(DISTINCT category) as categories
-      FROM nodes
-    `).get() as any;
-    
-    const packages = this.db!.prepare(`
-      SELECT package_name, COUNT(*) as count 
-      FROM nodes 
-      GROUP BY package_name
-    `).all() as any[];
-    
-    const baseStats = {
-      totalNodes: stats.total,
-      statistics: {
-        aiTools: stats.ai_tools,
-        triggers: stats.triggers,
-        versionedNodes: stats.versioned,
-        nodesWithDocumentation: stats.with_docs,
-        documentationCoverage: Math.round((stats.with_docs / stats.total) * 100) + '%',
-        uniquePackages: stats.packages,
-        uniqueCategories: stats.categories,
-      },
-      packageBreakdown: packages.map(pkg => ({
-        package: pkg.package_name,
-        nodeCount: pkg.count,
-      })),
-    };
+    if (!this.repository) throw new Error('Repository not initialized');
+
+    // Use repository's getDatabaseStatistics method
+    const baseStats = this.repository.getDatabaseStatistics();
     
     if (includePerformance) {
       const totalCacheOperations = this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses;
