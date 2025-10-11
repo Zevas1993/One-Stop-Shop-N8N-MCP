@@ -87,7 +87,21 @@
       "Bash(do echo \"=== $db ===\")",
       "Bash(done)",
       "Bash(ENABLE_FILE_LOGGING=true node search-agent-nodes.js)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(git checkout:*)",
+      "Bash(dir \"C:\\Users\\Chris Boyd\")",
+      "Read(//c/Users/Chris Boyd/**)",
+      "Bash(unzip:*)",
+      "Read(//c/**)",
+      "Bash(tree:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(do echo \"=== $file ===\")",
+      "Bash(xargs:*)",
+      "Bash(while read f)",
+      "Bash(do echo \"=== FILE: $f ===\")",
+      "Bash(wc:*)",
+      "Bash(do echo \"=== Checking $dir ===\")"
     ],
     "deny": []
   }

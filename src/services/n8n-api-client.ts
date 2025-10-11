@@ -165,6 +165,26 @@ export class N8nApiClient {
     }
   }
 
+  async activateWorkflow(id: string, active: boolean): Promise<Workflow> {
+    try {
+      // Use PATCH to update only the active field
+      const response = await this.client.patch(`/workflows/${id}`, { active });
+      return response.data;
+    } catch (error) {
+      throw handleN8nApiError(error);
+    }
+  }
+
+  async runWorkflow(id: string, data?: any): Promise<Execution> {
+    try {
+      // POST /workflows/:id/run to execute workflow directly
+      const response = await this.client.post(`/workflows/${id}/run`, data || {});
+      return response.data;
+    } catch (error) {
+      throw handleN8nApiError(error);
+    }
+  }
+
   // Execution Management
   async getExecution(id: string, includeData = false): Promise<Execution> {
     try {
@@ -189,6 +209,16 @@ export class N8nApiClient {
   async deleteExecution(id: string): Promise<void> {
     try {
       await this.client.delete(`/executions/${id}`);
+    } catch (error) {
+      throw handleN8nApiError(error);
+    }
+  }
+
+  async stopExecution(id: string): Promise<Execution> {
+    try {
+      // POST /executions/:id/stop to stop a running execution
+      const response = await this.client.post(`/executions/${id}/stop`);
+      return response.data;
     } catch (error) {
       throw handleN8nApiError(error);
     }

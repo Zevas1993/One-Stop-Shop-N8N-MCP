@@ -9,9 +9,6 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { n8nDocumentationToolsFinal } from './tools';
 import { n8nManagementTools } from './tools-n8n-manager';
-// import { browserTools, handleBrowserTool } from './browser-tools';
-// import { visualVerificationTools, handleVisualVerificationTool } from './tools-visual-verification';
-import { enhancedVisualVerificationTools, executeEnhancedVisualTool } from './tools-enhanced-visual-verification';
 import { logger } from '../utils/logger';
 import { NodeRepository } from '../database/node-repository';
 import { DatabaseAdapter, createDatabaseAdapter } from '../database/database-adapter';
@@ -82,10 +79,10 @@ export class N8NDocumentationMCPServer {
     // Log n8n API configuration status at startup
     const apiConfigured = isN8nApiConfigured();
     const totalTools = apiConfigured ?
-      n8nDocumentationToolsFinal.length + enhancedVisualVerificationTools.length + n8nManagementTools.length :
-      n8nDocumentationToolsFinal.length + enhancedVisualVerificationTools.length;
+      n8nDocumentationToolsFinal.length + n8nManagementTools.length :
+      n8nDocumentationToolsFinal.length;
 
-    logger.info(`MCP server created with ${totalTools} tools (n8n API: ${apiConfigured ? 'configured' : 'not configured'}, Enhanced Visual: enabled)`);
+    logger.info(`MCP server created with ${totalTools} tools (n8n API: ${apiConfigured ? 'configured' : 'not configured'})`);
 
     // Create MCP server immediately (doesn't wait for DB!)
     this.server = new Server(
@@ -132,7 +129,6 @@ export class N8NDocumentationMCPServer {
     try {
       // Wait for repository (max 30 seconds)
       this.repository = await this.initManager.waitForComponent<NodeRepository>('repository', 30000);
-      this.db = this.initManager.getDb();
     } catch (error) {
       // If still initializing, throw helpful error
       const status = this.initManager.getStatus();
@@ -152,7 +148,6 @@ export class N8NDocumentationMCPServer {
       this.handlerRegistry = await this.initManager.waitForComponent<HandlerRegistry>('services', 30000);
       this.repository = this.initManager.getRepository();
       this.templateService = this.initManager.getTemplateService();
-      this.db = this.initManager.getDb();
     } catch (error) {
       // If still initializing, throw helpful error
       const status = this.initManager.getStatus();
@@ -190,17 +185,14 @@ export class N8NDocumentationMCPServer {
       // Combine documentation tools with management tools and enhanced visual verification
       const tools = [...n8nDocumentationToolsFinal];
       const isConfigured = isN8nApiConfigured();
-      
-      // Add enhanced visual verification tools
-      tools.push(...enhancedVisualVerificationTools);
-      
+
       if (isConfigured) {
         tools.push(...n8nManagementTools);
-        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation + ${enhancedVisualVerificationTools.length} visual + ${n8nManagementTools.length} management)`);
+        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation + ${n8nManagementTools.length} management)`);
       } else {
-        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation + ${enhancedVisualVerificationTools.length} visual)`);
+        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation)`);
       }
-      
+
       return { tools };
     });
 
@@ -349,6 +341,10 @@ export class N8NDocumentationMCPServer {
         return n8nHandlers.handleDeleteWorkflow(args);
       case 'n8n_list_workflows':
         return n8nHandlers.handleListWorkflows(args);
+      case 'n8n_activate_workflow':
+        return n8nHandlers.handleActivateWorkflow(args);
+      case 'n8n_run_workflow':
+        return n8nHandlers.handleRunWorkflow(args);
       case 'n8n_trigger_webhook_workflow':
         return n8nHandlers.handleTriggerWebhookWorkflow(args);
       case 'n8n_get_execution':
@@ -357,6 +353,8 @@ export class N8NDocumentationMCPServer {
         return n8nHandlers.handleListExecutions(args);
       case 'n8n_delete_execution':
         return n8nHandlers.handleDeleteExecution(args);
+      case 'n8n_stop_execution':
+        return n8nHandlers.handleStopExecution(args);
       case 'n8n_system':
         return this.handleN8nSystemUnified(args);
       case 'n8n_validate_workflow':
@@ -410,11 +408,12 @@ export class N8NDocumentationMCPServer {
       case 'auto_fix_visual_issues':
       case 'cleanup_enhanced_visual_verification':
       case 'quick_workflow_check':
+      // Visual verification tools have been removed (not used by consolidated server)
       case 'detect_workflow_errors':
       case 'take_workflow_screenshot':
       case 'find_workflows_by_name':
-        return executeEnhancedVisualTool(name, args);
-      
+        throw new Error(`Visual verification tools not available. Tool ${name} has been deprecated.`);
+
       // Missing tools that were in HandlerRegistry but not in switch statement
       case 'list_nodes':
         return this.listNodesOptimized(args);

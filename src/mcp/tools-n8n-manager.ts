@@ -295,8 +295,44 @@ Validation example:
       }
     }
   },
+  {
+    name: 'n8n_activate_workflow',
+    description: `🔄 ACTIVATE/DEACTIVATE WORKFLOW: Enable or disable a workflow. Active workflows can be triggered by webhooks, schedules, or manual execution. Inactive workflows cannot run. Essential for workflow lifecycle management.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Workflow ID to activate/deactivate'
+        },
+        active: {
+          type: 'boolean',
+          description: 'true to activate workflow, false to deactivate it'
+        }
+      },
+      required: ['id', 'active']
+    }
+  },
 
   // Execution Management Tools
+  {
+    name: 'n8n_run_workflow',
+    description: `▶️ RUN WORKFLOW: Execute a workflow directly via API (not webhook). Workflow does NOT need to be active. Returns execution details immediately. Use this for testing or manual triggers.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Workflow ID to execute'
+        },
+        data: {
+          type: 'object',
+          description: 'Optional input data for the workflow execution'
+        }
+      },
+      required: ['id']
+    }
+  },
   {
     name: 'n8n_trigger_webhook_workflow',
     description: `Trigger a workflow via webhook. Workflow must be ACTIVE and have a Webhook trigger node. HTTP method must match webhook configuration.`,
@@ -386,9 +422,23 @@ Validation example:
     inputSchema: {
       type: 'object',
       properties: {
-        id: { 
-          type: 'string', 
-          description: 'Execution ID to delete' 
+        id: {
+          type: 'string',
+          description: 'Execution ID to delete'
+        }
+      },
+      required: ['id']
+    }
+  },
+  {
+    name: 'n8n_stop_execution',
+    description: `⛔ STOP EXECUTION: Emergency stop for running workflow executions. Immediately halts the execution and marks it as stopped. Use this when a workflow is stuck or needs to be terminated.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Execution ID to stop'
         }
       },
       required: ['id']

@@ -483,7 +483,7 @@ export async function handleListWorkflows(args: unknown): Promise<McpToolRespons
   try {
     const client = ensureApiConfigured();
     const input = listWorkflowsSchema.parse(args || {});
-    
+
     const response = await client.listWorkflows({
       limit: input.limit || 100,
       cursor: input.cursor,
@@ -492,7 +492,7 @@ export async function handleListWorkflows(args: unknown): Promise<McpToolRespons
       projectId: input.projectId,
       excludePinnedData: input.excludePinnedData ?? true
     });
-    
+
     return {
       success: true,
       data: {
@@ -509,7 +509,7 @@ export async function handleListWorkflows(args: unknown): Promise<McpToolRespons
         details: { errors: error.errors }
       };
     }
-    
+
     if (error instanceof N8nApiError) {
       return {
         success: false,
@@ -517,7 +517,85 @@ export async function handleListWorkflows(args: unknown): Promise<McpToolRespons
         code: error.code
       };
     }
-    
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+}
+
+export async function handleActivateWorkflow(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const { id, active } = z.object({
+      id: z.string(),
+      active: z.boolean()
+    }).parse(args);
+
+    const workflow = await client.activateWorkflow(id, active);
+
+    return {
+      success: true,
+      data: workflow,
+      message: `Workflow ${id} ${active ? 'activated' : 'deactivated'} successfully`
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: 'Invalid input',
+        details: { errors: error.errors }
+      };
+    }
+
+    if (error instanceof N8nApiError) {
+      return {
+        success: false,
+        error: getUserFriendlyErrorMessage(error),
+        code: error.code
+      };
+    }
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+}
+
+export async function handleRunWorkflow(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const { id, data } = z.object({
+      id: z.string(),
+      data: z.record(z.unknown()).optional()
+    }).parse(args);
+
+    const execution = await client.runWorkflow(id, data);
+
+    return {
+      success: true,
+      data: execution,
+      message: `Workflow ${id} executed successfully. Execution ID: ${execution.id}`
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: 'Invalid input',
+        details: { errors: error.errors }
+      };
+    }
+
+    if (error instanceof N8nApiError) {
+      return {
+        success: false,
+        error: getUserFriendlyErrorMessage(error),
+        code: error.code
+      };
+    }
+
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -748,9 +826,9 @@ export async function handleDeleteExecution(args: unknown): Promise<McpToolRespo
   try {
     const client = ensureApiConfigured();
     const { id } = z.object({ id: z.string() }).parse(args);
-    
+
     await client.deleteExecution(id);
-    
+
     return {
       success: true,
       message: `Execution ${id} deleted successfully`
@@ -763,7 +841,7 @@ export async function handleDeleteExecution(args: unknown): Promise<McpToolRespo
         details: { errors: error.errors }
       };
     }
-    
+
     if (error instanceof N8nApiError) {
       return {
         success: false,
@@ -771,7 +849,43 @@ export async function handleDeleteExecution(args: unknown): Promise<McpToolRespo
         code: error.code
       };
     }
-    
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+}
+
+export async function handleStopExecution(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const { id } = z.object({ id: z.string() }).parse(args);
+
+    const execution = await client.stopExecution(id);
+
+    return {
+      success: true,
+      data: execution,
+      message: `Execution ${id} stopped successfully`
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: 'Invalid input',
+        details: { errors: error.errors }
+      };
+    }
+
+    if (error instanceof N8nApiError) {
+      return {
+        success: false,
+        error: getUserFriendlyErrorMessage(error),
+        code: error.code
+      };
+    }
+
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -829,16 +943,19 @@ export async function handleListAvailableTools(): Promise<McpToolResponse> {
         { name: 'n8n_update_workflow', description: 'Update existing workflows' },
         { name: 'n8n_delete_workflow', description: 'Delete workflows' },
         { name: 'n8n_list_workflows', description: 'List workflows with filters' },
+        { name: 'n8n_activate_workflow', description: 'Enable/disable workflows' },
         { name: 'n8n_validate_workflow', description: 'Validate workflow from n8n instance' }
       ]
     },
     {
       category: 'Execution Management',
       tools: [
+        { name: 'n8n_run_workflow', description: 'Execute workflows directly via API' },
         { name: 'n8n_trigger_webhook_workflow', description: 'Trigger workflows via webhook' },
         { name: 'n8n_get_execution', description: 'Get execution details' },
         { name: 'n8n_list_executions', description: 'List executions with filters' },
-        { name: 'n8n_delete_execution', description: 'Delete execution records' }
+        { name: 'n8n_delete_execution', description: 'Delete execution records' },
+        { name: 'n8n_stop_execution', description: 'Stop running executions' }
       ]
     },
     {
@@ -910,7 +1027,7 @@ export async function handleDiagnostic(request: any): Promise<McpToolResponse> {
   
   // Check which tools are available
   const documentationTools = 22; // Base documentation tools
-  const managementTools = apiConfigured ? 16 : 0;
+  const managementTools = apiConfigured ? 19 : 0; // Updated: added 3 new tools (activate, run, stop)
   const totalTools = documentationTools + managementTools;
   
   // Build diagnostic report

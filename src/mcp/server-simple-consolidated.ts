@@ -11,22 +11,25 @@ import { isN8nApiConfigured } from '../config/n8n-api';
 import * as n8nHandlers from './handlers-n8n-manager';
 import { handleUpdatePartialWorkflow } from './handlers-workflow-diff';
 import { N8NDocumentationMCPServer } from './server';
+import { N8nVersionMonitor } from '../services/n8n-version-monitor';
+import { logger } from '../utils/logger';
 
 /**
  * Simple Consolidated MCP Server - 8 Essential Tools
- * 
- * Streamlined server that provides basic tool responses for testing.
+ *
+ * Streamlined server with automatic n8n version detection and sync.
  * This is a working prototype of the consolidated architecture.
  */
 export class SimpleConsolidatedMCPServer {
   private server: Server;
   private mainServer: N8NDocumentationMCPServer;
+  private versionMonitor: N8nVersionMonitor;
 
   constructor() {
     this.server = new Server(
       {
         name: 'n8n-mcp-consolidated-simple',
-        version: '1.0.0',
+        version: '2.7.1',
       },
       {
         capabilities: {
@@ -37,7 +40,39 @@ export class SimpleConsolidatedMCPServer {
 
     // Initialize the main server for real functionality
     this.mainServer = new N8NDocumentationMCPServer();
+
+    // Initialize version monitor for automatic n8n sync
+    this.versionMonitor = new N8nVersionMonitor();
+
     this.setupToolHandlers();
+    this.startVersionMonitoring();
+  }
+
+  private async startVersionMonitoring() {
+    try {
+      // Check for updates at startup
+      const { hasUpdates, changes } = await this.versionMonitor.checkForUpdates();
+
+      if (hasUpdates) {
+        logger.warn('⚠️  n8n packages have been updated since last database build!');
+        logger.warn('📋 Changes detected:');
+        changes.forEach(change => logger.warn(`   - ${change}`));
+        logger.warn('🔄 Consider running: npm run rebuild:local');
+      } else {
+        logger.info('✅ n8n database is up-to-date with installed packages');
+      }
+
+      // Start monitoring for future updates (disabled by default for low-end hardware)
+      // Users can enable by setting N8N_AUTO_SYNC=true environment variable
+      if (process.env.N8N_AUTO_SYNC === 'true') {
+        this.versionMonitor.startMonitoring(true);
+        logger.info('🔍 Automatic n8n sync enabled (N8N_AUTO_SYNC=true)');
+      } else {
+        logger.info('ℹ️  Automatic n8n sync disabled (set N8N_AUTO_SYNC=true to enable)');
+      }
+    } catch (error) {
+      logger.warn('Failed to check n8n versions:', error);
+    }
   }
 
   private setupToolHandlers() {
