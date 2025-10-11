@@ -101,7 +101,9 @@
       "Bash(while read f)",
       "Bash(do echo \"=== FILE: $f ===\")",
       "Bash(wc:*)",
-      "Bash(do echo \"=== Checking $dir ===\")"
+      "Bash(do echo \"=== Checking $dir ===\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

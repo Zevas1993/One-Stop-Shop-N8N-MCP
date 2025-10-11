@@ -100,3 +100,15 @@ cache/
 data/
 *.db
 nodes.db
+
+# IDE workspaces
+.kiro/
+.qodo/
+
+# Backup directories
+archive/
+backup/
+
+# Temporary test files
+*test-results*.json
+*test-output*.json
