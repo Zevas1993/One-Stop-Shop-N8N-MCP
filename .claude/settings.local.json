@@ -103,7 +103,8 @@
       "Bash(wc:*)",
       "Bash(do echo \"=== Checking $dir ===\")",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git rev-parse:*)"
     ],
     "deny": []
   }
