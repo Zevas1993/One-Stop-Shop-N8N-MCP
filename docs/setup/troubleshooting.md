@@ -119,6 +119,24 @@ This guide addresses common issues you might encounter when setting up and using
 - Cannot execute workflows or retrieve execution data
 - Execution starts but fails to complete
 
+### GraphRAG Query Fails with 'id' or Empty Results
+
+**Symptoms:**
+- `query_graph` returns errors mentioning `id` or no nodes
+
+**Cause:**
+- Missing or empty `catalog.json` in the graph cache directory (`GRAPH_DIR`)
+
+**Fix:**
+1. Set `GRAPH_DIR` explicitly so both the seeder and backend use the same path
+   - Windows (PowerShell): `$env:GRAPH_DIR = "$env:APPDATA\n8n-mcp\graph"`
+   - Linux/macOS (bash): `export GRAPH_DIR="$HOME/.cache/n8n-mcp/graph"`
+2. Seed the catalog from SQLite: `npm run seed:catalog`
+   - Expected output: `Wrote <N> entries to <GRAPH_DIR>\catalog.json`
+3. Verify: `Get-Content $env:GRAPH_DIR\catalog.json -TotalCount 2` (Windows) or `head -n 2 "$GRAPH_DIR/catalog.json"`
+4. Retry `query_graph` or `npm run metrics:snapshot`
+5. If seeding fails, ensure `data/nodes.db` exists (~11MB). If missing: `npm run rebuild`, then re-seed.
+
 **Possible Solutions:**
 1. **API Key Scope:**
    - Ensure your API key has the `workflow:execute` permission

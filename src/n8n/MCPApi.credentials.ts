@@ -12,8 +12,8 @@ export class MCPApi implements ICredentialType {
       displayName: 'Server URL',
       name: 'serverUrl',
       type: 'string',
-      default: 'http://localhost:3000',
-      placeholder: 'http://localhost:3000',
+      default: 'http://localhost:3000/mcp',
+      placeholder: 'http://localhost:3000/mcp',
       description: 'The URL of the MCP server',
     },
     {

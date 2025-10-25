@@ -17,6 +17,18 @@ dotenv.config();
 
 let expressServer: any;
 
+function mapErrorToJsonRpc(error: any): { code: number; message: string } {
+  const msg = (error instanceof Error ? error.message : String(error)) || 'Unknown error';
+  // Custom: unauthorized
+  if (/unauthorized/i.test(msg)) return { code: -32001, message: 'Unauthorized' };
+  // JSON-RPC standard mappings
+  if (/method not found/i.test(msg)) return { code: -32601, message: msg };
+  if (/invalid request/i.test(msg)) return { code: -32600, message: msg };
+  if (/invalid param|REQUIRED|INVALID/.test(msg)) return { code: -32602, message: msg };
+  // Default internal error
+  return { code: -32603, message: msg };
+}
+
 /**
  * Validate required environment variables
  */
@@ -144,6 +156,7 @@ export async function startFixedHTTPServer() {
   // Main MCP endpoint - handle each request with custom transport handling
   app.post('/mcp', async (req: express.Request, res: express.Response): Promise<void> => {
     const startTime = Date.now();
+    const maxBodyBytes = (parseInt(process.env.MCP_HTTP_MAX_BODY_KB || '512') || 512) * 1024; // default 512KB
     
     // Simple auth check
     const authHeader = req.headers.authorization;
@@ -175,6 +188,15 @@ export async function startFixedHTTPServer() {
       let body = '';
       req.on('data', chunk => {
         body += chunk.toString();
+        if (body.length > maxBodyBytes) {
+          logger.warn('Request body too large', { size: body.length });
+          res.status(413).json({
+            jsonrpc: '2.0',
+            error: { code: -32002, message: 'Payload too large' },
+            id: null
+          });
+          req.socket.destroy();
+        }
       });
       
       req.on('end', async () => {
@@ -242,11 +264,12 @@ export async function startFixedHTTPServer() {
                   id: jsonRpcRequest.id
                 };
               } catch (error) {
+                const mapped = mapErrorToJsonRpc(error);
                 response = {
                   jsonrpc: '2.0',
                   error: {
-                    code: -32603,
-                    message: `Error executing tool ${toolName}: ${error instanceof Error ? error.message : 'Unknown error'}`
+                    code: mapped.code,
+                    message: `Error executing tool ${toolName}: ${mapped.message}`
                   },
                   id: jsonRpcRequest.id
                 };

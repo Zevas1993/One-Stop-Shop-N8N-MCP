@@ -54,7 +54,12 @@
     "db:rebuild": "node dist/scripts/rebuild-database.js",
     "db:init": "node -e \"new (require('./dist/services/sqlite-storage-service').SQLiteStorageService)(); console.log('Database initialized')\"",
     "docs:rebuild": "ts-node src/scripts/rebuild-database.ts",
-    "sync:runtime-version": "node scripts/sync-runtime-version.js"
+    "sync:runtime-version": "node scripts/sync-runtime-version.js",
+    "test:graphrag": "ts-node src/scripts/test-graphrag.ts",
+    "test:http-client": "ts-node src/scripts/test-http-mcp-client.ts",
+    "seed:catalog": "ts-node src/scripts/seed-graph-catalog.ts",
+    "metrics:snapshot": "ts-node src/scripts/metrics-snapshot.ts",
+    "test:coverage": "jest --coverage --passWithNoTests"
   },
   "repository": {
     "type": "git",
@@ -78,6 +83,7 @@
     "@n8n/n8n-nodes-langchain": "^1.113.0",
     "@octokit/rest": "^22.0.0",
     "@playwright/test": "^1.53.2",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.3",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.15.30",

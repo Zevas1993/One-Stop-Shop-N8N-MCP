@@ -19,6 +19,26 @@ The n8n MCP Server is configured using environment variables, which can be set i
 |----------|-------------|---------|---------|
 | `DEBUG` | Enable debug logging | `false` | `true` or `false` |
 
+### GraphRAG & Runtime (New)
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `GRAPH_DIR` | Graph cache directory (authoritative for retrieval) | OS default | `C:\Users\<You>\AppData\Roaming\n8n-mcp\graph` |
+| `MEM_GUARD_THRESHOLD_MB` | Heap threshold to trigger cache cleanup | `512` | `768` |
+| `BRIDGE_CACHE_MAX` | Max cached `query_graph` entries | `100` | `200` |
+| `MCP_HTTP_MAX_BODY_KB` | Max JSON‑RPC body size (KB) | `512` | `1024` |
+| `METRICS_GRAPHRAG` | Enable latency + p50/p95 + cache hit logs | `false` | `true` |
+
+### Seeding & Metrics Commands
+
+```bash
+# Seed the graph catalog from SQLite into GRAPH_DIR
+npm run seed:catalog
+
+# Emit a metrics snapshot (JSON with p50/p95/cacheHitRate)
+METRICS_GRAPHRAG=true npm run metrics:snapshot
+```
+
 ## Creating a .env File
 
 The simplest way to configure the server is to create a `.env` file in the directory where you'll run the server:

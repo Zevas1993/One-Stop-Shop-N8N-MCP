@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { n8nDocumentationToolsFinal } from './tools';
 import { n8nManagementTools } from './tools-n8n-manager';
+import { graphRagTools, handleQueryGraph } from './tools-graphrag';
 import { logger } from '../utils/logger';
 import { NodeRepository } from '../database/node-repository';
 import { DatabaseAdapter, createDatabaseAdapter } from '../database/database-adapter';
@@ -27,6 +28,10 @@ import { handleUpdatePartialWorkflow } from './handlers-workflow-diff';
 import { HandlerRegistry } from './handlers/handler-registry';
 import { PROJECT_VERSION } from '../utils/version';
 import { LazyInitializationManager } from './lazy-initialization-manager';
+import { GraphUpdateLoop } from '../ai/graph-update-loop';
+import { GraphRAGBridge } from '../ai/graphrag-bridge';
+import { GraphWatcher } from '../ai/graph-watcher';
+import { MemoryGuard } from '../utils/memory-guard';
 
 interface NodeRow {
   node_type: string;
@@ -98,6 +103,38 @@ export class N8NDocumentationMCPServer {
     );
 
     this.setupHandlers();
+
+    // Optional: start graph update loop and watcher when n8n API is configured
+    try {
+      const apiConfigured = isN8nApiConfigured();
+      if (apiConfigured) {
+        const loop = new GraphUpdateLoop();
+        loop.start();
+        const graphDir = process.env.GRAPH_DIR || require('path').join(require('os').homedir(), '.cache', 'n8n-mcp', 'graph');
+        const watcher = new GraphWatcher(graphDir);
+        watcher.start(() => {
+          // Clear bridge cache on any file changes
+          GraphRAGBridge.get().clearCache();
+        });
+        logger.info('Graph update loop and watcher started');
+      }
+    } catch (e: any) {
+      logger.warn('Failed to start graph update loop/watcher', { error: e?.message || String(e) });
+    }
+
+    // Memory guard: aggressively clear caches if heap crosses threshold
+    try {
+      const guard = new MemoryGuard();
+      guard.addCleaner(() => {
+        this.nodeListCache.clear();
+        this.nodeInfoCache.clear();
+        GraphRAGBridge.get().clearCache();
+      });
+      guard.start();
+      logger.info('Memory guard started');
+    } catch (e: any) {
+      logger.warn('Failed to start memory guard', { error: e?.message || String(e) });
+    }
   }
 
   /**
@@ -183,7 +220,7 @@ export class N8NDocumentationMCPServer {
     // Handle tool listing
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       // Combine documentation tools with management tools and enhanced visual verification
-      const tools = [...n8nDocumentationToolsFinal];
+      const tools = [...n8nDocumentationToolsFinal, ...graphRagTools];
       const isConfigured = isN8nApiConfigured();
 
       if (isConfigured) {
@@ -303,6 +340,9 @@ export class N8NDocumentationMCPServer {
   
   private async executeToolInternal(name: string, args: any): Promise<any> {
     switch (name) {
+      // GraphRAG tools
+      case 'query_graph':
+        return handleQueryGraph({ query: args.query, top_k: args.top_k });
       case 'get_workflow_guide':
         return this.getWorkflowGuide(args.scenario);
       case 'find_nodes':

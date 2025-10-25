@@ -104,7 +104,16 @@
       "Bash(do echo \"=== Checking $dir ===\")",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git rev-parse:*)"
+      "Bash(git rev-parse:*)",
+      "Bash(test:*)",
+      "Read(//f/N8N/**)",
+      "Bash(powershell -Command:*)",
+      "Bash(n8n start)",
+      "Bash(where:*)",
+      "Bash(\"C:\\Users\\Chris Boyd\\AppData\\Roaming\\npm\\n8n\" start)",
+      "Bash(netstat:*)",
+      "Bash(npm test:*)",
+      "Bash(tee:*)"
     ],
     "deny": []
   }
