@@ -113,7 +113,18 @@
       "Bash(\"C:\\Users\\Chris Boyd\\AppData\\Roaming\\npm\\n8n\" start)",
       "Bash(netstat:*)",
       "Bash(npm test:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "WebFetch(domain:api.github.com)",
+      "Read(//usr/lib/**)",
+      "Read(//home/hris_oyd/.claude/**)",
+      "Read(//home/**)",
+      "Read(//tmp/**)",
+      "Bash(dir:*)",
+      "Bash(BashOutput 1dffed)",
+      "Bash(N8N_API_URL=http://localhost:5678 N8N_API_KEY=test123 timeout 60 node:*)",
+      "Bash(tar:*)",
+      "Bash(BashOutput 2873ef)",
+      "Bash(lsof:*)"
     ],
     "deny": []
   }

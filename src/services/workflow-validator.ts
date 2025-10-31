@@ -70,6 +70,86 @@ export class WorkflowValidator {
   ) {}
 
   /**
+   * Validate workflow schema/structure for n8n API compatibility (Issue #1)
+   * Checks that workflow contains only allowed properties and required fields
+   * This prevents agents from wasting tokens on workflows that will be rejected by the API
+   */
+  validateWorkflowSchema(
+    workflow: any,
+    result: WorkflowValidationResult
+  ): void {
+    // REQUIRED properties that n8n API expects
+    const REQUIRED_PROPERTIES = ['nodes', 'connections'];
+
+    // ALLOWED properties for n8n API (anything else will be rejected)
+    const ALLOWED_PROPERTIES = new Set([
+      'name',
+      'nodes',
+      'connections',
+      'settings',
+      'staticData',
+      'pinData',
+      'meta'
+    ]);
+
+    // FORBIDDEN properties that will cause API 400 error
+    const FORBIDDEN_PROPERTIES = [
+      'active',
+      'description',
+      'tags',
+      'createdAt',
+      'updatedAt',
+      'id',
+      'versions'
+    ];
+
+    // Check for required properties
+    for (const prop of REQUIRED_PROPERTIES) {
+      if (!(prop in workflow)) {
+        result.errors.push({
+          type: 'error',
+          message: `Missing required property '${prop}'. n8n API requires: ${REQUIRED_PROPERTIES.join(', ')}`
+        });
+      }
+    }
+
+    // Check for forbidden properties
+    for (const prop of FORBIDDEN_PROPERTIES) {
+      if (prop in workflow) {
+        result.errors.push({
+          type: 'error',
+          message: `Property '${prop}' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: ${Array.from(ALLOWED_PROPERTIES).join(', ')}`
+        });
+      }
+    }
+
+    // Check for unknown properties (might be extra properties not in allowed list)
+    for (const prop of Object.keys(workflow)) {
+      if (!ALLOWED_PROPERTIES.has(prop)) {
+        result.errors.push({
+          type: 'error',
+          message: `Property '${prop}' is not allowed by n8n API. Allowed properties are: ${Array.from(ALLOWED_PROPERTIES).join(', ')}`
+        });
+      }
+    }
+
+    // Validate 'settings' if present - it must have specific structure
+    if ('settings' in workflow && workflow.settings !== null && typeof workflow.settings === 'object') {
+      if (!('executionOrder' in workflow.settings)) {
+        // Not all workflows require executionOrder, but if settings exists, document it
+        logger.debug('[WorkflowValidator] Note: settings should include executionOrder property');
+      }
+    }
+
+    // Log if schema validation found errors
+    if (result.errors.some(e => e.message.includes('schema') || e.message.includes('property'))) {
+      logger.warn('[WorkflowValidator] Schema validation found issues that will prevent API deployment', {
+        errorCount: result.errors.filter(e => e.message.includes('schema') || e.message.includes('property')).length
+      });
+    }
+  }
+
+  /**
    * Validate a complete workflow
    */
   async validateWorkflow(
@@ -104,6 +184,17 @@ export class WorkflowValidator {
     };
 
     try {
+      // FIRST: Validate schema/properties for n8n API compatibility (Issue #1)
+      // This must run BEFORE other validations to catch API-level errors early
+      this.validateWorkflowSchema(workflow, result);
+
+      // Stop early if schema validation failed - no point in continuing
+      if (result.errors.some(e => e.message.includes('property') || e.message.includes('schema'))) {
+        logger.warn('[WorkflowValidator] Schema validation failed, stopping further validation');
+        result.valid = false;
+        return result;
+      }
+
       // Basic workflow structure validation
       this.validateWorkflowStructure(workflow, result);
 

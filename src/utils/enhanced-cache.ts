@@ -22,6 +22,7 @@ export class EnhancedCache<T = any> {
   private config: CacheConfig;
   private performanceMonitor: PerformanceMonitor;
   private cleanupInterval: NodeJS.Timeout | null = null;
+  private memoryPressureInterval: NodeJS.Timeout | null = null;
   private currentMemoryMB: number = 0;
   private maxMemoryMB: number;
 
@@ -35,12 +36,20 @@ export class EnhancedCache<T = any> {
     if (this.config.enabled) {
       // Start cleanup interval every 5 minutes
       this.cleanupInterval = setInterval(() => {
-        this.cleanup();
+        try {
+          this.cleanup();
+        } catch (error) {
+          logger.error('[Cache] Error in cleanup interval:', error);
+        }
       }, 5 * 60 * 1000);
 
-      // Check memory pressure more frequently (every 30 seconds)
-      setInterval(() => {
-        this.checkMemoryPressure();
+      // Check memory pressure more frequently (every 30 seconds) with error handling
+      this.memoryPressureInterval = setInterval(() => {
+        try {
+          this.checkMemoryPressure();
+        } catch (error) {
+          logger.error('[Cache] Error in memory pressure check:', error);
+        }
       }, 30 * 1000);
     }
 
@@ -351,9 +360,36 @@ export class EnhancedCache<T = any> {
   }
 
   private estimateSize(value: any): number {
-    // Rough estimate of object size in bytes
-    const json = JSON.stringify(value);
-    return json.length * 2; // UTF-16 encoding
+    // Accurate estimate of object size in bytes
+    if (value === null || value === undefined) {
+      return 8; // null/undefined overhead
+    }
+
+    if (typeof value === 'string') {
+      return value.length * 2; // UTF-16 encoding for strings
+    }
+
+    if (typeof value === 'number') {
+      return 8; // 64-bit number
+    }
+
+    if (typeof value === 'boolean') {
+      return 4; // boolean
+    }
+
+    // For objects, arrays, and complex types
+    try {
+      const json = JSON.stringify(value);
+      // Use actual byte length with UTF-8 encoding (more accurate for modern systems)
+      const byteLength = Buffer.byteLength(json, 'utf8');
+      // Add overhead for object structure (references, internal properties)
+      const structureOverhead = 100 + (Object.keys(value).length * 8);
+      return byteLength + structureOverhead;
+    } catch (e) {
+      // Fallback for circular references or non-serializable objects
+      logger.debug(`[Cache] Failed to estimate size for value, using default: ${e instanceof Error ? e.message : 'unknown error'}`);
+      return 1024; // Default 1KB estimate for non-serializable objects
+    }
   }
 
   destroy(): void {
@@ -361,6 +397,11 @@ export class EnhancedCache<T = any> {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
+    if (this.memoryPressureInterval) {
+      clearInterval(this.memoryPressureInterval);
+      this.memoryPressureInterval = null;
+    }
     this.clear();
+    logger.debug('[Cache] Cache destroyed and intervals cleared');
   }
 }
