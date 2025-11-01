@@ -10,6 +10,14 @@ import path from 'path';
 import { n8nDocumentationToolsFinal } from './tools';
 import { n8nManagementTools } from './tools-n8n-manager';
 import { graphRagTools, handleQueryGraph } from './tools-graphrag';
+import {
+  nanoAgentTools,
+  handleExecuteAgentPipeline,
+  handleExecutePatternDiscovery,
+  handleExecuteGraphRAGQuery,
+  handleExecuteWorkflowGeneration,
+  handleGetAgentStatus,
+} from './tools-nano-agents';
 import { logger } from '../utils/logger';
 import { NodeRepository } from '../database/node-repository';
 import { DatabaseAdapter, createDatabaseAdapter } from '../database/database-adapter';
@@ -219,15 +227,15 @@ export class N8NDocumentationMCPServer {
 
     // Handle tool listing
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      // Combine documentation tools with management tools and enhanced visual verification
-      const tools = [...n8nDocumentationToolsFinal, ...graphRagTools];
+      // Combine all tool categories
+      const tools = [...n8nDocumentationToolsFinal, ...graphRagTools, ...nanoAgentTools];
       const isConfigured = isN8nApiConfigured();
 
       if (isConfigured) {
         tools.push(...n8nManagementTools);
-        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation + ${n8nManagementTools.length} management)`);
+        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation + ${nanoAgentTools.length} nano-agents + ${n8nManagementTools.length} management)`);
       } else {
-        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation)`);
+        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation + ${nanoAgentTools.length} nano-agents)`);
       }
 
       return { tools };
@@ -343,6 +351,23 @@ export class N8NDocumentationMCPServer {
       // GraphRAG tools
       case 'query_graph':
         return handleQueryGraph({ query: args.query, top_k: args.top_k });
+
+      // Nano Agent Tools (agentic GraphRAG)
+      case 'execute_agent_pipeline':
+        return handleExecuteAgentPipeline({
+          goal: args.goal,
+          enableGraphRAG: args.enableGraphRAG,
+          shareInsights: args.shareInsights,
+        });
+      case 'execute_pattern_discovery':
+        return handleExecutePatternDiscovery({ goal: args.goal });
+      case 'execute_graphrag_query':
+        return handleExecuteGraphRAGQuery({ query: args.query, topK: args.topK });
+      case 'execute_workflow_generation':
+        return handleExecuteWorkflowGeneration({ goal: args.goal, patternId: args.patternId });
+      case 'get_agent_status':
+        return handleGetAgentStatus({ includeHistory: args.includeHistory });
+
       case 'get_workflow_guide':
         return this.getWorkflowGuide(args.scenario);
       case 'find_nodes':

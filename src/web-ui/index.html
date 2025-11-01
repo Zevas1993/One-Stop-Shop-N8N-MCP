@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>n8n Workflow Assistant - Powered by Local LLM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .header h1 {
+            margin-bottom: 5px;
+            font-size: 28px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .container {
+            flex: 1;
+            max-width: 1200px;
+            width: 100%;
+            margin: 20px auto;
+            padding: 0 20px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+            max-height: 600px;
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-card {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .status-item {
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+
+        .status-item label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .status-item .value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 400px;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid #eee;
+            padding: 15px;
+            border-radius: 6px;
+            background: #fafafa;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 10px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.assistant {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 6px;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+
+        .user .message-content {
+            background: #667eea;
+            color: white;
+        }
+
+        .assistant .message-content {
+            background: #e9e9e9;
+            color: #333;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .input-group button {
+            padding: 12px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .input-group button:hover {
+            background: #5568d3;
+        }
+
+        .input-group button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 8px;
+        }
+
+        .workflow-item {
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            font-size: 13px;
+            border-left: 3px solid transparent;
+        }
+
+        .workflow-item:hover {
+            background: #e8e8e8;
+            border-left-color: #667eea;
+        }
+
+        .setup-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            color: #333;
+            font-size: 13px;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .button-group button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s ease;
+            font-size: 13px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .alert-info {
+            background: #e3f2fd;
+            color: #1565c0;
+            border-left: 4px solid #1976d2;
+        }
+
+        .alert-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-left: 4px solid #43a047;
+        }
+
+        .alert-warning {
+            background: #fff3e0;
+            color: #e65100;
+            border-left: 4px solid #fb8c00;
+        }
+
+        .alert-error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #e53935;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+
+        .badge-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .badge-warning {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .footer {
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-size: 12px;
+            margin-top: auto;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                max-height: none;
+            }
+
+            .status-card {
+                grid-template-columns: 1fr;
+            }
+
+            .message-content {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 n8n Workflow Assistant</h1>
+        <p>Design and deploy n8n workflows using conversational AI</p>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <div id="setupSection">
+                <div class="section-title">⚙️ Setup</div>
+                <div class="setup-form" id="setupForm" style="display: none;">
+                    <div class="form-group">
+                        <label>n8n API URL</label>
+                        <input type="text" id="apiUrl" placeholder="http://localhost:5678" value="http://localhost:5678">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key</label>
+                        <input type="password" id="apiKey" placeholder="Your n8n API key">
+                    </div>
+                    <div class="button-group">
+                        <button class="btn-primary" onclick="configureN8n()">Configure</button>
+                        <button class="btn-secondary" onclick="toggleSetup()">Cancel</button>
+                    </div>
+                </div>
+                <button class="btn-primary" id="setupButton" onclick="toggleSetup()" style="width: 100%;">Configure n8n</button>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <div class="section-title">📊 System Info</div>
+                <div id="hardwareInfo" style="font-size: 12px; color: #666;">
+                    <p>Loading...</p>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <div class="section-title">🤖 Current LLM</div>
+                <div id="llmInfo" style="font-size: 12px; color: #666;">
+                    <p>Loading...</p>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <div class="section-title">📋 Workflows</div>
+                <div id="workflowsList">
+                    <p style="font-size: 12px; color: #999;">No workflows yet</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="main">
+            <div class="card">
+                <div class="status-card" id="statusCard">
+                    <div class="status-item">
+                        <label>Status</label>
+                        <div class="value" id="statusValue">Initializing...</div>
+                    </div>
+                    <div class="status-item">
+                        <label>Configured</label>
+                        <div class="value" id="configuredValue">Checking...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card chat-container">
+                <h3 style="margin-bottom: 15px;">💬 Conversation</h3>
+                <div class="messages" id="messages"></div>
+                <div class="input-group">
+                    <input
+                        type="text"
+                        id="messageInput"
+                        placeholder="Describe the workflow you want to create..."
+                        onkeypress="handleKeyPress(event)"
+                    >
+                    <button onclick="sendMessage()" id="sendBtn">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>🚀 n8n Workflow Assistant - Powered by Local Nano LLM | © 2025</p>
+    </div>
+
+    <script>
+        let isInitialized = false;
+        let isConfigured = false;
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initializeUI();
+        });
+
+        async function initializeUI() {
+            try {
+                // Load setup status
+                const setupRes = await fetch('/api/local-llm/setup');
+                const setupData = await setupRes.json();
+
+                isConfigured = setupData.isConfigured;
+                updateStatusUI(setupData);
+
+                // Load conversation history
+                loadConversation();
+
+                // Load workflows
+                loadWorkflows();
+
+                isInitialized = true;
+            } catch (error) {
+                console.error('Initialization error:', error);
+                addSystemMessage('⚠️ Failed to initialize. Please refresh the page.');
+            }
+        }
+
+        function updateStatusUI(setupData) {
+            document.getElementById('statusValue').textContent = 'Ready';
+            document.getElementById('configuredValue').textContent = isConfigured ? '✅ Yes' : '❌ No';
+
+            // Update hardware info
+            const hw = setupData.hardware;
+            document.getElementById('hardwareInfo').innerHTML = `
+                <p><strong>CPU:</strong> ${hw.cpuCores} cores</p>
+                <p><strong>RAM:</strong> ${hw.ramGbytes}GB</p>
+                <p><strong>GPU:</strong> ${hw.hasGpu ? 'Yes' : 'No'}</p>
+                <p><strong>OS:</strong> ${hw.osType}</p>
+            `;
+
+            // Update LLM info
+            const llm = setupData.selectedLLM;
+            document.getElementById('llmInfo').innerHTML = `
+                <p><strong>${llm.displayName}</strong></p>
+                <p style="font-size: 11px; color: #999;">
+                    ${llm.modelSize}<br>
+                    ${llm.speed} • ${llm.quality}
+                </p>
+            `;
+
+            // Show setup warnings if needed
+            if (setupData.systemValidation.warnings.length > 0) {
+                const warning = setupData.systemValidation.warnings[0];
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-warning';
+                alert.textContent = '⚠️ ' + warning;
+                document.querySelector('.card').prepend(alert);
+            }
+        }
+
+        function toggleSetup() {
+            const form = document.getElementById('setupForm');
+            const btn = document.getElementById('setupButton');
+            form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+            btn.style.display = btn.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function configureN8n() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const apiKey = document.getElementById('apiKey').value;
+
+            if (!apiUrl || !apiKey) {
+                alert('Please enter both API URL and Key');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/local-llm/configure', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ n8nApiUrl: apiUrl, n8nApiKey: apiKey })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    isConfigured = true;
+                    document.getElementById('configuredValue').textContent = '✅ Yes';
+                    addSystemMessage('✅ ' + data.message);
+                    toggleSetup();
+                } else {
+                    addSystemMessage('❌ Configuration failed: ' + data.message);
+                }
+            } catch (error) {
+                addSystemMessage('❌ Error: ' + error.message);
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // Add user message to UI
+            addMessage('user', message);
+            input.value = '';
+
+            // Disable send button
+            const btn = document.getElementById('sendBtn');
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/local-llm/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    addMessage('assistant', data.message);
+                } else {
+                    addSystemMessage('❌ Error: ' + data.error);
+                }
+            } catch (error) {
+                addSystemMessage('❌ Network error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                input.focus();
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function addMessage(role, content) {
+            const messages = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = content; // Allow HTML formatting
+
+            messageDiv.appendChild(contentDiv);
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function addSystemMessage(content) {
+            const messages = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.style.textAlign = 'center';
+            messageDiv.style.fontSize = '12px';
+            messageDiv.style.color = '#999';
+            messageDiv.style.marginBottom = '10px';
+            messageDiv.textContent = content;
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        async function loadConversation() {
+            try {
+                const res = await fetch('/api/local-llm/conversation');
+                const data = await res.json();
+
+                if (data.messages.length === 0) {
+                    addSystemMessage('👋 Start by telling me about your workflow idea!');
+                } else {
+                    data.messages.forEach(msg => {
+                        addMessage(msg.role, msg.content);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load conversation:', error);
+            }
+        }
+
+        async function loadWorkflows() {
+            try {
+                const res = await fetch('/api/local-llm/workflows');
+                const data = await res.json();
+
+                const list = document.getElementById('workflowsList');
+                list.innerHTML = '';
+
+                if (data.workflows.length === 0) {
+                    list.innerHTML = '<p style="font-size: 12px; color: #999;">No workflows yet</p>';
+                    return;
+                }
+
+                data.workflows.forEach(workflow => {
+                    const item = document.createElement('div');
+                    item.className = 'workflow-item';
+                    const statusBadge = workflow.isDeployed ? '✅ Deployed' : '📋 Ready';
+                    item.innerHTML = `
+                        <strong>${workflow.id.substring(0, 15)}...</strong>
+                        <span class="badge badge-${workflow.isDeployed ? 'success' : 'warning'}">${statusBadge}</span>
+                        <div style="font-size: 11px; color: #999; margin-top: 5px;">
+                            ${workflow.nodeCount} nodes • ${new Date(workflow.generatedAt).toLocaleDateString()}
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Failed to load workflows:', error);
+            }
+        }
+    </script>
+</body>
+</html>
