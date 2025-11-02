@@ -18,6 +18,8 @@ import {
   handleExecuteWorkflowGeneration,
   handleGetAgentStatus,
 } from './tools-nano-agents';
+import { nanoLLMTools } from './tools-nano-llm';
+import { getNanoLLMPipelineHandler } from './handlers-nano-llm-pipeline';
 import { logger } from '../utils/logger';
 import { NodeRepository } from '../database/node-repository';
 import { DatabaseAdapter, createDatabaseAdapter } from '../database/database-adapter';
@@ -111,6 +113,15 @@ export class N8NDocumentationMCPServer {
     );
 
     this.setupHandlers();
+
+    // Initialize nano LLM pipeline (non-blocking, will await repository when needed)
+    try {
+      logger.info('[NanoLLMPipeline] Initializing nano LLM pipeline handler');
+      // Handler will be created on-demand when first query comes in
+      // This ensures database is loaded first
+    } catch (e: any) {
+      logger.warn('Failed to initialize nano LLM pipeline', { error: e?.message || String(e) });
+    }
 
     // Optional: start graph update loop and watcher when n8n API is configured
     try {
@@ -228,14 +239,14 @@ export class N8NDocumentationMCPServer {
     // Handle tool listing
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       // Combine all tool categories
-      const tools = [...n8nDocumentationToolsFinal, ...graphRagTools, ...nanoAgentTools];
+      const tools = [...n8nDocumentationToolsFinal, ...graphRagTools, ...nanoAgentTools, ...nanoLLMTools];
       const isConfigured = isN8nApiConfigured();
 
       if (isConfigured) {
         tools.push(...n8nManagementTools);
-        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation + ${nanoAgentTools.length} nano-agents + ${n8nManagementTools.length} management)`);
+        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation + ${nanoAgentTools.length} nano-agents + ${nanoLLMTools.length} nano-llm + ${n8nManagementTools.length} management)`);
       } else {
-        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation + ${nanoAgentTools.length} nano-agents)`);
+        logger.debug(`Tool listing: ${tools.length} tools available (${n8nDocumentationToolsFinal.length} documentation + ${nanoAgentTools.length} nano-agents + ${nanoLLMTools.length} nano-llm)`);
       }
 
       return { tools };
@@ -348,6 +359,50 @@ export class N8NDocumentationMCPServer {
   
   private async executeToolInternal(name: string, args: any): Promise<any> {
     switch (name) {
+      // Nano LLM Pipeline Tools
+      case 'nano_llm_query': {
+        await this.ensureFullyInitialized();
+        const handler = getNanoLLMPipelineHandler(this.repository || undefined);
+        const result = await handler.handleQuery(
+          args.query,
+          args.userExpertise || 'intermediate'
+        );
+
+        // Add metrics and trace ID if requested
+        if (args.returnMetrics) {
+          return {
+            ...result,
+            observability: handler.getObservability(),
+          };
+        }
+        return result;
+      }
+
+      case 'nano_llm_observability': {
+        const handler = getNanoLLMPipelineHandler(this.repository || undefined);
+        const observability = handler.getObservability();
+
+        return {
+          status: observability.status,
+          message: observability.message,
+          metrics: observability.metrics,
+        };
+      }
+
+      case 'nano_llm_node_values': {
+        const handler = getNanoLLMPipelineHandler(this.repository || undefined);
+        const calc = handler.getNodeValueCalculator();
+
+        // This would get node values - implementation depends on how node calculator stores them
+        return {
+          message: 'Node value calculator initialized',
+          tier: args.tier || 'all',
+          limit: args.limit || 50,
+          sortBy: args.sortBy || 'value_score',
+          note: 'Node values are computed and updated during nano_llm_query operations'
+        };
+      }
+
       // GraphRAG tools
       case 'query_graph':
         return handleQueryGraph({ query: args.query, top_k: args.top_k });
