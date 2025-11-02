@@ -1,5 +1,21 @@
 #!/usr/bin/env node
 
+// Note: In Docker, environment variables are set via docker-compose.yml or -e flags
+// In local development, load from .env file using dotenv
+import dotenv from 'dotenv';
+// Always try to load .env file - this provides defaults for local development
+// Docker environment variables (passed via docker-compose.yml) will override .env values
+// since they're already in process.env before this runs
+try {
+  const result = dotenv.config();
+  // Explicitly assign parsed values to process.env to ensure they're available
+  if (result.parsed) {
+    Object.assign(process.env, result.parsed);
+  }
+} catch (e) {
+  // Ignore errors if .env doesn't exist
+}
+
 import { N8NDocumentationMCPServer } from './server';
 import { SimpleConsolidatedMCPServer } from './server-simple-consolidated';
 // Simple auto server removed - use main server instead
