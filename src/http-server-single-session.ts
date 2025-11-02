@@ -10,6 +10,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { N8NDocumentationMCPServer } from './mcp/server';
 import { ConsoleManager } from './utils/console-manager';
 import { logger } from './utils/logger';
+import { GraphRAGLearningService } from './services/graphrag-learning-service';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -26,8 +27,18 @@ export class SingleSessionHTTPServer {
   private consoleManager = new ConsoleManager();
   private expressServer: any;
   private sessionTimeout = 30 * 60 * 1000; // 30 minutes
-  
+  private learningService: GraphRAGLearningService;
+
   constructor() {
+    // Initialize GraphRAG learning service
+    const embeddingModel = process.env.EMBEDDING_MODEL || 'BAAI/bge-small-en-v1.5';
+    const generationModel = process.env.GENERATION_MODEL || 'Qwen/Qwen3-4B-Instruct';
+    this.learningService = new GraphRAGLearningService(
+      embeddingModel,
+      generationModel,
+      768
+    );
+
     // Validate environment on construction
     this.validateEnvironment();
   }
@@ -311,24 +322,76 @@ export class SingleSessionHTTPServer {
       });
     });
 
-    // API endpoint for learning feedback
-    app.post('/api/learning/feedback', (req, res) => {
-      const { workflowId, success, executionTime, feedback } = req.body;
-      logger.info('Workflow feedback received', { workflowId, success, executionTime });
-      res.json({
-        success: true,
-        feedback: 'recorded',
-        timestamp: new Date().toISOString()
-      });
+    // API endpoint for learning feedback - Nano LLM-driven GraphRAG updates
+    app.post('/api/learning/feedback', async (req: express.Request, res: express.Response): Promise<void> => {
+      try {
+        const { executionId, workflowId, userId, workflow, feedback } = req.body;
+
+        logger.info('Workflow feedback received for learning', {
+          executionId,
+          workflowId,
+          success: feedback?.success,
+          executionTime: feedback?.executionTime,
+        });
+
+        // Process feedback through Nano LLM learning pipeline
+        const learningFeedback = {
+          executionId: executionId || `exec-${Date.now()}`,
+          workflowId: workflowId || 'unknown',
+          userId: userId || 'anonymous',
+          timestamp: new Date().toISOString(),
+          workflow: workflow || { nodes: [], connections: {} },
+          feedback: feedback || {
+            success: false,
+            executionTime: 0,
+            nodeCount: 0,
+          },
+        };
+
+        // Run through Nano LLM pipeline
+        const updateDecision = await this.learningService.processWorkflowFeedback(
+          learningFeedback
+        );
+
+        logger.info('Learning feedback processed', {
+          executionId: learningFeedback.executionId,
+          decision: updateDecision.strategicAnalysis.decisionType,
+          confidence: updateDecision.strategicAnalysis.overallConfidence,
+        });
+
+        // Return update decision to client
+        res.json({
+          success: true,
+          feedback: 'processed through Nano LLM learning pipeline',
+          decision: updateDecision.strategicAnalysis.decisionType,
+          confidence: updateDecision.strategicAnalysis.overallConfidence,
+          operations: updateDecision.updateOperations.length,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        logger.error('Error processing workflow feedback', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        res.status(500).json({
+          success: false,
+          error: 'Failed to process feedback through learning pipeline',
+          timestamp: new Date().toISOString(),
+        });
+      }
     });
 
-    // API endpoint for learning progress
+    // API endpoint for learning progress - Shows what Nano LLMs learned
     app.get('/api/learning/progress', (req, res) => {
+      const progress = this.learningService.getLearningProgress();
       res.json({
-        learnedPatterns: 12,
-        successRate: 0.87,
-        avgExecutionTime: 2.3,
-        lastUpdated: new Date().toISOString()
+        patternsDiscovered: progress.patternsDiscovered,
+        patternsPromoted: progress.patternsPromoted,
+        pendingPatterns: progress.pendingPatterns,
+        successRate: progress.successRate,
+        avgConfidenceScore: progress.avgConfidenceScore,
+        lastUpdated: progress.lastUpdateTimestamp,
+        recentUpdates: progress.recentUpdates.slice(0, 5),
+        description: 'Learning progress from Nano LLM-driven GraphRAG updates',
       });
     });
 
