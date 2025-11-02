@@ -1,0 +1,93 @@
+# docker-compose.simple.yml
+# Simplified MCP Server - Using Host Ollama (No vLLM services)
+# For use when Ollama is already running locally
+version: '3.8'
+
+services:
+  # ============================================
+  # Main n8n MCP Server (Full Mode)
+  # Points to local Ollama on host
+  # ============================================
+  n8n-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: n8n-mcp:latest
+    container_name: n8n-mcp-server
+    restart: unless-stopped
+
+    # Environment configuration
+    environment:
+      # Mode configuration - FULL MODE for all features
+      MCP_MODE: full
+      USE_FIXED_HTTP: ${USE_FIXED_HTTP:-true}
+      AUTH_TOKEN: ${AUTH_TOKEN:-}
+
+      # Application settings
+      NODE_ENV: ${NODE_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PORT: ${PORT:-3000}
+
+      # Database
+      NODE_DB_PATH: ${NODE_DB_PATH:-/app/data/nodes.db}
+      REBUILD_ON_START: ${REBUILD_ON_START:-false}
+
+      # Optional: n8n API configuration
+      N8N_API_URL: ${N8N_API_URL}
+      N8N_API_KEY: ${N8N_API_KEY}
+      N8N_API_TIMEOUT: ${N8N_API_TIMEOUT:-30000}
+      N8N_API_MAX_RETRIES: ${N8N_API_MAX_RETRIES:-3}
+
+      # N8N Browser Authentication
+      N8N_USERNAME: ${N8N_USERNAME:-chrisboyd1993@gmail.com}
+      N8N_PASSWORD: ${N8N_PASSWORD:-AlastorB2024!@#}
+
+      # ============================================
+      # Nano LLM Configuration
+      # Using HOST Ollama (localhost:11434)
+      # ============================================
+      # Embedding Model
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://host.docker.internal:11434}
+      EMBEDDING_SERVER_PORT: ${EMBEDDING_SERVER_PORT:-11434}
+
+      # Generation Model
+      GENERATION_MODEL: ${GENERATION_MODEL:-avil/nvidia-llama-3.1-nemotron-nano-4b-v1.1-thinking}
+      GENERATION_BASE_URL: ${GENERATION_BASE_URL:-http://host.docker.internal:11434}
+      GENERATION_SERVER_PORT: ${GENERATION_SERVER_PORT:-11434}
+
+      # Ollama Configuration
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+
+    # Volumes for persistence
+    volumes:
+      - n8n-mcp-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    # Port mapping
+    ports:
+      - "${PORT:-3000}:3000"
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# ============================================
+# Named volumes for data persistence
+# ============================================
+volumes:
+  n8n-mcp-data:
+    driver: local
+

@@ -110,7 +110,7 @@ services:
     # Environment configuration
     environment:
       # Mode configuration (consolidated, http, or stdio)
-      MCP_MODE: ${MCP_MODE:-consolidated}
+      MCP_MODE: ${MCP_MODE:-full}
       USE_FIXED_HTTP: ${USE_FIXED_HTTP:-true}  # Use fixed implementation for stability
       AUTH_TOKEN: ${AUTH_TOKEN:-}
 

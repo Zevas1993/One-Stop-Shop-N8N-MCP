@@ -2926,18 +2926,9 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
 
-    // Force flush stdout for Docker environments
-    // Docker uses block buffering which can delay MCP responses
-    if (!process.stdout.isTTY || process.env.IS_DOCKER) {
-      // Override write to auto-flush
-      const originalWrite = process.stdout.write.bind(process.stdout);
-      process.stdout.write = function(chunk: any, encoding?: any, callback?: any) {
-        const result = originalWrite(chunk, encoding, callback);
-        // Force immediate flush
-        process.stdout.emit('drain');
-        return result;
-      };
-    }
+    // Don't override stdout.write - the MCP SDK handles buffering correctly
+    // Attempting to manually emit 'drain' events interferes with proper stdio communication
+    // The StdioServerTransport handles flushing automatically
 
     logger.info('[v3.0.0] MCP server running on stdio (initialization in background)');
 

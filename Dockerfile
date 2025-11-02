@@ -84,6 +84,9 @@ COPY --from=builder /app/data ./data
 # Create GitHub cache directory for auto-updates
 RUN mkdir -p /app/data/github-cache
 
+# Copy Python backend for GraphRAG support
+COPY python ./python
+
 # Copy required files
 COPY .env.example ./
 
