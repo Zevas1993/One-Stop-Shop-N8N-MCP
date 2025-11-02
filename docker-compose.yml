@@ -13,13 +13,15 @@ services:
     image: vllm/vllm-openai:${VLLM_EMBEDDING_VERSION:-latest}
     container_name: vllm-embedding
     restart: unless-stopped
-    command: --model ${EMBEDDING_MODEL:-Qwen/Qwen3-Embedding-0.6B} --served-model-name embedding-model --device cpu --dtype float16 --port 8000
 
     environment:
       # BEST nano embedding model: Qwen3-Embedding-0.6B (600M params)
       # #1 on MTEB multilingual leaderboard (70.58 score)
+      MODEL_ID: ${EMBEDDING_MODEL:-Qwen/Qwen3-Embedding-0.6B}
+      SERVED_MODEL_NAME: embedding-model
       VLLM_LOGGING_LEVEL: info
       API_KEY: ${VLLM_API_KEY:-}
+      CUDA_VISIBLE_DEVICES: "-1"
 
     volumes:
       - vllm-embedding-cache:/root/.cache
@@ -54,13 +56,15 @@ services:
     image: vllm/vllm-openai:${VLLM_GENERATION_VERSION:-latest}
     container_name: vllm-generation
     restart: unless-stopped
-    command: --model ${GENERATION_MODEL:-Qwen/Qwen3-4B-Instruct} --served-model-name generation-model --device cpu --dtype float16 --port 8000
 
     environment:
       # BEST nano generation model: Qwen3-4B-Instruct
       # Excellent tool calling, multilingual, optimized for agentic tasks
+      MODEL_ID: ${GENERATION_MODEL:-Qwen/Qwen3-4B-Instruct}
+      SERVED_MODEL_NAME: generation-model
       VLLM_LOGGING_LEVEL: info
       API_KEY: ${VLLM_API_KEY:-}
+      CUDA_VISIBLE_DEVICES: "-1"
 
     volumes:
       - vllm-generation-cache:/root/.cache

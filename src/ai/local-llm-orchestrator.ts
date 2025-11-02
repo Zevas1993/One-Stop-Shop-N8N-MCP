@@ -81,7 +81,7 @@ export class LocalLLMOrchestrator {
   constructor(config?: Partial<LocalLLMConfig>) {
     logger.info('[LocalLLM] Initializing orchestrator with DUAL NANO LLM architecture...');
 
-    // Detect hardware
+    // Detect hardware (container-safe: gracefully handles containerized environments)
     this.hardwareProfile = HardwareDetector.detectHardware();
     logger.info('[LocalLLM] Hardware detected:', {
       ram: `${this.hardwareProfile.ramGbytes}GB`,
@@ -91,6 +91,11 @@ export class LocalLLMOrchestrator {
       generationModel: this.hardwareProfile.generationModel,
       recommendedLlm: this.hardwareProfile.recommendedLlm,
     });
+
+    // Note: In Docker containers, GPU detection may show false but inference still works via Ollama
+    if (!this.hardwareProfile.hasGpu) {
+      logger.info('[LocalLLM] GPU not detected - will use CPU or rely on Ollama backend for inference');
+    }
 
     // Get embedding and generation model info
     const embeddingModelInfo = HardwareDetector.getEmbeddingModelInfo(

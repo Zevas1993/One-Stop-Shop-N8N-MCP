@@ -75,6 +75,7 @@ export interface HardwareProfile {
 export class HardwareDetector {
   /**
    * Detect current hardware profile and recommend nano LLM PAIR
+   * Container-safe: Gracefully handles missing GPU detection in Docker
    */
   static detectHardware(): HardwareProfile {
     const cpuCount = os.cpus().length;
@@ -88,8 +89,16 @@ export class HardwareDetector {
     const osRelease = os.release();
     const arch = os.arch();
 
-    // Try to detect GPU (basic detection, can be expanded)
+    // Check if running in container (Docker, Kubernetes, etc.)
+    const isContainerized = this.isContainerEnvironment();
+
+    // Try to detect GPU (gracefully handles containerization)
     const hasGpu = this.detectGpu();
+
+    // Log detection context for debugging
+    if (isContainerized) {
+      logger.debug('[Hardware] Running in containerized environment - GPU detection may be limited');
+    }
 
     // Determine if high-end or low-end
     const isHighEnd = ramGb >= 16 && cpuCount >= 8;
@@ -453,9 +462,44 @@ export class HardwareDetector {
   }
 
   /**
-   * Basic GPU detection (can be expanded with better detection)
-   * Checks for common GPU indicators
+   * Check if running in containerized environment (Docker, Kubernetes, etc.)
+   * Container-safe: Uses multiple detection methods that work even in restricted environments
    */
+  private static isContainerEnvironment(): boolean {
+    try {
+      // Method 1: Check for .dockerenv file (most reliable)
+      const fs = require('fs');
+      if (fs.existsSync('/.dockerenv')) {
+        return true;
+      }
+
+      // Method 2: Check for DOCKER_CONTAINER env var
+      if (process.env.DOCKER_CONTAINER === 'true' || process.env.DOCKER_HOST) {
+        return true;
+      }
+
+      // Method 3: Check for Kubernetes
+      if (process.env.KUBERNETES_SERVICE_HOST) {
+        return true;
+      }
+
+      // Method 4: Check cgroup (works in most containers)
+      try {
+        const cgroup = fs.readFileSync('/proc/self/cgroup', 'utf8');
+        if (cgroup.includes('docker') || cgroup.includes('kubepods') || cgroup.includes('lxc')) {
+          return true;
+        }
+      } catch (e) {
+        // File doesn't exist (not Linux or not in container)
+      }
+
+      return false;
+    } catch (error) {
+      logger.debug('[Hardware] Container detection error:', error);
+      return false;
+    }
+  }
+
   private static detectGpu(): boolean {
     try {
       // Check for NVIDIA CUDA
@@ -467,7 +511,7 @@ export class HardwareDetector {
       // Check for Apple Metal (on macOS)
       const hasMetal = os.platform() === 'darwin';
 
-      // Try to detect from cpuinfo on Linux
+      // Try to detect from cpuinfo on Linux (unreliable in containers)
       if (os.platform() === 'linux') {
         try {
           const cpuInfo = os.cpus()[0]?.model || '';
@@ -486,8 +530,8 @@ export class HardwareDetector {
 
       return !!(hasNvidiaCuda || hasAmdRocm || hasMetal);
     } catch (error) {
-      logger.debug('[Hardware] GPU detection error:', error);
-      return false;
+      logger.debug('[Hardware] GPU detection error (non-critical in containerized environments):', error);
+      return false; // Graceful fallback in containers
     }
   }
 
