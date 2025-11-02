@@ -2,10 +2,12 @@
  * Query Intent Classifier
  * Deep intent classification for edge cases and multi-label classification
  * Provides confidence scoring and alternative intent suggestions
+ * NOW WITH REAL LLM INFERENCE: Uses embedding model for semantic classification
  */
 
 import { logger } from '../utils/logger';
 import { QueryIntent } from './query_router';
+import { VLLMClient } from './vllm-client';
 
 /**
  * Detailed intent classification result
@@ -49,20 +51,32 @@ export interface ClassificationContext {
 
 /**
  * Query Intent Classifier - Deep classification with multi-label support
+ * NOW USES REAL LLM EMBEDDINGS for semantic intent classification
  */
 export class QueryIntentClassifier {
   private technicalTerms: Set<string> = new Set();
   private actionVerbs: Set<string> = new Set();
   private knownNodes: Map<string, string> = new Map(); // node name -> category
   private knownServices: Set<string> = new Set();
+  private embeddingClient?: VLLMClient;
+  private intentEmbeddings: Map<QueryIntent, number[]> = new Map();
+  private embeddingsInitialized: boolean = false;
 
-  constructor() {
+  constructor(embeddingClient?: VLLMClient) {
+    this.embeddingClient = embeddingClient;
     this.initializeTechnicalTerms();
     this.initializeActionVerbs();
     this.initializeKnownNodes();
     this.initializeKnownServices();
 
-    logger.info('[IntentClassifier] Initialized with deep classification capabilities');
+    logger.info('[IntentClassifier] Initialized with real embedding-based inference', {
+      hasEmbeddingClient: !!embeddingClient,
+    });
+
+    // Initialize embeddings asynchronously
+    if (embeddingClient) {
+      this.initializeIntentEmbeddings();
+    }
   }
 
   /**
@@ -232,18 +246,197 @@ export class QueryIntentClassifier {
   }
 
   /**
+   * Initialize intent embeddings using real LLM inference
+   * This generates semantic embeddings for each intent type
+   */
+  private async initializeIntentEmbeddings(): Promise<void> {
+    if (!this.embeddingClient) {
+      logger.warn('[IntentClassifier] No embedding client available for intent embeddings');
+      return;
+    }
+
+    // Define canonical descriptions for each intent
+    const intentDescriptions: Map<QueryIntent, string> = new Map([
+      [
+        QueryIntent.DIRECT_NODE_LOOKUP,
+        "User wants to use a specific n8n node by name, configure a particular trigger or action, learn how to set up a node",
+      ],
+      [
+        QueryIntent.SEMANTIC_QUERY,
+        "User describes what they want to do without knowing the specific node name, asks how to accomplish a task",
+      ],
+      [
+        QueryIntent.WORKFLOW_PATTERN,
+        "User wants to create a complete workflow with multiple steps and integrations, build an automation",
+      ],
+      [
+        QueryIntent.PROPERTY_SEARCH,
+        "User asks about configuration options, settings, parameters, fields, authentication methods, properties",
+      ],
+      [
+        QueryIntent.INTEGRATION_TASK,
+        "User wants to connect to a specific service or API like Google, Slack, Salesforce, integrate external systems",
+      ],
+      [
+        QueryIntent.RECOMMENDATION,
+        "User asks which node is best for a task, wants to compare options, needs recommendations for tools",
+      ],
+    ]);
+
+    // Generate embeddings for each intent description
+    for (const [intent, description] of intentDescriptions.entries()) {
+      try {
+        logger.debug('[IntentClassifier] Generating embedding for intent:', intent);
+        const response = await this.embeddingClient.generateEmbedding(description);
+        this.intentEmbeddings.set(intent, response.embedding);
+        logger.info('[IntentClassifier] ACTUAL INFERENCE: Generated embedding for intent:', {
+          intent,
+          embeddingDim: response.embedding.length,
+          processingTime: response.processingTime,
+        });
+      } catch (error) {
+        logger.error('[IntentClassifier] Failed to generate embedding for intent:', {
+          intent,
+          error: String(error),
+        });
+      }
+    }
+
+    this.embeddingsInitialized = this.intentEmbeddings.size > 0;
+    logger.info('[IntentClassifier] Intent embeddings initialization complete', {
+      initialized: this.embeddingsInitialized,
+      count: this.intentEmbeddings.size,
+    });
+  }
+
+  /**
+   * Calculate cosine similarity between two vectors
+   * Used for comparing embeddings
+   */
+  private cosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) {
+      throw new Error('Embedding dimensions must match');
+    }
+
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+
+    const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+    if (denominator === 0) {
+      return 0;
+    }
+
+    return dotProduct / denominator;
+  }
+
+  /**
+   * Classify intent using real LLM embeddings
+   * This is ACTUAL NEURAL NETWORK INFERENCE, not just pattern matching
+   */
+  private async classifyByEmbedding(
+    query: string,
+    features: ClassificationFeatures,
+    context?: ClassificationContext
+  ): Promise<ClassificationResult> {
+    if (!this.embeddingClient || !this.embeddingsInitialized) {
+      throw new Error('Embedding client not available or not initialized');
+    }
+
+    try {
+      // Generate query embedding - THIS CALLS THE REAL LLM MODEL
+      logger.debug('[IntentClassifier] Calling embedding model for semantic classification');
+      const queryEmbeddingResponse = await this.embeddingClient.generateEmbedding(query);
+      const queryEmbedding = queryEmbeddingResponse.embedding;
+
+      logger.info('[IntentClassifier] ACTUAL INFERENCE: Query embedding generated', {
+        queryLength: query.length,
+        embeddingDim: queryEmbedding.length,
+        processingTime: queryEmbeddingResponse.processingTime,
+      });
+
+      // Calculate cosine similarity with each intent embedding
+      const intentScores = new Map<QueryIntent, number>();
+
+      for (const [intent, intentEmbedding] of this.intentEmbeddings.entries()) {
+        const similarity = this.cosineSimilarity(queryEmbedding, intentEmbedding);
+        intentScores.set(intent, similarity);
+        logger.debug('[IntentClassifier] Intent similarity:', { intent, similarity: similarity.toFixed(3) });
+      }
+
+      // Combine embedding scores with feature-based scores for hybrid approach
+      const featureScores = this.scoreIntents(query, features, context);
+
+      for (const [intent, embeddingScore] of intentScores.entries()) {
+        const featureScore = featureScores.get(intent) || 0;
+        // Weighted combination: 70% embedding (semantic), 30% features (signals)
+        const combinedScore = embeddingScore * 0.7 + featureScore * 0.3;
+        intentScores.set(intent, combinedScore);
+      }
+
+      // Sort and select best intent
+      const sortedIntents = Array.from(intentScores.entries())
+        .map(([intent, score]) => ({ intent, score }))
+        .sort((a, b) => b.score - a.score);
+
+      const primaryIntent = sortedIntents[0];
+      const secondaryIntents = sortedIntents.slice(1, 3).filter((x) => x.score > 0.2);
+
+      logger.info('[IntentClassifier] EMBEDDING-BASED CLASSIFICATION COMPLETE', {
+        primaryIntent: primaryIntent.intent,
+        confidence: primaryIntent.score.toFixed(3),
+        method: 'semantic-embedding',
+      });
+
+      return {
+        primaryIntent: primaryIntent.intent,
+        primaryConfidence: primaryIntent.score,
+        secondaryIntents: secondaryIntents.map((x) => ({
+          intent: x.intent,
+          confidence: x.score,
+        })),
+        features,
+        reasoning: `Embedding-based semantic classification (similarity: ${(primaryIntent.score * 100).toFixed(1)}%, processing: ${queryEmbeddingResponse.processingTime}ms)`,
+      };
+    } catch (error) {
+      logger.error('[IntentClassifier] Embedding-based classification failed:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Classify query with deep analysis
+   * NOW USES REAL LLM EMBEDDINGS for semantic intent classification
    */
   async classify(
     query: string,
     context?: ClassificationContext
   ): Promise<ClassificationResult> {
-    logger.debug('[IntentClassifier] Starting deep classification for query:', query.substring(0, 100));
+    logger.debug('[IntentClassifier] Starting classification for query:', query.substring(0, 100));
 
     // Extract features
     const features = this.extractFeatures(query);
 
-    // Score each intent
+    // Try embedding-based classification if available and initialized
+    if (this.embeddingClient && this.embeddingsInitialized) {
+      try {
+        logger.info('[IntentClassifier] Using REAL EMBEDDING-BASED SEMANTIC CLASSIFICATION');
+        const result = await this.classifyByEmbedding(query, features, context);
+        return result;
+      } catch (error) {
+        logger.warn('[IntentClassifier] Embedding-based classification failed, falling back to pattern matching:', error);
+        // Fall through to pattern matching
+      }
+    }
+
+    // Fallback: Score each intent using pattern/keyword matching
+    logger.info('[IntentClassifier] Using fallback PATTERN-BASED CLASSIFICATION (no embedding model)');
     const intentScores = this.scoreIntents(query, features, context);
 
     // Sort by confidence
@@ -256,7 +449,7 @@ export class QueryIntentClassifier {
 
     const reasoning = this.generateReasoning(query, features, primaryIntent, context);
 
-    logger.debug('[IntentClassifier] Classification complete:', {
+    logger.debug('[IntentClassifier] Classification complete (pattern-based):', {
       primaryIntent: primaryIntent.intent,
       primaryConfidence: primaryIntent.score,
       secondaryCount: secondaryIntents.length,
@@ -517,7 +710,8 @@ export class QueryIntentClassifier {
 
 /**
  * Factory function to create intent classifier
+ * Now accepts VLLMClient for real embedding-based semantic classification
  */
-export function createIntentClassifier(): QueryIntentClassifier {
-  return new QueryIntentClassifier();
+export function createIntentClassifier(embeddingClient?: VLLMClient): QueryIntentClassifier {
+  return new QueryIntentClassifier(embeddingClient);
 }

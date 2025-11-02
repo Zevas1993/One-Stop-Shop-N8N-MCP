@@ -1,7 +1,7 @@
 /**
  * Nano LLM Pipeline Integration Handler
  * Wires the complete dual-nano LLM system into the MCP server
- * Simplified version focused on functionality
+ * NOW WITH REAL NANO LLM INFERENCE via vLLM clients
  */
 
 import { logger } from '../utils/logger';
@@ -16,6 +16,7 @@ import { NodeValueCalculator } from '../ai/node-value-calculator';
 import { RefinementEngine } from '../ai/refinement-engine';
 import { MetricsService } from '../ai/metrics';
 import { NodeRepository } from '../database/node-repository';
+import { VLLMClient, createDualVLLMClients } from '../ai/vllm-client';
 
 /**
  * Nano LLM Pipeline Result
@@ -31,7 +32,7 @@ export interface NanoLLMPipelineResult {
 }
 
 /**
- * Nano LLM Pipeline Handler - Simplified
+ * Nano LLM Pipeline Handler - WITH REAL VLLM INFERENCE
  */
 export class NanoLLMPipelineHandler {
   private queryRouter: QueryRouter;
@@ -44,11 +45,19 @@ export class NanoLLMPipelineHandler {
   private nodeValueCalc: NodeValueCalculator;
   private refinementEngine: RefinementEngine;
   private metrics: MetricsService;
+  private embeddingClient?: VLLMClient;
+  private generationClient?: VLLMClient;
 
   constructor(nodeRepository?: NodeRepository) {
-    this.queryRouter = new QueryRouter();
-    this.intentClassifier = new QueryIntentClassifier();
-    this.searchIntegration = new SearchRouterIntegration();
+    // Initialize vLLM clients for real nano LLM inference
+    this.initializeVLLMClients();
+
+    // Pass embedding client to components that need it
+    this.queryRouter = new QueryRouter(this.embeddingClient);
+    this.intentClassifier = new QueryIntentClassifier(this.embeddingClient);
+    this.searchIntegration = new SearchRouterIntegration(this.embeddingClient);
+
+    // Other components
     this.qualityPipeline = new QualityCheckPipeline();
     this.traceCollector = new TraceCollector();
     this.airEngine = new AIREngine();
@@ -57,7 +66,51 @@ export class NanoLLMPipelineHandler {
     this.refinementEngine = new RefinementEngine();
     this.metrics = new MetricsService();
 
-    logger.info('[NanoLLMPipelineHandler] Initialized - dual-nano LLM system operational');
+    logger.info('[NanoLLMPipelineHandler] Initialized with REAL NANO LLM INFERENCE', {
+      hasEmbeddingClient: !!this.embeddingClient,
+      hasGenerationClient: !!this.generationClient,
+    });
+  }
+
+  /**
+   * Initialize vLLM clients for nano LLM inference
+   * Creates connections to embedding and generation models
+   */
+  private initializeVLLMClients(): void {
+    try {
+      const embeddingBaseUrl = process.env.EMBEDDING_BASE_URL || 'http://localhost:8001';
+      const generationBaseUrl = process.env.GENERATION_BASE_URL || 'http://localhost:8002';
+      const embeddingModel = process.env.EMBEDDING_MODEL || 'BAAI/bge-small-en-v1.5';
+      const generationModel = process.env.GENERATION_MODEL || 'meta-llama/Llama-3.2-1b-instruct';
+
+      logger.info('[NanoLLMPipelineHandler] Initializing vLLM clients for nano models', {
+        embeddingModel,
+        generationModel,
+        embeddingBaseUrl,
+        generationBaseUrl,
+      });
+
+      // Create dual vLLM clients
+      const clients = createDualVLLMClients(
+        embeddingModel,
+        generationModel,
+        embeddingBaseUrl,
+        generationBaseUrl,
+        30000 // 30 second timeout
+      );
+
+      this.embeddingClient = clients.embedding;
+      this.generationClient = clients.generation;
+
+      logger.info('[NanoLLMPipelineHandler] vLLM clients initialized successfully', {
+        embedding: this.embeddingClient?.getModel(),
+        generation: this.generationClient?.getModel(),
+      });
+    } catch (error) {
+      logger.error('[NanoLLMPipelineHandler] Failed to initialize vLLM clients:', error);
+      logger.warn('[NanoLLMPipelineHandler] Will fall back to pattern-based classification');
+      // Continue without LLM clients - fallback to pattern matching
+    }
   }
 
   /**
