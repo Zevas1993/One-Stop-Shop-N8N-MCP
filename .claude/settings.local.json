@@ -124,7 +124,8 @@
       "Bash(N8N_API_URL=http://localhost:5678 N8N_API_KEY=test123 timeout 60 node:*)",
       "Bash(tar:*)",
       "Bash(BashOutput 2873ef)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(DEVICE=cpu docker compose up:*)"
     ],
     "deny": []
   }

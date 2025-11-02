@@ -80,8 +80,8 @@ export class NanoLLMPipelineHandler {
     try {
       const embeddingBaseUrl = process.env.EMBEDDING_BASE_URL || 'http://localhost:8001';
       const generationBaseUrl = process.env.GENERATION_BASE_URL || 'http://localhost:8002';
-      const embeddingModel = process.env.EMBEDDING_MODEL || 'BAAI/bge-small-en-v1.5';
-      const generationModel = process.env.GENERATION_MODEL || 'meta-llama/Llama-3.2-1b-instruct';
+      const embeddingModel = process.env.EMBEDDING_MODEL || 'Qwen/Qwen3-Embedding-0.6B';
+      const generationModel = process.env.GENERATION_MODEL || 'Qwen/Qwen3-4B-Instruct';
 
       logger.info('[NanoLLMPipelineHandler] Initializing vLLM clients for nano models', {
         embeddingModel,
