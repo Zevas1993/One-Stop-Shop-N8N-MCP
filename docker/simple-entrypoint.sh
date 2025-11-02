@@ -1,24 +1,16 @@
 #!/bin/bash
 
-# Consolidated n8n MCP Server - 8 Essential Tools
-echo "🚀 Starting n8n Consolidated MCP Server (8 tools)..."
-echo "📋 Eliminates AI agent choice paralysis"
-echo "⚡ Enforces validation-first workflow"
+# n8n MCP Server with Nano LLM Learning System (Stdio Mode for Claude Desktop)
+echo "🚀 Starting n8n MCP Server with Nano LLM Integration..."
+echo "📚 GraphRAG-driven learning system"
+echo "🧠 Nano LLM orchestration enabled"
+echo "⚙️ Mode: stdio (for Claude Desktop MCP integration)"
 
-# Set default mode to consolidated if not specified
-export MCP_MODE=${MCP_MODE:-consolidated}
+# Default to stdio mode for Claude Desktop compatibility
+export MCP_MODE=${MCP_MODE:-stdio}
 
-# Start the appropriate server
-if [ "$MCP_MODE" = "full" ] || [ "$MCP_MODE" = "stdio" ]; then
-    echo "🚀 Using full n8n MCP Server (40+ tools with GraphRAG & Nano LLMs)"
-    exec node /app/dist/mcp/index.js
-elif [ "$MCP_MODE" = "http" ]; then
-    echo "🌐 Using HTTP server mode on port ${PORT:-3000}"
-    exec node /app/dist/http-server-single-session.js
-elif [ "$MCP_MODE" = "consolidated" ]; then
-    echo "🎯 Using consolidated server (8 tools)"
-    exec node /app/dist/consolidated-server.js
-else
-    echo "🎯 Using consolidated server (8 tools) - default"
-    exec node /app/dist/consolidated-server.js
-fi
+# Start the MCP server in stdio mode with GraphRAG learning system
+# The Nano LLMs (Embedding Model and Generation Model) are integrated
+# directly into the MCP server and orchestrate GraphRAG updates
+echo "Starting MCP server with Nano LLM learning pipeline..."
+exec node /app/dist/mcp/index.js

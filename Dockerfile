@@ -16,11 +16,10 @@ RUN --mount=type=cache,target=/root/.npm \
 
 # Copy TypeScript config and source code
 COPY tsconfig.json ./
-COPY tsconfig.simple-auto.json ./
 COPY src ./src
 
-# Build the simple auto-update system only (avoids problematic files)
-RUN npx tsc -p tsconfig.simple-auto.json
+# Build full TypeScript including GraphRAG learning system and HTTP server
+RUN npx tsc
 
 # Copy pre-built database if it exists locally (speeds up build)
 COPY data ./data

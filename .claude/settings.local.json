@@ -27,7 +27,9 @@
       "Bash(cat:*)",
       "Bash(MCP_MODE=full node:*)",
       "Bash(index.html)",
-      "Bash(AUTH_TOKEN=\"test123\" timeout 5 node:*)"
+      "Bash(AUTH_TOKEN=\"test123\" timeout 5 node:*)",
+      "Bash(awk:*)",
+      "Bash(docker:*)"
     ],
     "deny": [],
     "ask": []
