@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # Open WebUI - Feature-rich web interface for LLM interaction
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: n8n-mcp-webui
+    ports:
+      - "3000:8080"
+    environment:
+      - OLLAMA_API_BASE_URL=http://ollama:11434
+      - WEBUI_SECRET_KEY=your-secret-key-change-this
+      - DEFAULT_MODELS=llama2
+    volumes:
+      - open-webui-data:/app/backend/data
+    networks:
+      - n8n-mcp-network
+    depends_on:
+      - n8n-mcp-backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # n8n MCP Backend - Your orchestrator service
+  n8n-mcp-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: n8n-mcp-backend
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - MCP_MODE=http
+      - AUTH_TOKEN=${AUTH_TOKEN:-your-secure-token-here}
+      - LOG_LEVEL=info
+      - EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+      - GENERATION_MODEL=Qwen/Qwen3-4B-Instruct
+      - CORS_ORIGIN=http://localhost:3000
+    volumes:
+      - ./dist:/app/dist
+      - ./nodes.db:/app/nodes.db
+    networks:
+      - n8n-mcp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Ollama - Local LLM inference server (optional, for local models)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: n8n-mcp-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - n8n-mcp-network
+    profiles:
+      - with-ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+
+volumes:
+  open-webui-data:
+    driver: local
+  ollama-data:
+    driver: local
+
+networks:
+  n8n-mcp-network:
+    driver: bridge
