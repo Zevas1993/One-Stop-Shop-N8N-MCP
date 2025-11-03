@@ -4,15 +4,14 @@ Complete guide to deploying the n8n MCP Server alongside n8n using Docker Compos
 
 ## Overview
 
-This setup provides five integrated services working together:
+This setup provides four integrated services working together:
 
 1. **n8n** (http://localhost:5678) - Workflow automation platform
 2. **MCP Server** - n8n node documentation + GraphRAG learning system (stdio mode)
-3. **vLLM Embedding Server** (localhost:8001) - Qwen3-Embedding-0.6B for semantic understanding
-4. **vLLM Generation Server** (localhost:8002) - Qwen3-4B-Instruct for AI-powered suggestions
-5. **Open WebUI** (http://localhost:3000) - Natural language orchestration interface
+3. **Ollama** (localhost:11434) - Nano LLM inference server with Qwen3 models
+4. **Open WebUI** (http://localhost:3000) - Natural language orchestration interface
 
-The MCP server automatically detects n8n version changes and rebuilds its database when needed. The vLLM services enable Nano LLM-powered semantic search and workflow optimization suggestions.
+The MCP server automatically detects n8n version changes and rebuilds its database when needed. Ollama provides Nano LLM-powered semantic search and workflow optimization suggestions using lightweight Qwen3 embedding and generation models.
 
 ## Quick Start
 
@@ -57,46 +56,52 @@ docker compose ps
 - **n8n**: http://localhost:5678
 - **Open WebUI**: http://localhost:3000
 - **MCP**: Available via stdio (Claude Desktop)
-- **vLLM Embedding**: localhost:8001 (Qwen3-Embedding-0.6B)
-- **vLLM Generation**: localhost:8002 (Qwen3-4B-Instruct)
+- **Ollama**: localhost:11434 (for direct API access if needed)
 
 ### 5. Nano LLM System Requirements & Configuration
 
-The Docker Compose stack includes two vLLM services for Nano LLM-powered AI features:
+The Docker Compose stack includes Ollama for lightweight Nano LLM-powered AI features:
 
-**Models Deployed:**
-- **Embedding Model** (Port 8001): Qwen3-Embedding-0.6B - Enables semantic understanding of queries
-- **Generation Model** (Port 8002): Qwen3-4B-Instruct - Powers AI-driven workflow optimization suggestions
+**Models Required:**
+The system uses two Qwen3 models for optimal performance:
+- **Embedding Model**: `Qwen/Qwen3-Embedding-0.6B` - Enables semantic understanding of queries
+- **Generation Model**: `Qwen/Qwen3-4B-Instruct` - Powers AI-driven workflow optimization suggestions
 
 **Hardware Requirements:**
 - **Minimum**: 16GB RAM (will use CPU inference if GPU unavailable)
-- **Recommended**: NVIDIA GPU with 8GB+ VRAM (RTX 3060 or better)
-- **Disk Space**: ~15GB for cached models (shared `vllm-models-cache` volume)
+- **Recommended**: NVIDIA GPU with 8GB+ VRAM (RTX 3060 or better) or Apple Silicon
+- **Disk Space**: ~4GB for Qwen3 models cached in `ollama-data` volume
+- **Windows 11 with Docker Desktop**: CPU inference works, GPU unavailable in Hyper-V
 
 **First Run Setup:**
 ```bash
-# First startup will download both Qwen3 models (~8GB total)
-# This may take 5-10 minutes depending on internet speed
-# Models are cached in vllm-models-cache volume for reuse
-
+# Start the stack
 docker compose up -d
 
-# Monitor model download progress
-docker compose logs -f vllm-embedding vllm-generation
+# Monitor Ollama initialization
+docker compose logs -f ollama
+
+# Pull the required models into Ollama (one-time setup)
+docker compose exec ollama ollama pull qwen3-embedding:0.6b
+docker compose exec ollama ollama pull qwen3:4b-instruct-q4_K_M
+
+# Verify models are available
+docker compose exec ollama ollama list
 ```
 
-**Disabling Nano LLM (CPU-only mode):**
-If you don't want to run the vLLM services (to save resources):
+**Disabling Nano LLM (Pattern-based mode):**
+If you don't want to run Ollama (to save resources):
 ```bash
-# Edit docker-compose.yml and comment out vllm-embedding and vllm-generation services
+# Edit docker-compose.yml and comment out the ollama service
 # MCP will automatically fall back to pattern-based classification
+# This reduces system resource usage but loses semantic learning capabilities
 ```
 
-**Using Ollama Instead (Alternative):**
-If you prefer Ollama instead of vLLM, you can:
-1. Comment out vllm-embedding and vllm-generation services in docker-compose.yml
-2. Add an Ollama service (not included by default)
-3. MCP code already has Ollama integration support in `src/ai/hardware-detector.ts`
+**Ollama Performance Notes:**
+- **Embedding inference**: ~200-500ms on CPU, <100ms on GPU
+- **Generation inference**: 2-5 seconds on CPU, <1 second on GPU
+- **Model memory**: Embedding model ~2GB, Generation model ~4GB (RAM or VRAM)
+- For Windows Docker Desktop with limited resources, consider using smaller models or disabling entirely
 
 ### 6. (Optional) Enable Workflow Management Features
 
@@ -363,38 +368,52 @@ docker compose up -d
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Docker Network                          │
-├─────────────────────────────────────────────────────────────┤
+┌────────────────────────────────────────────────────────────────┐
+│                     Docker Network (nano-network)              │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  ┌────────────────────┐  ┌────────────────────┐               │
+│  │  n8n Container     │  │  MCP Container     │               │
+│  │  (Workflow UI)     │  │  (Node Docs +      │               │
+│  │  Port: 5678        │  │   GraphRAG)        │               │
+│  └────────────────────┘  │  Stdio Mode        │               │
+│         │                └────────────────────┘               │
+│         │                         │                           │
+│         │      n8n-modules        │                           │
+│         │      (shared vol)       │                           │
+│         └─────────────────────────┘                           │
+│              │              │                                 │
+│         n8n-data       mcp-data                               │
+│         (volume)        (volume)                              │
+│              │              │                                 │
+│        (workflows)    (nodes.db +                             │
+│         (creds)     GraphRAG data)                            │
+│                                                               │
+│  ┌────────────────────────────────────────┐                 │
+│  │  Ollama Container (Nano LLMs)          │                 │
+│  │  Port: 11434                           │                 │
+│  │  Models:                               │                 │
+│  │  - Qwen3-Embedding-0.6B               │                 │
+│  │  - Qwen3-4B-Instruct                  │                 │
+│  └────────────────────────────────────────┘                 │
+│         │                                                    │
+│    ollama-data                                              │
+│      (volume)                                               │
+│         │                                                    │
+│   (model cache)                                             │
 │                                                              │
-│  ┌──────────────────┐  ┌──────────────────┐                │
-│  │  n8n Container   │  │  MCP Container   │                │
-│  │  (Workflow UI)   │  │  (Documentation) │                │
-│  │   Port: 5678     │  │   Stdio Mode     │                │
-│  └──────────────────┘  └──────────────────┘                │
-│         │                      │                            │
-│         │      n8n-modules     │                            │
-│         │      (shared vol)    │                            │
-│         └──────────────────────┘                            │
-│              │                │                             │
-│         n8n-data          mcp-data                           │
-│         (volume)           (volume)                          │
-│              │                │                             │
-│         (workflows)     (nodes.db +                          │
-│          (creds)      GraphRAG data)                         │
-│                                                              │
-│  ┌──────────────────────────────────────┐                  │
-│  │  Open WebUI Container                │                  │
-│  │  (Natural Language Interface)         │                  │
-│  │  Port: 3000                          │                  │
-│  └──────────────────────────────────────┘                  │
+│  ┌────────────────────────────────────────┐                 │
+│  │  Open WebUI Container                  │                 │
+│  │  (Natural Language Interface)           │                 │
+│  │  Port: 3000                            │                 │
+│  └────────────────────────────────────────┘                 │
 │         │                                                    │
 │    open-webui-data                                          │
 │      (volume)                                               │
 │         │                                                    │
 │    (conversations)                                          │
 │                                                              │
-└─────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────────┘
 
 Version Detection Flow:
 ─────────────────────
