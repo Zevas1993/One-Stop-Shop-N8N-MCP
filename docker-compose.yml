@@ -61,59 +61,26 @@ services:
     tty: true
     # Note: MCP runs in stdio mode, not exposed on network
 
-  # vLLM Embedding Model Server - Qwen3-Embedding-0.6B
-  vllm-embedding:
-    image: vllm/vllm-openai:latest
-    container_name: vllm-embedding
+  # Ollama - Nano LLM Inference Server (Embedding + Generation)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
     restart: unless-stopped
     environment:
-      - MODEL_NAME=Qwen/Qwen3-Embedding-0.6B
-      - CUDA_VISIBLE_DEVICES=0
-      # Fallback to CPU if GPU unavailable
-      - VLLM_DEVICE=auto
-      - TENSOR_PARALLEL_SIZE=1
-      - PIPELINE_PARALLEL_SIZE=1
+      - OLLAMA_HOST=0.0.0.0:11434
     ports:
-      - "8001:8000"
+      - "11434:11434"
     volumes:
-      # Cache downloaded models
-      - vllm-models-cache:/root/.cache/huggingface
+      # Ollama model cache and data
+      - ollama-data:/root/.ollama
     networks:
       - nano-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 60s
-    command: --model Qwen/Qwen3-Embedding-0.6B --port 8000 --max-model-len 2048
-
-  # vLLM Generation Model Server - Qwen3-4B-Instruct
-  vllm-generation:
-    image: vllm/vllm-openai:latest
-    container_name: vllm-generation
-    restart: unless-stopped
-    environment:
-      - MODEL_NAME=Qwen/Qwen3-4B-Instruct
-      - CUDA_VISIBLE_DEVICES=1
-      # Fallback to CPU if GPU unavailable
-      - VLLM_DEVICE=auto
-      - TENSOR_PARALLEL_SIZE=1
-      - PIPELINE_PARALLEL_SIZE=1
-    ports:
-      - "8002:8000"
-    volumes:
-      # Cache downloaded models
-      - vllm-models-cache:/root/.cache/huggingface
-    networks:
-      - nano-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-    command: --model Qwen/Qwen3-4B-Instruct --port 8000 --max-model-len 2048
 
   # Open WebUI - Natural Language Interface for Orchestration
   open-webui:
@@ -135,8 +102,7 @@ services:
       - nano-network
     depends_on:
       - mcp
-      - vllm-embedding
-      - vllm-generation
+      - ollama
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
       interval: 10s
@@ -162,9 +128,9 @@ volumes:
   open-webui-data:
     driver: local
 
-  # vLLM Models Cache (shared between embedding and generation servers)
-  # Stores downloaded Qwen3 models to avoid re-downloading
-  vllm-models-cache:
+  # Ollama Model Cache
+  # Stores downloaded Ollama models to avoid re-downloading
+  ollama-data:
     driver: local
 
 networks:
@@ -212,10 +178,10 @@ networks:
 #    - MCP update: New image, same nodes.db unless n8n also updated
 #    - No manual intervention required
 #
-# 6. NANO LLM INTEGRATION:
-#    The MCP container includes:
-#    - Embedding Model (Neural Graph Semanticist)
-#    - Generation Model (Graph Update Strategist)
+# 6. NANO LLM INTEGRATION (Ollama):
+#    The system uses Ollama for Nano LLM inference:
+#    - Ollama service provides model hosting on port 11434
+#    - MCP connects to Ollama for embedding and generation tasks
 #    - GraphRAG Backend (Python-based knowledge graph)
 #    These work together to learn from user workflows and improve suggestions
 #
