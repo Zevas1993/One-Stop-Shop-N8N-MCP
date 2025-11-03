@@ -56,6 +56,73 @@ docker compose ps
 - **Open WebUI**: http://localhost:3000
 - **MCP**: Available via stdio (Claude Desktop)
 
+### 5. (Optional) Enable Workflow Management Features
+
+MCP includes 11 powerful workflow management tools (create, update, execute workflows). To enable them:
+
+**Step 1: Get your n8n API Key**
+1. Open n8n at http://localhost:5678
+2. Click **Settings** (bottom left)
+3. Go to **API** tab
+4. Click **Create an API key**
+5. Copy the generated key
+
+**Step 2: Update .env file**
+
+```bash
+# Edit your .env file and add:
+N8N_API_KEY=your-api-key-here
+N8N_API_URL=http://n8n:5678/api
+```
+
+**Step 3: Restart MCP**
+
+```bash
+docker compose restart mcp
+```
+
+Now you can use all 11 workflow management tools!
+
+### Workflow Management Tools
+
+Once configured, you can use these powerful tools:
+
+**Workflow Management:**
+- `n8n_create_workflow` - Create new workflows programmatically
+- `n8n_get_workflow` - Retrieve workflow details by ID
+- `n8n_get_workflow_structure` - Get simplified workflow structure
+- `n8n_update_full_workflow` - Update entire workflows
+- `n8n_update_partial_workflow` - Update specific workflow sections with diff operations
+- `n8n_delete_workflow` - Delete workflows permanently
+- `n8n_list_workflows` - Browse all workflows with filtering
+
+**Execution Management:**
+- `n8n_run_workflow` - Execute workflows directly (no webhook needed)
+- `n8n_trigger_webhook_workflow` - Execute via webhook URL
+- `n8n_list_executions` - Monitor execution history
+- `n8n_stop_execution` - Stop running executions
+
+**Validation:**
+- `n8n_validate_workflow` - Validate workflow from n8n instance by ID
+
+### Quick Example
+
+Once API key is configured:
+
+```bash
+# Create a new workflow via Claude Desktop
+# "Create a webhook workflow that logs incoming data"
+
+# Update an existing workflow
+# "Add an HTTP Request node to workflow 123 that posts data to https://example.com"
+
+# Execute a workflow
+# "Run workflow named 'Slack Monitor' now"
+
+# List all executions
+# "Show me all executions from the past 24 hours"
+```
+
 ## How It Works
 
 ### Automatic Version Detection
