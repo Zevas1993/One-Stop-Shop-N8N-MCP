@@ -4,13 +4,15 @@ Complete guide to deploying the n8n MCP Server alongside n8n using Docker Compos
 
 ## Overview
 
-This setup provides three integrated services working together:
+This setup provides five integrated services working together:
 
 1. **n8n** (http://localhost:5678) - Workflow automation platform
 2. **MCP Server** - n8n node documentation + GraphRAG learning system (stdio mode)
-3. **Open WebUI** (http://localhost:3000) - Natural language orchestration interface
+3. **vLLM Embedding Server** (localhost:8001) - Qwen3-Embedding-0.6B for semantic understanding
+4. **vLLM Generation Server** (localhost:8002) - Qwen3-4B-Instruct for AI-powered suggestions
+5. **Open WebUI** (http://localhost:3000) - Natural language orchestration interface
 
-The MCP server automatically detects n8n version changes and rebuilds its database when needed.
+The MCP server automatically detects n8n version changes and rebuilds its database when needed. The vLLM services enable Nano LLM-powered semantic search and workflow optimization suggestions.
 
 ## Quick Start
 
@@ -55,8 +57,48 @@ docker compose ps
 - **n8n**: http://localhost:5678
 - **Open WebUI**: http://localhost:3000
 - **MCP**: Available via stdio (Claude Desktop)
+- **vLLM Embedding**: localhost:8001 (Qwen3-Embedding-0.6B)
+- **vLLM Generation**: localhost:8002 (Qwen3-4B-Instruct)
 
-### 5. (Optional) Enable Workflow Management Features
+### 5. Nano LLM System Requirements & Configuration
+
+The Docker Compose stack includes two vLLM services for Nano LLM-powered AI features:
+
+**Models Deployed:**
+- **Embedding Model** (Port 8001): Qwen3-Embedding-0.6B - Enables semantic understanding of queries
+- **Generation Model** (Port 8002): Qwen3-4B-Instruct - Powers AI-driven workflow optimization suggestions
+
+**Hardware Requirements:**
+- **Minimum**: 16GB RAM (will use CPU inference if GPU unavailable)
+- **Recommended**: NVIDIA GPU with 8GB+ VRAM (RTX 3060 or better)
+- **Disk Space**: ~15GB for cached models (shared `vllm-models-cache` volume)
+
+**First Run Setup:**
+```bash
+# First startup will download both Qwen3 models (~8GB total)
+# This may take 5-10 minutes depending on internet speed
+# Models are cached in vllm-models-cache volume for reuse
+
+docker compose up -d
+
+# Monitor model download progress
+docker compose logs -f vllm-embedding vllm-generation
+```
+
+**Disabling Nano LLM (CPU-only mode):**
+If you don't want to run the vLLM services (to save resources):
+```bash
+# Edit docker-compose.yml and comment out vllm-embedding and vllm-generation services
+# MCP will automatically fall back to pattern-based classification
+```
+
+**Using Ollama Instead (Alternative):**
+If you prefer Ollama instead of vLLM, you can:
+1. Comment out vllm-embedding and vllm-generation services in docker-compose.yml
+2. Add an Ollama service (not included by default)
+3. MCP code already has Ollama integration support in `src/ai/hardware-detector.ts`
+
+### 6. (Optional) Enable Workflow Management Features
 
 MCP includes 11 powerful workflow management tools (create, update, execute workflows). To enable them:
 

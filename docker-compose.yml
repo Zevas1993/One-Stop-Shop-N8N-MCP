@@ -61,6 +61,60 @@ services:
     tty: true
     # Note: MCP runs in stdio mode, not exposed on network
 
+  # vLLM Embedding Model Server - Qwen3-Embedding-0.6B
+  vllm-embedding:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-embedding
+    restart: unless-stopped
+    environment:
+      - MODEL_NAME=Qwen/Qwen3-Embedding-0.6B
+      - CUDA_VISIBLE_DEVICES=0
+      # Fallback to CPU if GPU unavailable
+      - VLLM_DEVICE=auto
+      - TENSOR_PARALLEL_SIZE=1
+      - PIPELINE_PARALLEL_SIZE=1
+    ports:
+      - "8001:8000"
+    volumes:
+      # Cache downloaded models
+      - vllm-models-cache:/root/.cache/huggingface
+    networks:
+      - nano-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    command: --model Qwen/Qwen3-Embedding-0.6B --port 8000 --max-model-len 2048
+
+  # vLLM Generation Model Server - Qwen3-4B-Instruct
+  vllm-generation:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-generation
+    restart: unless-stopped
+    environment:
+      - MODEL_NAME=Qwen/Qwen3-4B-Instruct
+      - CUDA_VISIBLE_DEVICES=1
+      # Fallback to CPU if GPU unavailable
+      - VLLM_DEVICE=auto
+      - TENSOR_PARALLEL_SIZE=1
+      - PIPELINE_PARALLEL_SIZE=1
+    ports:
+      - "8002:8000"
+    volumes:
+      # Cache downloaded models
+      - vllm-models-cache:/root/.cache/huggingface
+    networks:
+      - nano-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    command: --model Qwen/Qwen3-4B-Instruct --port 8000 --max-model-len 2048
+
   # Open WebUI - Natural Language Interface for Orchestration
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
@@ -81,6 +135,8 @@ services:
       - nano-network
     depends_on:
       - mcp
+      - vllm-embedding
+      - vllm-generation
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
       interval: 10s
@@ -104,6 +160,11 @@ volumes:
 
   # Open WebUI Conversations & User Data
   open-webui-data:
+    driver: local
+
+  # vLLM Models Cache (shared between embedding and generation servers)
+  # Stores downloaded Qwen3 models to avoid re-downloading
+  vllm-models-cache:
     driver: local
 
 networks:
