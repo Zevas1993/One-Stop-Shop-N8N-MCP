@@ -1,21 +1,44 @@
-# Top 10 Embedding Model Combinations for Nano LLM Systems
-## Comprehensive Benchmark Analysis & Recommendations
+# Top 10 Embedding + Generation Model Combinations for Nano LLM Systems
+## Comprehensive Benchmark Analysis & RAG Pipeline Recommendations
 
 **Last Updated**: November 2025
-**Research Scope**: FastEmbed, MTEB Leaderboard, Ollama Available Models, CPU Optimization
+**Research Scope**: FastEmbed, MTEB Leaderboard, Ollama Available Models, CPU Optimization, RAG Pairing Strategies
+**Critical Note**: This system uses a DUAL-MODEL ORCHESTRATOR pattern with separate embedding and generation models
 
 ---
 
-## Current Setup Analysis
+## Architecture Understanding
+
+### Your MCP System: Dual-Model Design
+Your n8n MCP server is built with **TWO separate models working together**:
+
+1. **Embedding Model** (For Semantic Understanding)
+   - Converts text to vectors (embeddings)
+   - Powers GraphRAG pattern discovery
+   - Enables semantic search across workflows
+   - Used by orchestrator to understand user intent
+
+2. **Generation Model** (For Response Generation)
+   - Generates AI-powered suggestions
+   - Creates workflow optimization recommendations
+   - Produces suggestions to Claude Desktop/end-user
+   - Acts as the "thinking model" that orchestrator uses
+
+3. **Orchestrator Layer** (MCP Server)
+   - Takes user query from Claude Desktop
+   - Uses embedding model to understand intent semantically
+   - Retrieves relevant workflow patterns from GraphRAG
+   - Uses generation model to produce contextual suggestions
+   - Returns recommendations to Claude Desktop
 
 ### Your Current Configuration
-- **Embedding Model**: Qwen3-Embedding-0.6B
-- **Generation Model**: Qwen3-4B-Instruct
+- **Embedding Model**: Qwen3-Embedding-0.6B (problematic - too small)
+- **Generation Model**: Qwen3-4B-Instruct (good baseline)
 - **Deployment**: Ollama on Windows Docker Desktop (CPU inference)
-- **Expected Performance**: ~200-500ms embedding inference on CPU
+- **Expected Performance**: ~200-500ms embedding + 2-5s generation per request
 
 ### Performance Reality Check
-Your current Qwen3 setup is actually **solid** but there are better alternatives depending on your priorities.
+Your current Qwen3 setup is **functional but suboptimal**. The 0.6B embedding model is too small for quality semantic understanding. Better combinations available depending on your priorities.
 
 ---
 
