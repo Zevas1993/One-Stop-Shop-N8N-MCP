@@ -87,9 +87,9 @@ cd One-Stop-Shop-N8N-MCP
 
 # 2. Generate authentication tokens
 AUTH_TOKEN=$(openssl rand -base64 32)
-N8N_API_KEY=$(openssl rand -base64 32)
+WEBUI_SECRET_KEY=$(openssl rand -base64 32)
 echo "AUTH_TOKEN=$AUTH_TOKEN" > .env
-echo "N8N_API_KEY=$N8N_API_KEY" >> .env
+echo "WEBUI_SECRET_KEY=$WEBUI_SECRET_KEY" >> .env
 
 # 3. Start all services
 docker compose up -d
@@ -102,6 +102,49 @@ docker compose ps
 # - Open WebUI: http://localhost:3000
 # - MCP: Stdio mode (Claude Desktop)
 ```
+
+### Connecting to Your n8n Instance
+
+To enable MCP's workflow management features (create, update, execute workflows), you need to configure your n8n API key:
+
+**Step 1: Get your n8n API Key**
+1. Open n8n at http://localhost:5678
+2. Click **Settings** (bottom left)
+3. Go to **API** tab
+4. Click **Create an API key**
+5. Copy the generated key
+
+**Step 2: Update your .env file**
+
+Add the API key to your `.env` file:
+
+```bash
+# Edit the .env file
+nano .env
+# or use your preferred editor
+
+# Add these lines:
+N8N_API_KEY=your-api-key-here
+N8N_API_URL=http://n8n:5678/api
+```
+
+**Step 3: Restart MCP**
+
+```bash
+# Restart MCP service to apply the API key
+docker compose restart mcp
+
+# Verify connection
+docker compose logs mcp | grep -i "api\|workflow"
+```
+
+**Now you can:**
+- Create workflows programmatically
+- Update and execute workflows
+- List and manage executions
+- Validate workflows before deployment
+
+All 11 workflow management tools in MCP will now be available!
 
 ### What's Included
 
