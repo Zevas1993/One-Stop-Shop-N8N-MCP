@@ -109,8 +109,9 @@ EXPOSE 3000
 
 # Note: No health check needed for MCP stdio mode
 
-# Copy entry point script with execute permissions
-COPY --chmod=755 docker/simple-entrypoint.sh ./
+# Copy entry point script with smart n8n version detection
+# This script detects n8n version from shared volume and auto-rebuilds if changed
+COPY --chmod=755 docker/entrypoint-auto-rebuild.sh ./
 
-# Start unified n8n MCP server
-CMD ["/bin/bash", "./simple-entrypoint.sh"]
+# Start MCP server with automatic n8n version detection & rebuild
+CMD ["/bin/bash", "./entrypoint-auto-rebuild.sh"]

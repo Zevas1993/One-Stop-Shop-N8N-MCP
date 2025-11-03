@@ -1,211 +1,185 @@
-# docker-compose.yml
-# Dual Nano LLM Architecture with vLLM Services
-# For optimized builds with BuildKit, use: docker-compose -f docker-compose.buildkit.yml up
-version: '3.8'
+version: '3.9'
 
 services:
-  # ============================================
-  # vLLM Embedding Service
-  # EmbeddingGemma 300M (or Nomic-Embed-Text v1.5)
-  # Handles semantic understanding and knowledge graph queries
-  # ============================================
-  vllm-embedding:
-    image: vllm/vllm-openai:${VLLM_EMBEDDING_VERSION:-latest}
-    container_name: vllm-embedding
+  # Official n8n Instance - Workflow Automation Platform
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n-instance
     restart: unless-stopped
-
     environment:
-      # BEST nano embedding model: Qwen3-Embedding-0.6B (600M params)
-      # #1 on MTEB multilingual leaderboard (70.58 score)
-      MODEL_ID: ${EMBEDDING_MODEL:-Qwen/Qwen3-Embedding-0.6B}
-      SERVED_MODEL_NAME: embedding-model
-      VLLM_LOGGING_LEVEL: info
-      API_KEY: ${VLLM_API_KEY:-}
-      CUDA_VISIBLE_DEVICES: "-1"
-
-    volumes:
-      - vllm-embedding-cache:/root/.cache
-
+      - N8N_HOST=n8n
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      # Optional: Set admin user
+      # - N8N_DEFAULT_USER_PASSWORD=your-secure-password
+      # Optional: Enable n8n analytics
+      # - N8N_DIAGNOSTICS_ENABLED=false
     ports:
-      - "${EMBEDDING_SERVER_PORT:-8001}:8000"
-
-    # Resource allocation for embedding model (lightweight)
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-        reservations:
-          memory: 2G
-
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-    networks:
-      - n8n-mcp-network
-
-  # ============================================
-  # vLLM Generation Service
-  # Nemotron Nano 4B, Llama 3.2 3B, or Llama 3.2 1B
-  # Handles text generation and workflow creation
-  # ============================================
-  vllm-generation:
-    image: vllm/vllm-openai:${VLLM_GENERATION_VERSION:-latest}
-    container_name: vllm-generation
-    restart: unless-stopped
-
-    environment:
-      # BEST nano generation model: Qwen3-4B-Instruct
-      # Excellent tool calling, multilingual, optimized for agentic tasks
-      MODEL_ID: ${GENERATION_MODEL:-Qwen/Qwen3-4B-Instruct}
-      SERVED_MODEL_NAME: generation-model
-      VLLM_LOGGING_LEVEL: info
-      API_KEY: ${VLLM_API_KEY:-}
-      CUDA_VISIBLE_DEVICES: "-1"
-
+      - "5678:5678"
     volumes:
-      - vllm-generation-cache:/root/.cache
-
-    ports:
-      - "${GENERATION_SERVER_PORT:-8002}:8000"
-
-    # Resource allocation for generation model (larger)
-    deploy:
-      resources:
-        limits:
-          memory: 16G
-        reservations:
-          memory: 8G
-
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
-
+      # n8n data persistence
+      - n8n-data:/home/node/.n8n
+      # Share n8n node_modules with MCP for runtime detection
+      - n8n-modules:/shared/n8n-modules:ro
     networks:
-      - n8n-mcp-network
+      - nano-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-  # ============================================
-  # Main n8n MCP Server
-  # Orchestrates dual nano LLM models
-  # ============================================
-  n8n-mcp:
+  # MCP Server - n8n Node Documentation & GraphRAG Learning System
+  mcp:
     build:
       context: .
       dockerfile: Dockerfile
-    image: n8n-mcp:unified-v1
-    container_name: n8n-mcp-unified
+      # Build args can be passed here if needed
+    container_name: mcp-server
     restart: unless-stopped
-    depends_on:
-      vllm-embedding:
-        condition: service_healthy
-      vllm-generation:
-        condition: service_healthy
-
-    # Environment configuration
     environment:
-      # Mode configuration (consolidated, http, or stdio)
-      MCP_MODE: ${MCP_MODE:-full}
-      USE_FIXED_HTTP: ${USE_FIXED_HTTP:-true}  # Use fixed implementation for stability
-      AUTH_TOKEN: ${AUTH_TOKEN:-}
-
-      # Auto-update configuration (for simple-auto mode)
-      # GITHUB_TOKEN: ${GITHUB_TOKEN:-}  # Disabled: no n8n packages in runtime image
-      UPDATE_INTERVAL_MINUTES: ${UPDATE_INTERVAL_MINUTES:-15}
-
-      # Application settings
-      NODE_ENV: ${NODE_ENV:-production}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      PORT: ${PORT:-3000}
-
-      # Database
-      NODE_DB_PATH: ${NODE_DB_PATH:-/app/data/nodes.db}
-      REBUILD_ON_START: ${REBUILD_ON_START:-false}
-
-      # Optional: n8n API configuration (enables 16 additional management tools)
-      # Uncomment and configure to enable n8n workflow management
-      N8N_API_URL: ${N8N_API_URL}
-      N8N_API_KEY: ${N8N_API_KEY}
-      N8N_API_TIMEOUT: ${N8N_API_TIMEOUT:-30000}
-      N8N_API_MAX_RETRIES: ${N8N_API_MAX_RETRIES:-3}
-
-      # N8N Browser Authentication (for visual verification)
-      N8N_USERNAME: ${N8N_USERNAME:-chrisboyd1993@gmail.com}
-      N8N_PASSWORD: ${N8N_PASSWORD:-AlastorB2024!@#}
-
-      # ============================================
-      # Dual Nano LLM Configuration
-      # ============================================
-      # Embedding Model (for semantic understanding)
-      # Using nano model: BAAI/bge-small-en-v1.5 (33M params - best balance)
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
-      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://vllm-embedding:8000}
-      EMBEDDING_SERVER_PORT: ${EMBEDDING_SERVER_PORT:-8001}
-
-      # Generation Model (for text generation)
-      # Using true nano model: Llama 3.2 1B (1.2B params, NOT 7B)
-      GENERATION_MODEL: ${GENERATION_MODEL:-meta-llama/Llama-3.2-1b-instruct}
-      GENERATION_BASE_URL: ${GENERATION_BASE_URL:-http://vllm-generation:8000}
-      GENERATION_SERVER_PORT: ${GENERATION_SERVER_PORT:-8002}
-
-      # vLLM Configuration
-      VLLM_API_KEY: ${VLLM_API_KEY:-}
-      VLLM_EMBEDDING_VERSION: ${VLLM_EMBEDDING_VERSION:-latest}
-      VLLM_GENERATION_VERSION: ${VLLM_GENERATION_VERSION:-latest}
-    
-    # Volumes for persistence and Docker access
+      - NODE_ENV=production
+      - MCP_MODE=stdio
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
+      - LOG_LEVEL=info
+      # n8n API integration (optional - for workflow management features)
+      - N8N_API_URL=http://n8n:5678/api
+      - N8N_API_KEY=${N8N_API_KEY:-}
     volumes:
-      - n8n-mcp-data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket for container access
-    
-    # Port mapping
-    ports:
-      - "${PORT:-3000}:3000"
-    
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
-    
-    # Health check
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-    # Network for service communication
+      # MCP data persistence (nodes.db, GraphRAG knowledge graph)
+      - mcp-data:/app/data
+      # Mount n8n's node_modules as read-only for runtime version detection
+      - n8n-modules:/shared/n8n-modules:ro
     networks:
-      - n8n-mcp-network
+      - nano-network
+    depends_on:
+      n8n:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    # Note: MCP runs in stdio mode, not exposed on network
 
-# ============================================
-# Named volumes for data persistence and caching
-# ============================================
+  # Open WebUI - Natural Language Interface for Orchestration
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: open-webui
+    restart: unless-stopped
+    environment:
+      - WEBUI_NAME=n8n Learning System
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-your-secret-key-change-me}
+      - WEBUI_URL=http://open-webui:3000
+      # Optional: Configure default model
+      # - OLLAMA_BASE_URL=http://ollama:11434
+    ports:
+      - "3000:8080"
+    volumes:
+      # Open WebUI data persistence (conversations, user settings, models)
+      - open-webui-data:/app/backend/data
+    networks:
+      - nano-network
+    depends_on:
+      - mcp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 volumes:
-  # Main n8n MCP data volume
-  n8n-mcp-data:
+  # n8n Workflows & Settings
+  n8n-data:
     driver: local
 
-  # vLLM embedding model cache (lighter weight)
-  vllm-embedding-cache:
+  # MCP Database & GraphRAG Knowledge Graph
+  mcp-data:
     driver: local
 
-  # vLLM generation model cache (heavier weight)
-  vllm-generation-cache:
+  # n8n node_modules (shared with MCP for runtime detection)
+  # This is where MCP will detect n8n version changes
+  n8n-modules:
     driver: local
 
-# ============================================
-# Docker network for internal service communication
-# ============================================
+  # Open WebUI Conversations & User Data
+  open-webui-data:
+    driver: local
+
 networks:
-  n8n-mcp-network:
+  nano-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Architecture Notes:
+# ====================
+# 
+# 1. SERVICE ISOLATION:
+#    - n8n: Workflow automation platform (official image)
+#    - mcp: Node documentation + GraphRAG learning system (custom image)
+#    - open-webui: Natural language interface for orchestration
+#
+# 2. SHARED VOLUME STRATEGY:
+#    The "n8n-modules" volume is the critical link between services:
+#    - n8n writes its node_modules to this volume at startup
+#    - MCP mounts it as read-only to detect n8n version
+#    - MCP's entrypoint script reads /shared/n8n-modules/n8n/package.json
+#    - If version changed, MCP auto-triggers npm run rebuild
+#    - This ensures nodes.db is always in sync with n8n version
+#
+# 3. AUTOMATIC VERSION DETECTION:
+#    When MCP container starts:
+#    a) Waits up to 60 seconds for n8n to initialize
+#    b) Reads n8n version from shared volume
+#    c) Compares to last known version in /app/data/.n8n-versions
+#    d) If different, rebuilds nodes.db by scanning n8n packages
+#    e) Stores new version for next startup
+#
+# 4. DATA PERSISTENCE:
+#    Each service has dedicated volume for its data:
+#    - n8n-data: Workflows, credentials, executions
+#    - mcp-data: nodes.db, GraphRAG graph storage
+#    - open-webui-data: Conversations, user preferences
+#    All volumes persist across container restarts
+#
+# 5. INDEPENDENT UPDATES:
+#    Users can update services independently:
+#    - `docker compose pull && docker compose up -d`
+#    - n8n update: MCP detects version change and rebuilds
+#    - MCP update: New image, same nodes.db unless n8n also updated
+#    - No manual intervention required
+#
+# 6. NANO LLM INTEGRATION:
+#    The MCP container includes:
+#    - Embedding Model (Neural Graph Semanticist)
+#    - Generation Model (Graph Update Strategist)
+#    - GraphRAG Backend (Python-based knowledge graph)
+#    These work together to learn from user workflows and improve suggestions
+#
+# QUICK START:
+# ============
+# 1. Create .env file with authentication tokens:
+#    echo "AUTH_TOKEN=$(openssl rand -base64 32)" > .env
+#    echo "N8N_API_KEY=$(openssl rand -base64 32)" >> .env
+#    echo "WEBUI_SECRET_KEY=$(openssl rand -base64 32)" >> .env
+#
+# 2. Start all services:
+#    docker compose up -d
+#
+# 3. Check status:
+#    docker compose ps
+#    docker compose logs -f mcp  # Watch MCP version detection
+#
+# 4. Access services:
+#    - n8n: http://localhost:5678
+#    - Open WebUI: http://localhost:3000
+#    - MCP: Stdio mode (used by Claude Desktop)
+#
+# 5. Stop all services:
+#    docker compose down
+#
+# 6. Clean up volumes (⚠️  WARNING: deletes all data):
+#    docker compose down -v
+#

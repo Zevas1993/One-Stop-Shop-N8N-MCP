@@ -74,6 +74,88 @@ npm run setup:http
 npm run setup:docker
 ```
 
+## 🐳 Docker Compose Deployment
+
+Deploy the complete stack (n8n + MCP + Open WebUI) with a single command:
+
+### Quick Start with Docker Compose
+
+```bash
+# 1. Clone repository
+git clone https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP.git
+cd One-Stop-Shop-N8N-MCP
+
+# 2. Generate authentication tokens
+AUTH_TOKEN=$(openssl rand -base64 32)
+N8N_API_KEY=$(openssl rand -base64 32)
+echo "AUTH_TOKEN=$AUTH_TOKEN" > .env
+echo "N8N_API_KEY=$N8N_API_KEY" >> .env
+
+# 3. Start all services
+docker compose up -d
+
+# 4. Check status
+docker compose ps
+
+# 5. Access services
+# - n8n: http://localhost:5678
+# - Open WebUI: http://localhost:3000
+# - MCP: Stdio mode (Claude Desktop)
+```
+
+### What's Included
+
+The `docker-compose.yml` orchestrates three integrated services:
+
+| Service | Purpose | Port |
+|---------|---------|------|
+| **n8n** | Workflow automation platform (official n8nio/n8n image) | 5678 |
+| **MCP Server** | Node documentation + GraphRAG learning system | Stdio mode |
+| **Open WebUI** | Natural language orchestration interface | 3000 |
+
+### Automatic Version Detection
+
+MCP automatically detects when n8n updates:
+
+1. **On startup**: Reads n8n version from shared volume
+2. **On change**: Rebuilds `nodes.db` if version differs
+3. **Zero friction**: Users just run `docker compose up -d` again
+
+```bash
+# Update n8n (MCP auto-detects and rebuilds)
+docker compose pull n8n
+docker compose up -d
+
+# MCP will automatically rebuild nodes.db
+docker compose logs -f mcp
+```
+
+### Common Docker Compose Tasks
+
+```bash
+# View MCP startup logs (shows version detection)
+docker compose logs -f mcp
+
+# Stop services (preserves data)
+docker compose down
+
+# Stop and clean up (WARNING: deletes all data)
+docker compose down -v
+
+# Restart a single service
+docker compose restart mcp
+```
+
+### For Complete Documentation
+
+See [**docs/DOCKER_COMPOSE_SETUP.md**](docs/DOCKER_COMPOSE_SETUP.md) for:
+- Advanced configuration options
+- Troubleshooting guide
+- Volume and network management
+- Security considerations
+- Production deployment guide
+- Backup and restore procedures
+
 ### 🔍 Verify Installation
 
 **For Claude Desktop:**
