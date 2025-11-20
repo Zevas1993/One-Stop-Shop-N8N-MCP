@@ -10,9 +10,10 @@
  * and applies high-confidence updates to the GraphRAG neural knowledge graph.
  */
 
-import { logger } from '../utils/logger';
-import { createEmbeddingSystemPrompt } from '../prompts/embedding-model-system-prompt';
-import { createGenerationSystemPrompt } from '../prompts/generation-model-system-prompt';
+import { logger } from "../utils/logger";
+import { createEmbeddingSystemPrompt } from "../prompts/embedding-model-system-prompt";
+import { createGenerationSystemPrompt } from "../prompts/generation-model-system-prompt";
+import { OllamaClient, createDualOllamaClients } from "../ai/ollama-client";
 
 export interface WorkflowFeedback {
   executionId: string;
@@ -39,7 +40,7 @@ export interface EmbeddingAnalysis {
   patternAnalysis: {
     detectedArchetype: string;
     semanticIntent: string;
-    complexity: 'simple' | 'moderate' | 'complex';
+    complexity: "simple" | "moderate" | "complex";
     confidence: number;
   };
   embeddings: {
@@ -73,7 +74,12 @@ export interface GraphUpdateDecision {
   executionId: string;
   strategicAnalysis: {
     timestamp: string;
-    decisionType: 'promote-pattern' | 'demote-pattern' | 'update-relationship' | 'flag-conflict' | 'no-action';
+    decisionType:
+      | "promote-pattern"
+      | "demote-pattern"
+      | "update-relationship"
+      | "flag-conflict"
+      | "no-action";
     overallConfidence: number;
   };
   updateOperations: Array<{
@@ -130,6 +136,10 @@ export class GraphRAGLearningService {
   private embeddingSystemPrompt: string;
   private generationSystemPrompt: string;
 
+  // Real LLM Clients
+  private embeddingClient: OllamaClient;
+  private generationClient: OllamaClient;
+
   // Learning state tracking
   private learningState: LearningProgress = {
     patternsDiscovered: 0,
@@ -145,9 +155,10 @@ export class GraphRAGLearningService {
   private patternHistory: Map<string, any> = new Map();
 
   constructor(
-    embeddingModelName: string = 'BAAI/bge-small-en-v1.5',
-    generationModelName: string = 'Qwen/Qwen3-4B-Instruct',
-    embeddingDimension: number = 768
+    embeddingModelName: string = "nomic-embed-text",
+    generationModelName: string = "qwen2.5:3b",
+    embeddingDimension: number = 768,
+    ollamaBaseUrl: string = "http://ollama:11434"
   ) {
     this.embeddingModelName = embeddingModelName;
     this.generationModelName = generationModelName;
@@ -158,12 +169,24 @@ export class GraphRAGLearningService {
       embeddingModelName,
       embeddingDimension
     );
-    this.generationSystemPrompt = createGenerationSystemPrompt(generationModelName);
+    this.generationSystemPrompt =
+      createGenerationSystemPrompt(generationModelName);
 
-    logger.info('GraphRAG Learning Service initialized', {
+    // Initialize Dual Ollama Clients
+    const clients = createDualOllamaClients(
+      embeddingModelName,
+      generationModelName,
+      ollamaBaseUrl,
+      ollamaBaseUrl
+    );
+    this.embeddingClient = clients.embedding;
+    this.generationClient = clients.generation;
+
+    logger.info("GraphRAG Learning Service initialized", {
       embeddingModel: embeddingModelName,
       generationModel: generationModelName,
       embeddingDimension,
+      mode: "active-llm",
     });
   }
 
@@ -173,9 +196,11 @@ export class GraphRAGLearningService {
    * @param feedback - The workflow execution feedback to process
    * @returns Update decisions to apply to GraphRAG
    */
-  async processWorkflowFeedback(feedback: WorkflowFeedback): Promise<GraphUpdateDecision> {
+  async processWorkflowFeedback(
+    feedback: WorkflowFeedback
+  ): Promise<GraphUpdateDecision> {
     const startTime = Date.now();
-    logger.info('Processing workflow feedback', {
+    logger.info("Processing workflow feedback", {
       executionId: feedback.executionId,
       workflowId: feedback.workflowId,
       success: feedback.feedback.success,
@@ -184,7 +209,7 @@ export class GraphRAGLearningService {
     try {
       // Stage 1: Embedding Model Analysis (Neural Graph Semanticist)
       const embeddingAnalysis = await this.runEmbeddingModelAnalysis(feedback);
-      logger.debug('Embedding model analysis complete', {
+      logger.debug("Embedding model analysis complete", {
         executionId: feedback.executionId,
         archetype: embeddingAnalysis.patternAnalysis.detectedArchetype,
         confidence: embeddingAnalysis.patternAnalysis.confidence,
@@ -195,7 +220,7 @@ export class GraphRAGLearningService {
         feedback,
         embeddingAnalysis
       );
-      logger.debug('Generation model analysis complete', {
+      logger.debug("Generation model analysis complete", {
         executionId: feedback.executionId,
         decision: updateDecision.strategicAnalysis.decisionType,
         confidence: updateDecision.strategicAnalysis.overallConfidence,
@@ -205,7 +230,7 @@ export class GraphRAGLearningService {
       this.updateLearningState(updateDecision, feedback);
 
       const duration = Date.now() - startTime;
-      logger.info('Workflow feedback processing complete', {
+      logger.info("Workflow feedback processing complete", {
         executionId: feedback.executionId,
         duration,
         decision: updateDecision.strategicAnalysis.decisionType,
@@ -214,7 +239,7 @@ export class GraphRAGLearningService {
 
       return updateDecision;
     } catch (error) {
-      logger.error('Error processing workflow feedback', {
+      logger.error("Error processing workflow feedback", {
         executionId: feedback.executionId,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -229,56 +254,53 @@ export class GraphRAGLearningService {
   private async runEmbeddingModelAnalysis(
     feedback: WorkflowFeedback
   ): Promise<EmbeddingAnalysis> {
-    // In production, this would send the feedback + system prompt to the actual vLLM embedding model
-    // For now, we simulate the analysis to demonstrate the architecture
+    const workflowText = JSON.stringify(feedback.workflow);
+    let embeddings: number[] = [];
+    let confidence = 0.0;
 
-    logger.debug('Running Embedding Model analysis', {
-      executionId: feedback.executionId,
-      nodeCount: feedback.workflow.nodes.length,
-    });
+    try {
+      // Generate real embedding via Ollama
+      const response = await this.embeddingClient.generateEmbedding(
+        workflowText
+      );
+      embeddings = response.embedding; // Single embedding returned
+      confidence = 0.95; // High confidence if model call succeeds
+    } catch (error) {
+      logger.warn("Failed to generate real embedding, falling back to mock", {
+        error,
+      });
+      embeddings = this.generateMockEmbedding(
+        feedback.workflowId,
+        this.embeddingDimension
+      );
+      confidence = 0.5; // Lower confidence for mock
+    }
 
-    // Extract workflow pattern characteristics
-    const nodes = feedback.workflow.nodes.map((n) => n.type);
-    const patternKey = nodes.join(' → ');
-
-    // Detect archetype based on node types
-    const archetype = this.detectWorkflowArchetype(nodes);
-
-    // Generate mock embeddings (in production, vLLM would do this)
-    // This represents a 768-dimensional semantic embedding
-    const patternEmbedding = this.generateMockEmbedding(patternKey, this.embeddingDimension);
-
-    // Discover node relationships
-    const nodeRelationships = this.discoverNodeRelationships(
+    // Analyze relationships (heuristic for now, could be LLM-enhanced)
+    const relationships = this.discoverNodeRelationships(
       feedback.workflow.nodes,
       feedback.workflow.connections
-    );
-
-    // Analyze performance metrics
-    const confidence = this.calculateEmbeddingConfidence(
-      feedback.feedback,
-      nodeRelationships
     );
 
     const analysis: EmbeddingAnalysis = {
       executionId: feedback.executionId,
       analysisTimestamp: new Date().toISOString(),
       patternAnalysis: {
-        detectedArchetype: archetype,
-        semanticIntent:
-          feedback.feedback.semanticIntent ||
-          `Workflow executing ${nodes.length} nodes: ${nodes.join(' → ')}`,
+        detectedArchetype: this.detectWorkflowArchetype(
+          feedback.workflow.nodes.map((n: any) => n.type)
+        ),
+        semanticIntent: feedback.feedback.semanticIntent || "unknown",
         complexity: this.calculateComplexity(feedback.workflow.nodes),
-        confidence: confidence,
+        confidence: this.calculateEmbeddingConfidence(feedback, relationships),
       },
       embeddings: {
-        patternEmbedding,
-        dimension: this.embeddingDimension,
+        patternEmbedding: embeddings,
+        dimension: embeddings.length,
         normalized: true,
       },
-      nodeRelationships,
+      nodeRelationships: relationships,
       clusterAssignment: {
-        primaryCluster: `${archetype}-cluster`,
+        primaryCluster: "cluster-" + feedback.workflowId.substring(0, 4),
         clusterSimilarity: 0.85,
       },
       performanceMetrics: {
@@ -301,67 +323,126 @@ export class GraphRAGLearningService {
     feedback: WorkflowFeedback,
     embeddingAnalysis: EmbeddingAnalysis
   ): Promise<GraphUpdateDecision> {
-    logger.debug('Running Generation Model analysis', {
-      executionId: feedback.executionId,
-      embeddingConfidence: embeddingAnalysis.patternAnalysis.confidence,
-    });
+    try {
+      // Construct prompt for the Generation Model
+      const prompt = `
+      Analyze this workflow execution and recommend GraphRAG updates.
 
-    // Get or create pattern history for this pattern
-    const patternId = this.generatePatternId(feedback.workflow);
-    const patternInfo = this.getOrCreatePatternInfo(patternId, feedback, embeddingAnalysis);
+      Workflow Context:
+      - ID: ${feedback.workflowId}
+      - Success: ${feedback.feedback.success}
+      - Node Count: ${feedback.feedback.nodeCount}
+      - Archetype: ${embeddingAnalysis.patternAnalysis.detectedArchetype}
 
-    // Update pattern metrics with new execution data
+      Embedding Analysis:
+      - Confidence: ${embeddingAnalysis.patternAnalysis.confidence}
+      - Relationships: ${JSON.stringify(
+        embeddingAnalysis.nodeRelationships.map((r) => r.semanticMeaning)
+      )}
+
+      Task:
+      Determine if this pattern should be promoted to the knowledge graph.
+      Return a JSON object with:
+      - decisionType: "promote-pattern" | "update-relationship" | "no-action"
+      - confidence: number (0.0-1.0)
+      - reasoning: string
+      `;
+
+      // Call Generation Model
+      const response = await this.generationClient.generateText(prompt, {
+        temperature: 0.2,
+        maxTokens: 500,
+      });
+
+      // Parse JSON response (naive parsing, could be more robust)
+      const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const decision = JSON.parse(jsonMatch[0]);
+
+        // Map LLM decision to internal structure
+        return {
+          executionId: feedback.executionId,
+          strategicAnalysis: {
+            timestamp: new Date().toISOString(),
+            decisionType: decision.decisionType || "no-action",
+            overallConfidence: decision.confidence || 0.5,
+          },
+          updateOperations: [], // Would be populated based on decision
+          strategicReasoning: {
+            patternScore: {}, // Placeholder
+            promotionCriteria: {
+              meetSuccessRate: feedback.feedback.success,
+              meetFrequency: true,
+              meetConfidence: decision.confidence > 0.8,
+              noConflicts: true,
+              semanticallySound: true,
+            },
+          },
+          warnings: [],
+          notes: [decision.reasoning],
+          expectedImpact: {
+            description: "LLM determined impact",
+            affectedNodeTypes: [],
+            estimatedBenefitScore: 0.5,
+          },
+        };
+      }
+    } catch (error) {
+      logger.warn("Generation model failed, falling back to heuristic", {
+        error,
+      });
+    }
+
+    // Fallback to heuristic decision making
+    const patternInfo = this.getOrCreatePatternInfo(
+      this.generatePatternId(feedback.workflow),
+      feedback,
+      embeddingAnalysis
+    );
     this.updatePatternMetrics(patternInfo, feedback);
 
-    // Determine decision based on quality thresholds
     const decision = this.makePromotionDecision(
       patternInfo,
       embeddingAnalysis,
       feedback
     );
-
-    // Generate update operations
-    const updateOperations = this.generateUpdateOperations(
+    const operations = this.generateUpdateOperations(
       decision,
       patternInfo,
       embeddingAnalysis,
       feedback
     );
+    const conflicts = this.detectConflicts(operations, embeddingAnalysis);
 
-    // Detect conflicts
-    const conflicts = this.detectConflicts(
-      updateOperations,
-      embeddingAnalysis
-    );
-
-    const updateDecision: GraphUpdateDecision = {
+    return {
       executionId: feedback.executionId,
       strategicAnalysis: {
         timestamp: new Date().toISOString(),
         decisionType: decision.type as any,
         overallConfidence: decision.confidence,
       },
-      updateOperations,
+      updateOperations: operations,
       strategicReasoning: {
         patternScore: decision.patternScore,
         promotionCriteria: {
-          meetSuccessRate: (patternInfo.successRate || 0) >= 0.8,
-          meetFrequency: (patternInfo.observationCount || 0) >= 3,
+          meetSuccessRate: patternInfo.successRate >= 0.8,
+          meetFrequency: patternInfo.observationCount >= 3,
           meetConfidence: embeddingAnalysis.patternAnalysis.confidence >= 0.85,
           noConflicts: conflicts.length === 0,
           semanticallySound: decision.semanticallySound,
         },
       },
-      warnings: conflicts.length > 0 ? conflicts : [],
+      warnings: conflicts,
       notes: decision.notes,
       expectedImpact: {
         description: decision.impactDescription,
-        affectedNodeTypes: embeddingAnalysis.nodeRelationships.map((r) => r.sourceNode),
+        affectedNodeTypes: embeddingAnalysis.nodeRelationships.flatMap((r) => [
+          r.sourceNode,
+          r.targetNode,
+        ]),
         estimatedBenefitScore: decision.benefitScore,
       },
     };
-
-    return updateDecision;
   }
 
   /**
@@ -380,7 +461,10 @@ export class GraphRAGLearningService {
     // Calculate pattern score
     const patternScore = {
       successRateWeight: { value: successRate, weight: 0.4 },
-      frequencyWeight: { value: Math.min(observationCount / 10, 1.0), weight: 0.2 },
+      frequencyWeight: {
+        value: Math.min(observationCount / 10, 1.0),
+        weight: 0.2,
+      },
       semanticStabilityWeight: {
         value: embeddingAnalysis.performanceMetrics.semanticStability,
         weight: 0.2,
@@ -394,9 +478,9 @@ export class GraphRAGLearningService {
     };
 
     // Determine decision type
-    let decisionType = 'no-action';
+    let decisionType = "no-action";
     let confidence = 0;
-    let impactDescription = 'Pattern requires more observation';
+    let impactDescription = "Pattern requires more observation";
     let benefitScore = 0;
     let semanticallySound = true;
 
@@ -407,9 +491,13 @@ export class GraphRAGLearningService {
       embeddingConfidence >= 0.85 &&
       patternScore.finalScore >= 0.85
     ) {
-      decisionType = 'promote-pattern';
+      decisionType = "promote-pattern";
       confidence = patternScore.finalScore;
-      impactDescription = `Promote ${embeddingAnalysis.patternAnalysis.detectedArchetype} pattern to knowledge graph with ${(confidence * 100).toFixed(0)}% confidence`;
+      impactDescription = `Promote ${
+        embeddingAnalysis.patternAnalysis.detectedArchetype
+      } pattern to knowledge graph with ${(confidence * 100).toFixed(
+        0
+      )}% confidence`;
       benefitScore = 0.9;
     }
     // UPDATE: Strengthen existing relationships
@@ -418,27 +506,33 @@ export class GraphRAGLearningService {
       successRate >= 0.75 &&
       embeddingConfidence >= 0.8
     ) {
-      decisionType = 'update-relationship';
+      decisionType = "update-relationship";
       confidence = Math.min(embeddingConfidence, patternScore.finalScore);
-      impactDescription = 'Update relationship confidence scores based on new evidence';
+      impactDescription =
+        "Update relationship confidence scores based on new evidence";
       benefitScore = 0.7;
     }
     // HOLD: Insufficient data
     else if (observationCount < 3) {
-      decisionType = 'no-action';
+      decisionType = "no-action";
       confidence = patternScore.finalScore;
-      impactDescription = `Pattern needs ${3 - observationCount} more observation(s) before promotion`;
+      impactDescription = `Pattern needs ${
+        3 - observationCount
+      } more observation(s) before promotion`;
       benefitScore = 0;
     }
     // REJECT: Below quality thresholds
     else {
-      decisionType = 'no-action';
+      decisionType = "no-action";
       confidence = 0;
-      impactDescription = 'Pattern does not meet quality thresholds for promotion';
+      impactDescription =
+        "Pattern does not meet quality thresholds for promotion";
       benefitScore = 0;
 
       if (successRate < 0.8) {
-        impactDescription += ` (success rate ${(successRate * 100).toFixed(0)}% < 80%)`;
+        impactDescription += ` (success rate ${(successRate * 100).toFixed(
+          0
+        )}% < 80%)`;
       }
     }
 
@@ -450,9 +544,11 @@ export class GraphRAGLearningService {
       impactDescription,
       benefitScore,
       notes: [
-        `Pattern observed ${observationCount} times with ${(successRate * 100).toFixed(0)}% success rate`,
+        `Pattern observed ${observationCount} times with ${(
+          successRate * 100
+        ).toFixed(0)}% success rate`,
         `Embedding confidence: ${(embeddingConfidence * 100).toFixed(0)}%`,
-        `User satisfaction: ${(userSatisfaction / 5.0 * 100).toFixed(0)}%`,
+        `User satisfaction: ${((userSatisfaction / 5.0) * 100).toFixed(0)}%`,
       ],
     };
   }
@@ -468,29 +564,31 @@ export class GraphRAGLearningService {
   ): Array<any> {
     const operations: any[] = [];
 
-    if (decision.type === 'promote-pattern') {
+    if (decision.type === "promote-pattern") {
       // Promote the pattern
       operations.push({
-        operationType: 'promote-pattern',
+        operationType: "promote-pattern",
         operationId: `op-${Date.now()}-0`,
         patternId: patternInfo.patternId,
         patternName: embeddingAnalysis.patternAnalysis.detectedArchetype,
         archetype: embeddingAnalysis.patternAnalysis.detectedArchetype,
         promotion: {
-          fromStatus: 'pending',
-          toStatus: 'promoted',
+          fromStatus: "pending",
+          toStatus: "promoted",
           confidenceScore: decision.confidence,
           evidence: decision.notes,
         },
         confidence: decision.confidence,
-        reasoning: `Pattern meets all promotion criteria with ${(decision.confidence * 100).toFixed(0)}% confidence`,
+        reasoning: `Pattern meets all promotion criteria with ${(
+          decision.confidence * 100
+        ).toFixed(0)}% confidence`,
       });
 
       // Add node relationships
       let opIndex = 1;
       for (const relationship of embeddingAnalysis.nodeRelationships) {
         operations.push({
-          operationType: 'add-relationship',
+          operationType: "add-relationship",
           operationId: `op-${Date.now()}-${opIndex++}`,
           sourceNodeType: relationship.sourceNode,
           targetNodeType: relationship.targetNode,
@@ -499,12 +597,14 @@ export class GraphRAGLearningService {
           reasoning: relationship.semanticMeaning,
         });
       }
-    } else if (decision.type === 'update-relationship') {
+    } else if (decision.type === "update-relationship") {
       // Update existing relationship confidence scores
       for (const relationship of embeddingAnalysis.nodeRelationships) {
         operations.push({
-          operationType: 'update-relationship',
-          operationId: `op-${Date.now()}-rel-${relationship.sourceNode}-${relationship.targetNode}`,
+          operationType: "update-relationship",
+          operationId: `op-${Date.now()}-rel-${relationship.sourceNode}-${
+            relationship.targetNode
+          }`,
           sourceNodeType: relationship.sourceNode,
           targetNodeType: relationship.targetNode,
           relationshipType: relationship.relationshipType,
@@ -520,14 +620,19 @@ export class GraphRAGLearningService {
   /**
    * Detect conflicts with existing patterns
    */
-  private detectConflicts(operations: any[], embeddingAnalysis: EmbeddingAnalysis): string[] {
+  private detectConflicts(
+    operations: any[],
+    embeddingAnalysis: EmbeddingAnalysis
+  ): string[] {
     const conflicts: string[] = [];
 
     // In production, this would check against existing GraphRAG patterns
     // For now, we just validate semantic soundness
-    if (!this.isSemanticallySoundCombination(embeddingAnalysis.nodeRelationships)) {
+    if (
+      !this.isSemanticallySoundCombination(embeddingAnalysis.nodeRelationships)
+    ) {
       conflicts.push(
-        'Semantic conflict detected: Node combination may not be semantically valid'
+        "Semantic conflict detected: Node combination may not be semantically valid"
       );
     }
 
@@ -538,37 +643,46 @@ export class GraphRAGLearningService {
    * Helper: Detect workflow archetype from node types
    */
   private detectWorkflowArchetype(nodeTypes: string[]): string {
-    const nodeString = nodeTypes.join('|');
+    const nodeString = nodeTypes.join("|");
 
     if (
-      nodeString.includes('webhook') &&
-      (nodeString.includes('slack') || nodeString.includes('email'))
+      nodeString.includes("webhook") &&
+      (nodeString.includes("slack") || nodeString.includes("email"))
     ) {
-      return 'notification-trigger';
-    } else if (nodeString.includes('httpRequest') || nodeString.includes('http')) {
-      if (nodeString.includes('slack') || nodeString.includes('email')) {
-        return 'api-to-notification';
+      return "notification-trigger";
+    } else if (
+      nodeString.includes("httpRequest") ||
+      nodeString.includes("http")
+    ) {
+      if (nodeString.includes("slack") || nodeString.includes("email")) {
+        return "api-to-notification";
       }
-      return 'api-fetch';
-    } else if (nodeString.includes('webhook') && nodeString.includes('httpRequest')) {
-      return 'webhook-http-chain';
+      return "api-fetch";
+    } else if (
+      nodeString.includes("webhook") &&
+      nodeString.includes("httpRequest")
+    ) {
+      return "webhook-http-chain";
     } else if (nodeTypes.length > 3) {
-      return 'complex-orchestration';
+      return "complex-orchestration";
     } else {
-      return 'simple-pipeline';
+      return "simple-pipeline";
     }
   }
 
   /**
    * Helper: Generate mock embeddings (in production, vLLM would do this)
    */
-  private generateMockEmbedding(patternKey: string, dimension: number): number[] {
+  private generateMockEmbedding(
+    patternKey: string,
+    dimension: number
+  ): number[] {
     const embedding: number[] = [];
     let hash = 0;
 
     // Simple hash of pattern key
     for (let i = 0; i < patternKey.length; i++) {
-      hash = ((hash << 5) - hash) + patternKey.charCodeAt(i);
+      hash = (hash << 5) - hash + patternKey.charCodeAt(i);
       hash |= 0;
     }
 
@@ -605,7 +719,7 @@ export class GraphRAGLearningService {
                 relationships.push({
                   sourceNode: sourceNode.type,
                   targetNode: targetNode.type,
-                  relationshipType: 'direct-connection',
+                  relationshipType: "direct-connection",
                   strength: 0.9,
                   semanticMeaning: `${sourceNode.type} flows to ${targetNode.type}`,
                 });
@@ -622,7 +736,10 @@ export class GraphRAGLearningService {
   /**
    * Helper: Calculate embedding confidence score
    */
-  private calculateEmbeddingConfidence(feedback: any, relationships: any[]): number {
+  private calculateEmbeddingConfidence(
+    feedback: any,
+    relationships: any[]
+  ): number {
     let confidence = 0.5; // Base confidence
 
     // Boost for successful execution
@@ -631,7 +748,7 @@ export class GraphRAGLearningService {
     }
 
     // Boost for explicit user feedback
-    if (feedback.userFeedback && feedback.userFeedback.includes('✅')) {
+    if (feedback.userFeedback && feedback.userFeedback.includes("✅")) {
       confidence += 0.15;
     }
 
@@ -647,12 +764,10 @@ export class GraphRAGLearningService {
   /**
    * Helper: Calculate workflow complexity
    */
-  private calculateComplexity(
-    nodes: any[]
-  ): 'simple' | 'moderate' | 'complex' {
-    if (nodes.length <= 2) return 'simple';
-    if (nodes.length <= 5) return 'moderate';
-    return 'complex';
+  private calculateComplexity(nodes: any[]): "simple" | "moderate" | "complex" {
+    if (nodes.length <= 2) return "simple";
+    if (nodes.length <= 5) return "moderate";
+    return "complex";
   }
 
   /**
@@ -676,15 +791,15 @@ export class GraphRAGLearningService {
     const warnings: string[] = [];
 
     if (!feedback.success) {
-      warnings.push('Execution failed - pattern may not be reliable');
+      warnings.push("Execution failed - pattern may not be reliable");
     }
 
     if (feedback.userSatisfaction && feedback.userSatisfaction < 3) {
-      warnings.push('Low user satisfaction - pattern may need refinement');
+      warnings.push("Low user satisfaction - pattern may need refinement");
     }
 
     if (feedback.executionTime > 10) {
-      warnings.push('High execution time - pattern may need optimization');
+      warnings.push("High execution time - pattern may need optimization");
     }
 
     return warnings;
@@ -694,14 +809,18 @@ export class GraphRAGLearningService {
    * Helper: Generate pattern ID from workflow
    */
   private generatePatternId(workflow: any): string {
-    const nodes = workflow.nodes.map((n: any) => n.type).join('|');
-    return `pattern-${Buffer.from(nodes).toString('base64').slice(0, 16)}`;
+    const nodes = workflow.nodes.map((n: any) => n.type).join("|");
+    return `pattern-${Buffer.from(nodes).toString("base64").slice(0, 16)}`;
   }
 
   /**
    * Helper: Get or create pattern info
    */
-  private getOrCreatePatternInfo(patternId: string, feedback: any, analysis: any): any {
+  private getOrCreatePatternInfo(
+    patternId: string,
+    feedback: any,
+    analysis: any
+  ): any {
     if (!this.patternHistory.has(patternId)) {
       this.patternHistory.set(patternId, {
         patternId,
@@ -749,7 +868,8 @@ export class GraphRAGLearningService {
         patternInfo.userSatisfactionAvg = feedback.feedback.userSatisfaction;
       } else {
         patternInfo.userSatisfactionAvg =
-          (patternInfo.userSatisfactionAvg * (patternInfo.observationCount - 1) +
+          (patternInfo.userSatisfactionAvg *
+            (patternInfo.observationCount - 1) +
             feedback.feedback.userSatisfaction) /
           patternInfo.observationCount;
       }
@@ -768,29 +888,36 @@ export class GraphRAGLearningService {
   /**
    * Helper: Update learning state
    */
-  private updateLearningState(decision: GraphUpdateDecision, feedback: any): void {
+  private updateLearningState(
+    decision: GraphUpdateDecision,
+    feedback: any
+  ): void {
     // Update counters
     this.learningState.patternsDiscovered++;
 
-    if (decision.strategicAnalysis.decisionType === 'promote-pattern') {
+    if (decision.strategicAnalysis.decisionType === "promote-pattern") {
       this.learningState.patternsPromoted++;
       this.learningState.recentUpdates.unshift({
         patternName: decision.expectedImpact.description,
-        decision: 'PROMOTED',
+        decision: "PROMOTED",
         confidence: decision.strategicAnalysis.overallConfidence,
         timestamp: new Date().toISOString(),
       });
-    } else if (decision.strategicAnalysis.decisionType === 'no-action') {
+    } else if (decision.strategicAnalysis.decisionType === "no-action") {
       this.learningState.pendingPatterns++;
     }
 
     // Keep only last 10 updates
-    this.learningState.recentUpdates = this.learningState.recentUpdates.slice(0, 10);
+    this.learningState.recentUpdates = this.learningState.recentUpdates.slice(
+      0,
+      10
+    );
 
     // Update aggregate metrics
     this.learningState.lastUpdateTimestamp = new Date().toISOString();
     this.learningState.avgConfidenceScore =
-      (this.learningState.avgConfidenceScore * (this.learningState.patternsDiscovered - 1) +
+      (this.learningState.avgConfidenceScore *
+        (this.learningState.patternsDiscovered - 1) +
         decision.strategicAnalysis.overallConfidence) /
       this.learningState.patternsDiscovered;
   }

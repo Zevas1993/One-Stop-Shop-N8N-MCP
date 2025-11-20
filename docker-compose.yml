@@ -1,4 +1,4 @@
-version: '3.9'
+version: "3.9"
 
 services:
   # Official n8n Instance - Workflow Automation Platform
@@ -25,7 +25,15 @@ services:
     networks:
       - nano-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5678/healthz",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -136,13 +144,9 @@ volumes:
 networks:
   nano-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-
 # Architecture Notes:
 # ====================
-# 
+#
 # 1. SERVICE ISOLATION:
 #    - n8n: Workflow automation platform (official image)
 #    - mcp: Node documentation + GraphRAG learning system (custom image)
