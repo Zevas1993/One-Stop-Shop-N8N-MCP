@@ -128,7 +128,9 @@ export class GraphRAGNanoOrchestrator {
         return result;
       }
 
-      result.pattern = patternResult.result?.matchedPatterns?.[0] || null;
+      // Extract pattern from agent result (agent returns "patterns", not "matchedPatterns")
+      const patterns = patternResult.result?.patterns || [];
+      result.pattern = patterns.length > 0 ? patterns[0] : null;
       logger.info(
         `[Pipeline] Pattern discovered: ${
           result.pattern?.patternName || "none"

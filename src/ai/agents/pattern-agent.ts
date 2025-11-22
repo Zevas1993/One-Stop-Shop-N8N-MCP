@@ -133,7 +133,7 @@ export class PatternAgent extends BaseAgent {
   }
 
   /**
-   * Extract keywords from goal
+   * Extract keywords from goal with stemming for plurals
    */
   private extractKeywords(goal: string): string[] {
     const normalized = goal.toLowerCase().trim();
@@ -184,7 +184,23 @@ export class PatternAgent extends BaseAgent {
 
     return words
       .filter((word) => word.length > 2 && !stopWords.has(word))
+      .map((word) => this.stemWord(word)) // Apply stemming for plurals/variants
       .slice(0, 10); // Limit to 10 keywords
+  }
+
+  /**
+   * Simple stemming to handle plurals and common suffixes
+   */
+  private stemWord(word: string): string {
+    // Remove common plural/verb suffixes
+    if (word.endsWith("ies")) {
+      return word.slice(0, -3) + "y";
+    } else if (word.endsWith("es")) {
+      return word.slice(0, -2);
+    } else if (word.endsWith("s") && !word.endsWith("ss")) {
+      return word.slice(0, -1);
+    }
+    return word;
   }
 
   /**
@@ -219,8 +235,8 @@ export class PatternAgent extends BaseAgent {
       }
     }
 
-    // Only return matches with reasonable confidence
-    return Array.from(matches.values()).filter((m) => m.confidence >= 0.3);
+    // Only return matches with minimum confidence (lowered threshold to catch single-keyword matches)
+    return Array.from(matches.values()).filter((m) => m.confidence >= 0.2);
   }
 
   /**

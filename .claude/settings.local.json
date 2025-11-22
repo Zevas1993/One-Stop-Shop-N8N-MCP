@@ -14,7 +14,14 @@
       "Bash(timeout 120 node:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(timeout 180 npx ts-node:*)"
+      "Bash(timeout 180 npx ts-node:*)",
+      "Bash(timeout 60 npm run build:*)",
+      "Bash(pgrep:*)",
+      "Bash(pkill:*)",
+      "Bash(taskkill:*)",
+      "Bash(nul)",
+      "Bash(node test-orchestrator-init.js:*)",
+      "Bash(node test-agentic-graphrag-live-v2.js:*)"
     ],
     "deny": [],
     "ask": []

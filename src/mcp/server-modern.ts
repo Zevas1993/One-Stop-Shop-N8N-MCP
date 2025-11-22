@@ -906,9 +906,30 @@ export class UnifiedMCPServer {
   }
 
   async run(): Promise<void> {
+    // Initialize nano agent orchestrator on server startup
+    try {
+      logger.info("[Server] Initializing nano agent orchestrator on startup...");
+      await this.initializeNanoAgentOrchestrator();
+      logger.info("[Server] ✅ Nano agent orchestrator initialized");
+    } catch (error) {
+      logger.warn(
+        "[Server] Failed to initialize nano agent orchestrator on startup:",
+        error instanceof Error ? error.message : String(error)
+      );
+      // Don't fail server startup, but log the warning
+    }
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     logger.info("Unified MCP Server running on stdio");
+  }
+
+  /**
+   * Initialize nano agent orchestrator if not already done
+   */
+  private async initializeNanoAgentOrchestrator(): Promise<void> {
+    const { ensureOrchestratorReady } = await import("./tools-nano-agents");
+    await ensureOrchestratorReady();
   }
 
   async connect(transport: any): Promise<void> {

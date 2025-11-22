@@ -20,7 +20,7 @@ let orchestrator: GraphRAGNanoOrchestrator | null = null;
 /**
  * Initialize the nano agent orchestrator
  */
-async function ensureOrchestratorReady(): Promise<GraphRAGNanoOrchestrator> {
+export async function ensureOrchestratorReady(): Promise<GraphRAGNanoOrchestrator> {
   if (!orchestrator) {
     logger.info('[Nano Agents] Initializing GraphRAG orchestrator...');
     orchestrator = new GraphRAGNanoOrchestrator({
