@@ -1,107 +1,75 @@
 {
-  "timestamp": "2025-10-04T19:56:50.432Z",
-  "totalTests": 14,
-  "passed": 14,
-  "failed": 0,
-  "skipped": 0,
-  "results": [
-    {
-      "toolName": "node_discovery",
-      "action": "search",
-      "status": "PASS",
-      "details": "Found 2 results",
-      "timestamp": "2025-10-04T19:56:50.873Z"
-    },
-    {
-      "toolName": "node_discovery",
-      "action": "list",
-      "status": "PASS",
-      "details": "Listed 5 nodes",
-      "timestamp": "2025-10-04T19:56:50.876Z"
-    },
-    {
-      "toolName": "node_discovery",
-      "action": "get_info",
-      "status": "PASS",
-      "details": "Got info for Slack",
-      "timestamp": "2025-10-04T19:56:50.879Z"
-    },
-    {
-      "toolName": "node_discovery",
-      "action": "get_documentation",
-      "status": "PASS",
-      "details": "Has docs: Fallback",
-      "timestamp": "2025-10-04T19:56:50.880Z"
-    },
-    {
-      "toolName": "node_discovery",
-      "action": "search_properties",
-      "status": "PASS",
-      "details": "Found 0 matching properties",
-      "timestamp": "2025-10-04T19:56:50.882Z"
-    },
-    {
-      "toolName": "node_validation",
-      "action": "validate_minimal",
-      "status": "PASS",
-      "details": "Valid: undefined",
-      "timestamp": "2025-10-04T19:56:50.884Z"
-    },
-    {
-      "toolName": "node_validation",
-      "action": "get_dependencies",
-      "status": "PASS",
-      "details": "Found dependencies",
-      "timestamp": "2025-10-04T19:56:50.887Z"
-    },
-    {
-      "toolName": "node_validation",
-      "action": "list_tasks",
-      "status": "PASS",
-      "details": "Found 16 tasks",
-      "timestamp": "2025-10-04T19:56:50.889Z"
-    },
-    {
-      "toolName": "template_system",
-      "action": "search",
-      "status": "PASS",
-      "details": "Found undefined templates",
-      "timestamp": "2025-10-04T19:56:50.889Z"
-    },
-    {
-      "toolName": "template_system",
-      "action": "get_by_node",
-      "status": "PASS",
-      "details": "Found 0 Slack templates",
-      "timestamp": "2025-10-04T19:56:50.890Z"
-    },
-    {
-      "toolName": "workflow_manager",
-      "action": "list",
-      "status": "PASS",
-      "details": "Found 41 workflows",
-      "timestamp": "2025-10-04T19:56:51.051Z"
-    },
-    {
-      "toolName": "workflow_execution",
-      "action": "list",
-      "status": "PASS",
-      "details": "Found 0 executions",
-      "timestamp": "2025-10-04T19:56:51.072Z"
-    },
-    {
-      "toolName": "n8n_system",
-      "action": "health_check",
-      "status": "PASS",
-      "details": "Healthy: undefined",
-      "timestamp": "2025-10-04T19:56:51.084Z"
-    },
-    {
-      "toolName": "n8n_system",
-      "action": "list_tools",
-      "status": "PASS",
-      "details": "Found undefined tools",
-      "timestamp": "2025-10-04T19:56:51.095Z"
+  "success": true,
+  "goal": "Send message to Slack when webhook receives data",
+  "pattern": null,
+  "graphInsights": null,
+  "workflow": {
+    "name": "Email Workflow - Send message to Slack when web...",
+    "description": "Generated workflow for: Send message to Slack when webhook receives data",
+    "nodes": [
+      {
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "position": [
+          100,
+          100
+        ]
+      },
+      {
+        "name": "Send Email",
+        "type": "n8n-nodes-base.emailSend",
+        "position": [
+          300,
+          100
+        ],
+        "parameters": {
+          "toEmail": "recipient@example.com",
+          "subject": "Email from workflow",
+          "textOnly": false,
+          "htmlEmail": "<p>Message body</p>"
+        }
+      }
+    ],
+    "connections": {
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "Send Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
     }
-  ]
+  },
+  "validationResult": {
+    "validationResult": {
+      "valid": true,
+      "nodeCount": 2,
+      "connectionCount": 1,
+      "errors": [],
+      "warnings": [],
+      "stats": {
+        "totalNodes": 2,
+        "totalConnections": 1,
+        "triggerNodes": 1,
+        "actionNodes": 1,
+        "connectedNodes": 2,
+        "orphanedNodes": 0,
+        "complexity": "simple"
+      }
+    },
+    "workflowName": "Email Workflow - Send message to Slack when web...",
+    "isValid": true
+  },
+  "executionStats": {
+    "totalTime": 2,
+    "patternDiscoveryTime": 1,
+    "graphQueryTime": 0,
+    "workflowGenerationTime": 1,
+    "validationTime": 0
+  },
+  "errors": []
 }
