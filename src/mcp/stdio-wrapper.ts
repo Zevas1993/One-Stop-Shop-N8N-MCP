@@ -6,9 +6,9 @@
  */
 
 // CRITICAL: Set environment BEFORE any imports to prevent any initialization logs
-process.env.MCP_MODE = 'stdio';
-process.env.DISABLE_CONSOLE_OUTPUT = 'true';
-process.env.LOG_LEVEL = 'error';
+process.env.MCP_MODE = "stdio";
+process.env.DISABLE_CONSOLE_OUTPUT = "true";
+process.env.LOG_LEVEL = "error";
 
 // Suppress all console output before anything else
 const originalConsoleLog = console.log;
@@ -40,27 +40,29 @@ console.count = () => {};
 console.countReset = () => {};
 
 // Import and run the server AFTER suppressing output
-import { N8NDocumentationMCPServer } from './server';
+import { createUnifiedMCPServer } from "./server-modern";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 async function main() {
   try {
-    const server = new N8NDocumentationMCPServer();
-    await server.run();
+    const server = await createUnifiedMCPServer();
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
   } catch (error) {
     // In case of fatal error, output to stderr only
-    originalConsoleError('Fatal error:', error);
+    originalConsoleError("Fatal error:", error);
     process.exit(1);
   }
 }
 
 // Handle uncaught errors silently
-process.on('uncaughtException', (error) => {
-  originalConsoleError('Uncaught exception:', error);
+process.on("uncaughtException", (error) => {
+  originalConsoleError("Uncaught exception:", error);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason) => {
-  originalConsoleError('Unhandled rejection:', reason);
+process.on("unhandledRejection", (reason) => {
+  originalConsoleError("Unhandled rejection:", reason);
   process.exit(1);
 });
 

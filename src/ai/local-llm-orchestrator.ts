@@ -11,16 +11,16 @@ import {
   EmbeddingModelOption,
   GenerationModelOption,
   HardwareProfile,
-} from './hardware-detector';
-import { VLLMClient, createDualVLLMClients } from './vllm-client';
-import { logger } from '../utils/logger';
+} from "./hardware-detector";
+import { VLLMClient, createDualVLLMClients } from "./vllm-client";
+import { logger } from "../utils/logger";
 
 // Forward declaration - avoid circular import
 type GraphRAGNanoOrchestrator = any;
 type PipelineResult = any;
 
 export interface ConversationMessage {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: Date;
 }
@@ -79,11 +79,13 @@ export class LocalLLMOrchestrator {
   private generationClient?: VLLMClient;
 
   constructor(config?: Partial<LocalLLMConfig>) {
-    logger.info('[LocalLLM] Initializing orchestrator with DUAL NANO LLM architecture...');
+    logger.info(
+      "[LocalLLM] Initializing orchestrator with DUAL NANO LLM architecture..."
+    );
 
     // Detect hardware (container-safe: gracefully handles containerized environments)
     this.hardwareProfile = HardwareDetector.detectHardware();
-    logger.info('[LocalLLM] Hardware detected:', {
+    logger.info("[LocalLLM] Hardware detected:", {
       ram: `${this.hardwareProfile.ramGbytes}GB`,
       cores: this.hardwareProfile.cpuCores,
       gpu: this.hardwareProfile.hasGpu,
@@ -94,7 +96,9 @@ export class LocalLLMOrchestrator {
 
     // Note: In Docker containers, GPU detection may show false but inference still works via Ollama
     if (!this.hardwareProfile.hasGpu) {
-      logger.info('[LocalLLM] GPU not detected - will use CPU or rely on Ollama backend for inference');
+      logger.info(
+        "[LocalLLM] GPU not detected - will use CPU or rely on Ollama backend for inference"
+      );
     }
 
     // Get embedding and generation model info
@@ -107,25 +111,35 @@ export class LocalLLMOrchestrator {
 
     // Determine LLM option (use provided or auto-detect)
     const llmOption = config?.llmOption || this.hardwareProfile.recommendedLlm;
-    const validation = llmOption ? HardwareDetector.validateSystemRequirements(llmOption, this.hardwareProfile) : { meetsRequirements: true, warnings: [] };
+    const validation = llmOption
+      ? HardwareDetector.validateSystemRequirements(
+          llmOption,
+          this.hardwareProfile
+        )
+      : { meetsRequirements: true, warnings: [] };
 
     if (!validation.meetsRequirements) {
-      logger.warn('[LocalLLM] System does not meet minimum requirements:', validation.warnings);
+      logger.warn(
+        "[LocalLLM] System does not meet minimum requirements:",
+        validation.warnings
+      );
     }
 
     this.config = {
       llmOption: llmOption as NanoLLMOption,
-      embeddingModel: config?.embeddingModel || this.hardwareProfile.embeddingModel,
-      generationModel: config?.generationModel || this.hardwareProfile.generationModel,
-      baseUrl: config?.baseUrl || 'http://localhost:11434',
-      embeddingBaseUrl: config?.embeddingBaseUrl || 'http://localhost:8001',
-      generationBaseUrl: config?.generationBaseUrl || 'http://localhost:8002',
+      embeddingModel:
+        config?.embeddingModel || this.hardwareProfile.embeddingModel,
+      generationModel:
+        config?.generationModel || this.hardwareProfile.generationModel,
+      baseUrl: config?.baseUrl || "http://localhost:11434",
+      embeddingBaseUrl: config?.embeddingBaseUrl || "http://localhost:8001",
+      generationBaseUrl: config?.generationBaseUrl || "http://localhost:8002",
       temperature: config?.temperature ?? 0.7,
       maxTokens: config?.maxTokens ?? 1024,
       systemPrompt: config?.systemPrompt,
     };
 
-    logger.info('[LocalLLM] Dual Nano LLM Configuration:', {
+    logger.info("[LocalLLM] Dual Nano LLM Configuration:", {
       embeddingModel: this.config.embeddingModel,
       embeddingModelDisplayName: embeddingModelInfo.displayName,
       generationModel: this.config.generationModel,
@@ -157,14 +171,14 @@ export class LocalLLMOrchestrator {
       this.embeddingClient = clients.embedding;
       this.generationClient = clients.generation;
 
-      logger.info('[LocalLLM] Dual vLLM clients initialized:', {
+      logger.info("[LocalLLM] Dual vLLM clients initialized:", {
         embeddingModel: this.config.embeddingModel,
         embeddingServer: this.config.embeddingBaseUrl,
         generationModel: this.config.generationModel,
         generationServer: this.config.generationBaseUrl,
       });
     } catch (error) {
-      logger.warn('[LocalLLM] Failed to initialize vLLM clients:', error);
+      logger.warn("[LocalLLM] Failed to initialize vLLM clients:", error);
       this.embeddingClient = undefined;
       this.generationClient = undefined;
     }
@@ -172,7 +186,9 @@ export class LocalLLMOrchestrator {
     // Initialize nano agent orchestrator
     try {
       // Dynamically import to avoid circular dependency
-      const { GraphRAGNanoOrchestrator: GRAO } = require('./graphrag-nano-orchestrator');
+      const {
+        GraphRAGNanoOrchestrator: GRAO,
+      } = require("./graphrag-nano-orchestrator");
       this.nanoAgentOrchestrator = new GRAO({
         enableGraphRAG: true,
         maxAgentRetries: 2,
@@ -180,21 +196,26 @@ export class LocalLLMOrchestrator {
         shareGraphInsights: true,
       });
     } catch (error) {
-      logger.warn('[LocalLLM] Failed to initialize nano agent orchestrator:', error);
+      logger.warn(
+        "[LocalLLM] Failed to initialize nano agent orchestrator:",
+        error
+      );
       this.nanoAgentOrchestrator = null;
     }
 
     // Load or create system prompt
     this.systemPrompt = config?.systemPrompt || this.createSystemPrompt();
 
-    logger.info('[LocalLLM] Orchestrator initialized successfully');
+    logger.info("[LocalLLM] Orchestrator initialized successfully");
   }
 
   /**
    * Initialize the orchestrator (async setup)
    */
   async initialize(): Promise<void> {
-    logger.info('[LocalLLM] Starting async initialization with dual nano LLM clients...');
+    logger.info(
+      "[LocalLLM] Starting async initialization with dual nano LLM clients..."
+    );
     try {
       // Check vLLM client health
       let embeddingHealthy = false;
@@ -203,40 +224,42 @@ export class LocalLLMOrchestrator {
       if (this.embeddingClient) {
         embeddingHealthy = await this.embeddingClient.checkHealth();
         if (embeddingHealthy) {
-          logger.info('[LocalLLM] Embedding vLLM client is healthy');
+          logger.info("[LocalLLM] Embedding vLLM client is healthy");
         } else {
-          logger.warn('[LocalLLM] Embedding vLLM client is not responding');
+          logger.warn("[LocalLLM] Embedding vLLM client is not responding");
         }
       }
 
       if (this.generationClient) {
         generationHealthy = await this.generationClient.checkHealth();
         if (generationHealthy) {
-          logger.info('[LocalLLM] Generation vLLM client is healthy');
+          logger.info("[LocalLLM] Generation vLLM client is healthy");
         } else {
-          logger.warn('[LocalLLM] Generation vLLM client is not responding');
+          logger.warn("[LocalLLM] Generation vLLM client is not responding");
         }
       }
 
       // Initialize nano agent orchestrator
       if (this.nanoAgentOrchestrator) {
         await this.nanoAgentOrchestrator.initialize();
-        logger.info('[LocalLLM] Nano agent orchestrator initialized');
+        logger.info("[LocalLLM] Nano agent orchestrator initialized");
       }
 
       // Verify LLM connectivity (legacy fallback)
       const isConnected = await this.verifyLLMConnectivity();
-      if (!isConnected && (!embeddingHealthy && !generationHealthy)) {
-        logger.warn('[LocalLLM] vLLM clients not yet connected - will retry on first use');
+      if (!isConnected && !embeddingHealthy && !generationHealthy) {
+        logger.warn(
+          "[LocalLLM] vLLM clients not yet connected - will retry on first use"
+        );
       }
 
-      logger.info('[LocalLLM] Async initialization complete', {
+      logger.info("[LocalLLM] Async initialization complete", {
         embeddingHealthy,
         generationHealthy,
         hasNanoAgent: !!this.nanoAgentOrchestrator,
       });
     } catch (error) {
-      logger.error('[LocalLLM] Initialization error:', error);
+      logger.error("[LocalLLM] Initialization error:", error);
       throw error;
     }
   }
@@ -246,12 +269,20 @@ export class LocalLLMOrchestrator {
    */
   private createSystemPrompt(): string {
     const llmInfo = HardwareDetector.getLLMInfo(this.config.llmOption!);
-    const embeddingModelInfo = HardwareDetector.getEmbeddingModelInfo(this.config.embeddingModel!);
-    const generationModelInfo = HardwareDetector.getGenerationModelInfo(this.config.generationModel!);
+    const embeddingModelInfo = HardwareDetector.getEmbeddingModelInfo(
+      this.config.embeddingModel!
+    );
+    const generationModelInfo = HardwareDetector.getGenerationModelInfo(
+      this.config.generationModel!
+    );
     return `You are an expert n8n workflow architect assistant powered by a dual nano LLM system.
 This system uses:
-- **Embedding Model:** ${embeddingModelInfo.displayName} (semantic understanding & knowledge graph queries)
-- **Generation Model:** ${generationModelInfo.displayName} (text generation & workflow design)
+- **Embedding Model:** ${
+      embeddingModelInfo.displayName
+    } (semantic understanding & knowledge graph queries)
+- **Generation Model:** ${
+      generationModelInfo.displayName
+    } (text generation & workflow design)
 
 # Your Role
 You help users design and build n8n automation workflows through natural conversation. You provide expert guidance on:
@@ -300,7 +331,7 @@ When a user describes a workflow idea:
 - Latency: ${embeddingModelInfo.latency}
 - Context: ${embeddingModelInfo.contextWindow}
 - Quality: ${embeddingModelInfo.quality}
-- Multilingual: ${embeddingModelInfo.multilingual ? 'Yes' : 'No'}
+- Multilingual: ${embeddingModelInfo.multilingual ? "Yes" : "No"}
 
 **Generation Model:** ${generationModelInfo.displayName}
 - Parameters: ${generationModelInfo.modelSize}
@@ -308,9 +339,15 @@ When a user describes a workflow idea:
 - Quality: ${generationModelInfo.quality}
 - Speed: ${generationModelInfo.speed}
 
-**Hardware:** ${this.hardwareProfile.ramGbytes}GB RAM, ${this.hardwareProfile.cpuCores} cores${this.hardwareProfile.hasGpu ? ', GPU available' : ''}
-- Estimated embedding latency: ${this.hardwareProfile.estimatedEmbeddingLatency}ms
-- Estimated generation throughput: ${this.hardwareProfile.estimatedGenerationTokensPerSecond} tokens/second
+**Hardware:** ${this.hardwareProfile.ramGbytes}GB RAM, ${
+      this.hardwareProfile.cpuCores
+    } cores${this.hardwareProfile.hasGpu ? ", GPU available" : ""}
+- Estimated embedding latency: ${
+      this.hardwareProfile.estimatedEmbeddingLatency
+    }ms
+- Estimated generation throughput: ${
+      this.hardwareProfile.estimatedGenerationTokensPerSecond
+    } tokens/second
 
 # Conversation Style
 - Be conversational and helpful
@@ -325,21 +362,24 @@ Let's help users build amazing n8n workflows!`;
   /**
    * Configure n8n API credentials
    */
-  async configureN8n(apiUrl: string, apiKey: string): Promise<{ success: boolean; message: string }> {
-    logger.info('[LocalLLM] Configuring n8n API...');
+  async configureN8n(
+    apiUrl: string,
+    apiKey: string
+  ): Promise<{ success: boolean; message: string }> {
+    logger.info("[LocalLLM] Configuring n8n API...");
 
     try {
       // Validate credentials by making a simple API call
       // (In a real implementation, this would test the API)
       if (!apiUrl || !apiKey) {
-        return { success: false, message: 'API URL and API Key are required' };
+        return { success: false, message: "API URL and API Key are required" };
       }
 
       this.context.n8nApiUrl = apiUrl;
       this.context.n8nApiKey = apiKey;
       this.context.isConfigured = true;
 
-      logger.info('[LocalLLM] n8n configured:', { url: apiUrl });
+      logger.info("[LocalLLM] n8n configured:", { url: apiUrl });
 
       return {
         success: true,
@@ -347,7 +387,7 @@ Let's help users build amazing n8n workflows!`;
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error('[LocalLLM] n8n configuration error:', message);
+      logger.error("[LocalLLM] n8n configuration error:", message);
       return { success: false, message };
     }
   }
@@ -356,12 +396,12 @@ Let's help users build amazing n8n workflows!`;
    * Chat with the nano LLM
    */
   async chat(userMessage: string): Promise<string> {
-    logger.info('[LocalLLM] Processing user message...');
+    logger.info("[LocalLLM] Processing user message...");
 
     try {
       // Add user message to context
       this.context.messages.push({
-        role: 'user',
+        role: "user",
         content: userMessage,
         timestamp: new Date(),
       });
@@ -370,7 +410,7 @@ Let's help users build amazing n8n workflows!`;
       const messages = this.buildMessageHistory();
 
       // Call LLM
-      logger.debug('[LocalLLM] Calling LLM with message history:', {
+      logger.debug("[LocalLLM] Calling LLM with message history:", {
         messageCount: messages.length,
         latestMessage: userMessage.substring(0, 100),
       });
@@ -380,7 +420,7 @@ Let's help users build amazing n8n workflows!`;
 
       // Add assistant response to context
       this.context.messages.push({
-        role: 'assistant',
+        role: "assistant",
         content: response,
         timestamp: new Date(),
       });
@@ -403,7 +443,7 @@ Let's help users build amazing n8n workflows!`;
       return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error('[LocalLLM] Chat error:', message);
+      logger.error("[LocalLLM] Chat error:", message);
       return `I encountered an error processing your request: ${message}`;
     }
   }
@@ -412,16 +452,21 @@ Let's help users build amazing n8n workflows!`;
    * Generate a workflow from a user idea
    */
   async generateWorkflow(idea: string): Promise<WorkflowGenerationResult> {
-    logger.info('[LocalLLM] Generating workflow for idea:', idea.substring(0, 100));
+    logger.info(
+      "[LocalLLM] Generating workflow for idea:",
+      idea.substring(0, 100)
+    );
 
     try {
       if (!idea) {
-        throw new Error('Workflow idea is required');
+        throw new Error("Workflow idea is required");
       }
 
       // Use nano agent orchestrator to generate workflow
-      logger.info('[LocalLLM] Calling nano agent orchestrator...');
-      const pipelineResult = await this.nanoAgentOrchestrator.executePipeline(idea);
+      logger.info("[LocalLLM] Calling nano agent orchestrator...");
+      const pipelineResult = await this.nanoAgentOrchestrator.executePipeline(
+        idea
+      );
 
       // Create workflow result
       const workflowId = `workflow-${Date.now()}-${++this.workflowCounter}`;
@@ -437,7 +482,7 @@ Let's help users build amazing n8n workflows!`;
       // Add to context
       this.context.generatedWorkflows.push(result);
 
-      logger.info('[LocalLLM] Workflow generated:', {
+      logger.info("[LocalLLM] Workflow generated:", {
         id: workflowId,
         nodeCount: pipelineResult.workflow?.nodes?.length || 0,
         isValid: pipelineResult.validationResult?.valid,
@@ -450,7 +495,9 @@ Let's help users build amazing n8n workflows!`;
 **Workflow ID:** ${workflowId}
 **Node Count:** ${pipelineResult.workflow?.nodes?.length || 0} nodes
 **Pattern Matched:** ${pipelineResult.pattern?.patternName}
-**Validation:** ${pipelineResult.validationResult?.valid ? '✅ Passed' : '❌ Failed'}
+**Validation:** ${
+        pipelineResult.validationResult?.valid ? "✅ Passed" : "❌ Failed"
+      }
 
 **Execution Stats:**
 - Pattern Discovery: ${pipelineResult.executionStats.patternDiscoveryTime}ms
@@ -462,7 +509,7 @@ Let's help users build amazing n8n workflows!`;
 The workflow is ready for deployment. Review it and then deploy to n8n when ready!`;
 
       this.context.messages.push({
-        role: 'assistant',
+        role: "assistant",
         content: summary,
         timestamp: new Date(),
       });
@@ -470,7 +517,7 @@ The workflow is ready for deployment. Review it and then deploy to n8n when read
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error('[LocalLLM] Workflow generation error:', message);
+      logger.error("[LocalLLM] Workflow generation error:", message);
       throw error;
     }
   }
@@ -478,23 +525,33 @@ The workflow is ready for deployment. Review it and then deploy to n8n when read
   /**
    * Deploy a generated workflow to n8n
    */
-  async deployWorkflow(workflowId: string): Promise<{ success: boolean; message: string; n8nId?: string }> {
-    logger.info('[LocalLLM] Deploying workflow:', workflowId);
+  async deployWorkflow(
+    workflowId: string
+  ): Promise<{ success: boolean; message: string; n8nId?: string }> {
+    logger.info("[LocalLLM] Deploying workflow:", workflowId);
 
     try {
       if (!this.context.isConfigured) {
-        return { success: false, message: 'n8n not configured. Please set up API credentials first.' };
+        return {
+          success: false,
+          message: "n8n not configured. Please set up API credentials first.",
+        };
       }
 
       // Find the workflow
-      const workflow = this.context.generatedWorkflows.find((w) => w.id === workflowId);
+      const workflow = this.context.generatedWorkflows.find(
+        (w) => w.id === workflowId
+      );
       if (!workflow) {
         return { success: false, message: `Workflow not found: ${workflowId}` };
       }
 
       // Validate before deployment
       if (!workflow.validationResult?.valid) {
-        return { success: false, message: 'Workflow validation failed. Cannot deploy.' };
+        return {
+          success: false,
+          message: "Workflow validation failed. Cannot deploy.",
+        };
       }
 
       // For now, return success placeholder
@@ -510,12 +567,12 @@ The workflow is ready for deployment. Review it and then deploy to n8n when read
 
 The workflow is now active in your n8n instance and ready to execute!`;
 
-      logger.info('[LocalLLM] Workflow deployed:', { workflowId, n8nId });
+      logger.info("[LocalLLM] Workflow deployed:", { workflowId, n8nId });
 
       return { success: true, message, n8nId };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      logger.error('[LocalLLM] Deployment error:', message);
+      logger.error("[LocalLLM] Deployment error:", message);
       return { success: false, message };
     }
   }
@@ -566,8 +623,12 @@ The workflow is now active in your n8n instance and ready to execute!`;
     generation: any;
   } {
     return {
-      embedding: HardwareDetector.getEmbeddingModelInfo(this.config.embeddingModel!),
-      generation: HardwareDetector.getGenerationModelInfo(this.config.generationModel!),
+      embedding: HardwareDetector.getEmbeddingModelInfo(
+        this.config.embeddingModel!
+      ),
+      generation: HardwareDetector.getGenerationModelInfo(
+        this.config.generationModel!
+      ),
     };
   }
 
@@ -575,7 +636,7 @@ The workflow is now active in your n8n instance and ready to execute!`;
    * Clear conversation history (start fresh)
    */
   clearContext(): void {
-    logger.info('[LocalLLM] Clearing conversation context...');
+    logger.info("[LocalLLM] Clearing conversation context...");
     this.context = {
       messages: [],
       workflowIdeas: [],
@@ -591,7 +652,7 @@ The workflow is now active in your n8n instance and ready to execute!`;
    */
   private buildMessageHistory(): Array<{ role: string; content: string }> {
     return [
-      { role: 'system', content: this.systemPrompt },
+      { role: "system", content: this.systemPrompt },
       ...this.context.messages.map((msg) => ({
         role: msg.role,
         content: msg.content,
@@ -603,38 +664,45 @@ The workflow is now active in your n8n instance and ready to execute!`;
    * Call the dual nano LLMs (embedding for semantic queries, generation for text)
    * Routes to appropriate model based on operation type
    */
-  private async callLLM(messages: Array<{ role: string; content: string }>): Promise<string> {
+  private async callLLM(
+    messages: Array<{ role: string; content: string }>
+  ): Promise<string> {
     try {
       // Check if generation client is available
       if (!this.generationClient) {
-        logger.warn('[LocalLLM] Generation client not initialized, using fallback response');
+        logger.warn(
+          "[LocalLLM] Generation client not initialized, using fallback response"
+        );
         return this.getFallbackResponse();
       }
 
       // Build conversation prompt from message history
-      let conversationPrompt = '';
+      let conversationPrompt = "";
       for (const msg of messages) {
-        if (msg.role === 'system') {
-          conversationPrompt = msg.content + '\n\n';
-        } else if (msg.role === 'user') {
+        if (msg.role === "system") {
+          conversationPrompt = msg.content + "\n\n";
+        } else if (msg.role === "user") {
           conversationPrompt += `User: ${msg.content}\n`;
-        } else if (msg.role === 'assistant') {
+        } else if (msg.role === "assistant") {
           conversationPrompt += `Assistant: ${msg.content}\n`;
         }
       }
 
       // Call generation client for text generation
-      logger.debug('[LocalLLM] Calling generation client (vLLM)', {
+      logger.debug("[LocalLLM] Calling generation client (vLLM)", {
         modelName: this.generationClient.getModel(),
         promptLength: conversationPrompt.length,
       });
 
-      const response = await this.generationClient.generateText(conversationPrompt, {
-        maxTokens: this.config.maxTokens,
-        temperature: this.config.temperature,
-      });
+      const response = await this.generationClient.generateText(
+        conversationPrompt,
+        {
+          maxTokens: this.config.maxTokens,
+          temperature: this.config.temperature,
+        }
+      );
 
-      logger.debug('[LocalLLM] Generation response received', {
+      logger.debug("[LocalLLM] Generation response received", {
         tokens: response.tokens,
         generationTime: response.generationTime,
         textLength: response.text.length,
@@ -642,7 +710,7 @@ The workflow is now active in your n8n instance and ready to execute!`;
 
       return response.text.trim();
     } catch (error) {
-      logger.error('[LocalLLM] LLM call error:', error);
+      logger.error("[LocalLLM] LLM call error:", error);
       // Fall back to placeholder response
       return this.getFallbackResponse();
     }
@@ -652,9 +720,13 @@ The workflow is now active in your n8n instance and ready to execute!`;
    * Get fallback response when LLM is unavailable
    */
   private getFallbackResponse(): string {
-    const lastUserMessage = this.context.messages[this.context.messages.length - 1]?.content || '';
+    const lastUserMessage =
+      this.context.messages[this.context.messages.length - 1]?.content || "";
 
-    if (lastUserMessage.toLowerCase().includes('slack') && lastUserMessage.toLowerCase().includes('email')) {
+    if (
+      lastUserMessage.toLowerCase().includes("slack") &&
+      lastUserMessage.toLowerCase().includes("email")
+    ) {
       return `Great idea! I can help you create an email-to-Slack notification workflow.
 
 Here's what we'll need:
@@ -687,11 +759,16 @@ Once I understand your specific use case, I can generate a complete workflow usi
    */
   private async verifyLLMConnectivity(): Promise<boolean> {
     try {
-      // TODO: Implement actual LLM connectivity check
-      logger.debug('[LocalLLM] LLM connectivity check (not yet implemented)');
-      return true;
+      // Simple check to Ollama version endpoint
+      const response = await fetch(`${this.config.baseUrl}/api/version`);
+      if (response.ok) {
+        logger.debug("[LocalLLM] LLM connectivity check passed");
+        return true;
+      }
+      logger.warn("[LocalLLM] LLM connectivity check failed: Non-200 response");
+      return false;
     } catch (error) {
-      logger.warn('[LocalLLM] LLM connectivity check failed:', error);
+      logger.warn("[LocalLLM] LLM connectivity check failed:", error);
       return false;
     }
   }
@@ -701,14 +778,14 @@ Once I understand your specific use case, I can generate a complete workflow usi
    */
   private shouldGenerateWorkflow(message: string): boolean {
     const generateKeywords = [
-      'workflow',
-      'automation',
-      'create',
-      'build',
-      'design',
-      'setup',
-      'connect',
-      'integrate',
+      "workflow",
+      "automation",
+      "create",
+      "build",
+      "design",
+      "setup",
+      "connect",
+      "integrate",
     ];
 
     const lowerMessage = message.toLowerCase();

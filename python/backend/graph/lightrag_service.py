@@ -22,6 +22,7 @@ logger = logging.getLogger("lightrag_service")
 # Fix imports for script execution
 current_dir = Path(__file__).parent.resolve()
 sys.path.append(str(current_dir))
+sys.path.append(str(current_dir.parent)) # Add backend root for core imports
 
 try:
     import numpy as np
@@ -29,6 +30,8 @@ try:
     from storage.models import Node, Edge, Embedding, EntityType
     from core.semantic_search import SemanticSearchEngine
 except ImportError as e:
+    import traceback
+    traceback.print_exc()
     logger.error(f"Failed to import dependencies: {e}")
     sys.exit(1)
 
@@ -61,6 +64,8 @@ def query_graph_impl(text: str, top_k: int, embedding: list, engine: SemanticSea
                 "id": r.node_id,
                 "label": r.node_label,
                 "type": r.node_type,
+                "description": r.description,
+                "score": r.confidence,
                 "confidence": r.confidence,
                 "metadata": r.metadata
             })

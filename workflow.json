@@ -1,0 +1,378 @@
+{
+  "name": "Teams-Outlook RAG Assistant (Agent Generated)",
+  "nodes": [
+    {
+      "name": "Outlook Email Trigger",
+      "type": "n8n-nodes-base.microsoftOutlookTrigger",
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "pollInterval": 60
+      },
+      "id": "ea3b040e-d6ec-435d-b852-081cb124dc04",
+      "typeVersion": 1
+    },
+    {
+      "name": "Process Email for RAG",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        250,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Extract email body and metadata\nreturn items;"
+      },
+      "id": "b5bed161-9bef-447c-8ca1-7243e60e8ff8",
+      "typeVersion": 1
+    },
+    {
+      "name": "Fraud Classifier",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        500,
+        -150
+      ],
+      "parameters": {
+        "mode": "text"
+      },
+      "id": "11c13cb3-5a0f-4cbd-af34-19427c847edf",
+      "typeVersion": 1
+    },
+    {
+      "name": "Billing RAG Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        500,
+        0
+      ],
+      "parameters": {
+        "mode": "chat"
+      },
+      "id": "97910110-86bc-4db0-a675-3ac21065fe82",
+      "typeVersion": 1
+    },
+    {
+      "name": "High Priority RAG Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        500,
+        150
+      ],
+      "parameters": {
+        "mode": "chat"
+      },
+      "id": "934acccc-9be6-4bef-babd-5c9e193b38c9",
+      "typeVersion": 1
+    },
+    {
+      "name": "Teams Message Trigger",
+      "type": "n8n-nodes-base.microsoftTeamsTrigger",
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {},
+      "id": "be8efe89-6958-4aa2-883a-b17c5cbf00e3",
+      "typeVersion": 1
+    },
+    {
+      "name": "Process Teams Input",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        250,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// Format teams message for AI\nreturn items;"
+      },
+      "id": "3e491feb-20f7-4b6f-853c-4af6674e72c1",
+      "typeVersion": 1
+    },
+    {
+      "name": "AI Agent (Central)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        500,
+        400
+      ],
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a helpful Outlook & Teams assistant."
+        }
+      },
+      "id": "58023a7a-7dec-4585-8180-4c513e4a7849",
+      "typeVersion": 1
+    },
+    {
+      "name": "Send Teams Response",
+      "type": "n8n-nodes-base.microsoftTeams",
+      "position": [
+        800,
+        400
+      ],
+      "parameters": {
+        "operation": "sendMessage"
+      },
+      "id": "4ba145f3-700d-4309-a297-3115cf27d12f",
+      "typeVersion": 1
+    },
+    {
+      "name": "Postgres Memory",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        400,
+        600
+      ],
+      "parameters": {
+        "operation": "executeQuery"
+      },
+      "id": "9430c61e-7fc8-43e9-bc4d-ed57e6473ceb",
+      "typeVersion": 1
+    },
+    {
+      "name": "Search Emails",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "position": [
+        500,
+        600
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll"
+      },
+      "id": "e4c23273-7b83-475e-ba13-a48d21898a24",
+      "typeVersion": 1
+    },
+    {
+      "name": "Get Calendar Events",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "position": [
+        650,
+        600
+      ],
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll"
+      },
+      "id": "75c089d1-9940-4f69-87c6-b95f2be63f80",
+      "typeVersion": 1
+    },
+    {
+      "name": "Create Calendar Event",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "position": [
+        800,
+        600
+      ],
+      "parameters": {
+        "resource": "event",
+        "operation": "create"
+      },
+      "id": "67ceecde-7f9d-49f0-88ff-202402f0660c",
+      "typeVersion": 1
+    },
+    {
+      "name": "Create Draft",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "position": [
+        950,
+        600
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "create"
+      },
+      "id": "72e387e3-7b50-453b-b9fa-06b8458514ce",
+      "typeVersion": 1
+    },
+    {
+      "name": "Send Email",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "position": [
+        1100,
+        600
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send"
+      },
+      "id": "9e1d266e-9079-4811-ba8f-efcf54cccc1b",
+      "typeVersion": 1
+    },
+    {
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.openAiChatModel",
+      "position": [
+        200,
+        400
+      ],
+      "parameters": {
+        "model": "gpt-4o"
+      },
+      "id": "5124b1be-ea59-467f-9c6d-69cc0982a2e2",
+      "typeVersion": 1
+    },
+    {
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [
+        200,
+        550
+      ],
+      "parameters": {},
+      "id": "9939e3fb-4afc-4801-bd65-44e903c2b2c5",
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Outlook Email Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process Email for RAG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Email for RAG": {
+      "main": [
+        [
+          {
+            "node": "Fraud Classifier",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Billing RAG Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "High Priority RAG Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Teams Message Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process Teams Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Teams Input": {
+      "main": [
+        [
+          {
+            "node": "AI Agent (Central)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent (Central)": {
+      "main": [
+        [
+          {
+            "node": "Send Teams Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Postgres Memory",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Search Emails",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Calendar Events",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create Draft",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "main": [
+        [
+          {
+            "node": "Fraud Classifier",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Billing RAG Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "High Priority RAG Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent (Central)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "main": [
+        [
+          {
+            "node": "Fraud Classifier",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Billing RAG Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "High Priority RAG Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent (Central)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

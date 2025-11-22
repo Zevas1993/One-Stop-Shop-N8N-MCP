@@ -20,7 +20,7 @@ from collections import deque
 import logging
 import time
 
-from ..storage import Database, Node, Edge, RelationshipType
+from storage import Database, Node, Edge, RelationshipType
 
 logger = logging.getLogger(__name__)
 

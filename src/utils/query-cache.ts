@@ -25,9 +25,9 @@ export class QueryCache<T = any> {
   private stats = {
     hits: 0,
     misses: 0,
-    evictions: 0
+    evictions: 0,
   };
-  
+
   constructor(
     private maxSize = 1000,
     private ttlMs = 5 * 60 * 1000, // 5 minutes default
@@ -35,7 +35,7 @@ export class QueryCache<T = any> {
   ) {
     // Periodic cleanup of expired entries
     setInterval(() => this.cleanup(), this.cleanupIntervalMs);
-    
+
     // Memory pressure monitoring
     setInterval(() => this.checkMemoryPressure(), 30 * 1000); // Check every 30 seconds
   }
@@ -44,7 +44,7 @@ export class QueryCache<T = any> {
    * Get cached value or execute function and cache result
    */
   async getOrSet<R extends T>(
-    key: string, 
+    key: string,
     fetchFn: () => Promise<R>,
     customTtl?: number
   ): Promise<R> {
@@ -63,7 +63,7 @@ export class QueryCache<T = any> {
    */
   get(key: string): T | null {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       this.stats.misses++;
       return null;
@@ -80,7 +80,7 @@ export class QueryCache<T = any> {
     entry.accessCount++;
     entry.lastAccessed = Date.now();
     this.stats.hits++;
-    
+
     return entry.data;
   }
 
@@ -89,7 +89,7 @@ export class QueryCache<T = any> {
    */
   set(key: string, value: T, customTtl?: number): void {
     const now = Date.now();
-    
+
     // Enforce size limit with LRU eviction
     if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
       this.evictLeastRecentlyUsed();
@@ -99,7 +99,7 @@ export class QueryCache<T = any> {
       data: value,
       timestamp: now,
       accessCount: 0,
-      lastAccessed: now
+      lastAccessed: now,
     });
   }
 
@@ -128,15 +128,18 @@ export class QueryCache<T = any> {
       totalRequests,
       hitRate: totalRequests > 0 ? (this.stats.hits / totalRequests) * 100 : 0,
       size: this.cache.size,
-      maxSize: this.maxSize
+      maxSize: this.maxSize,
     };
   }
 
   /**
    * Generate cache key from parameters
    */
-  static generateKey(prefix: string, ...params: (string | number | boolean)[]): string {
-    return `${prefix}:${params.map(p => String(p)).join(':')}`;
+  static generateKey(
+    prefix: string,
+    ...params: (string | number | boolean)[]
+  ): string {
+    return `${prefix}:${params.map((p) => String(p)).join(":")}`;
   }
 
   /**
@@ -152,7 +155,7 @@ export class QueryCache<T = any> {
       }
     }
 
-    toDelete.forEach(key => this.cache.delete(key));
+    toDelete.forEach((key) => this.cache.delete(key));
   }
 
   /**
@@ -179,15 +182,19 @@ export class QueryCache<T = any> {
    * Check memory pressure and clear cache if needed
    */
   private checkMemoryPressure(): void {
+    // Use v8 to get actual heap limit, not just current heap size
+    const v8 = require("v8");
+    const heapStats = v8.getHeapStatistics();
     const memUsage = process.memoryUsage();
-    const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
-    const heapTotalMB = memUsage.heapTotal / 1024 / 1024;
-    const usageRatio = memUsage.heapUsed / memUsage.heapTotal;
 
-    // If using more than 85% of heap, start aggressive eviction
+    const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
+    const heapTotalMB = heapStats.heap_size_limit / 1024 / 1024;
+    const usageRatio = memUsage.heapUsed / heapStats.heap_size_limit;
+
+    // If using more than 85% of max allowed heap, start aggressive eviction
     if (usageRatio > 0.85) {
       const evictCount = Math.floor(this.cache.size * 0.2); // Evict 20%
-      
+
       // Sort by last accessed time and evict oldest entries
       const entries = Array.from(this.cache.entries())
         .sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed)
@@ -198,21 +205,29 @@ export class QueryCache<T = any> {
         this.stats.evictions++;
       }
 
-      console.warn(`[Cache] Memory pressure detected (${heapUsedMB.toFixed(1)}MB/${heapTotalMB.toFixed(1)}MB), evicted ${evictCount} entries`);
+      console.warn(
+        `[Cache] Memory pressure detected (${heapUsedMB.toFixed(
+          1
+        )}MB/${heapTotalMB.toFixed(1)}MB), evicted ${evictCount} entries`
+      );
     }
 
-    // If using more than 95% of heap, emergency clear
+    // If using more than 95% of max allowed heap, emergency clear
     if (usageRatio > 0.95) {
       const beforeSize = this.cache.size;
       this.cache.clear();
       this.stats.evictions += beforeSize;
-      
-      console.error(`[Cache] Emergency memory clear (${heapUsedMB.toFixed(1)}MB/${heapTotalMB.toFixed(1)}MB), cleared ${beforeSize} entries`);
+
+      console.error(
+        `[Cache] Emergency memory clear (${heapUsedMB.toFixed(
+          1
+        )}MB/${heapTotalMB.toFixed(1)}MB), cleared ${beforeSize} entries`
+      );
     }
   }
 }
 
 // Global cache instances - Reduced sizes for memory-constrained environments
 export const nodeInfoCache = new QueryCache(100, 10 * 60 * 1000); // 10 min TTL, reduced from 500 to 100
-export const searchCache = new QueryCache(50, 5 * 60 * 1000);     // 5 min TTL, reduced from 200 to 50
-export const templateCache = new QueryCache(25, 30 * 60 * 1000);  // 30 min TTL, reduced from 100 to 25
+export const searchCache = new QueryCache(50, 5 * 60 * 1000); // 5 min TTL, reduced from 200 to 50
+export const templateCache = new QueryCache(25, 30 * 60 * 1000); // 30 min TTL, reduced from 100 to 25

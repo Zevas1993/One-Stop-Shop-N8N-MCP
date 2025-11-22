@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import datetime
 from dataclasses import asdict
 
-from ..storage.database import Database
+from storage.database import Database
 from .entity_extractor import AgenticNode
 from .relationship_builder import AgenticEdge
 

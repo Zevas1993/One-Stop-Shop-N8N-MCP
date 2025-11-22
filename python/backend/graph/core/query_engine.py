@@ -21,7 +21,7 @@ import time
 import uuid
 import numpy as np
 
-from ..storage import Database, Node
+from storage import Database, Node
 from .semantic_search import SemanticSearchEngine, SearchResult
 from .graph_traversal import GraphTraversalEngine, Path
 from .explanation_generator import ExplanationGenerator, Explanation

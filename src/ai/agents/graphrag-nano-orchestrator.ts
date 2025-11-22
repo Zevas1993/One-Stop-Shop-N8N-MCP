@@ -9,13 +9,13 @@
  * 4. ValidatorAgent → Validate generated workflow
  */
 
-import { BaseAgent, AgentConfig, AgentInput, AgentOutput } from './base-agent';
-import { PatternAgent, PatternMatch } from './pattern-agent';
-import { WorkflowAgent } from './workflow-agent';
-import { ValidatorAgent } from './validator-agent';
-import { SharedMemory } from '../shared-memory';
-import { GraphRAGBridge, QueryGraphResult } from '../graphrag-bridge';
-import { logger } from '../../utils/logger';
+import { BaseAgent, AgentConfig, AgentInput, AgentOutput } from "./base-agent";
+import { PatternAgent, PatternMatch } from "./pattern-agent";
+import { WorkflowAgent } from "./workflow-agent";
+import { ValidatorAgent } from "./validator-agent";
+import { SharedMemory } from "../shared-memory";
+import { GraphRAGBridge, QueryGraphResult } from "../graphrag-bridge";
+import { logger } from "../../utils/logger";
 
 export interface NanoAgentPipelineConfig {
   enableGraphRAG: boolean;
@@ -73,18 +73,25 @@ export class GraphRAGNanoOrchestrator {
       shareGraphInsights: config?.shareGraphInsights ?? true,
     };
 
-    logger.info('[GraphRAG Orchestrator] Initialized with config:', this.config);
+    logger.info(
+      "[GraphRAG Orchestrator] Initialized with config:",
+      this.config
+    );
   }
 
   /**
    * Initialize all agents
    */
   async initialize(): Promise<void> {
-    logger.info('[GraphRAG Orchestrator] Initializing agents...');
+    logger.info("[GraphRAG Orchestrator] Initializing agents...");
+
+    // Initialize shared memory first
+    await this.sharedMemory.initialize();
+
     await this.patternAgent.initialize();
     await this.workflowAgent.initialize();
     await this.validatorAgent.initialize();
-    logger.info('[GraphRAG Orchestrator] All agents initialized');
+    logger.info("[GraphRAG Orchestrator] All agents initialized");
   }
 
   /**
@@ -122,40 +129,70 @@ export class GraphRAGNanoOrchestrator {
       }
 
       result.pattern = patternResult.result?.matchedPatterns?.[0] || null;
-      logger.info(`[Pipeline] Pattern discovered: ${result.pattern?.patternName || 'none'}`);
+      logger.info(
+        `[Pipeline] Pattern discovered: ${
+          result.pattern?.patternName || "none"
+        }`
+      );
 
       // Step 2: GraphRAG Query (if enabled)
       if (this.config.enableGraphRAG && result.pattern) {
-        logger.info(`[Pipeline] Step 2: Querying GraphRAG for node relationships`);
+        logger.info(
+          `[Pipeline] Step 2: Querying GraphRAG for node relationships`
+        );
         const graphStart = Date.now();
-        const graphResult = await this.queryGraphRAGForPattern(goal, result.pattern);
+        const graphResult = await this.queryGraphRAGForPattern(
+          goal,
+          result.pattern
+        );
         result.executionStats.graphQueryTime = Date.now() - graphStart;
 
         if (graphResult) {
           result.graphInsights = graphResult;
-          logger.info(`[Pipeline] GraphRAG returned ${graphResult.nodes?.length || 0} relevant nodes`);
+          logger.info(
+            `[Pipeline] GraphRAG returned ${
+              graphResult.nodes?.length || 0
+            } relevant nodes`
+          );
 
           // Share graph insights with workflow agent
           if (this.config.shareGraphInsights) {
-            await this.sharedMemory.set('graph-insights', graphResult, 'graphrag-orchestrator');
-            logger.debug('[Pipeline] Shared graph insights with workflow agent');
+            await this.sharedMemory.set(
+              "graph-insights",
+              graphResult,
+              "graphrag-orchestrator"
+            );
+            logger.debug(
+              "[Pipeline] Shared graph insights with workflow agent"
+            );
           }
         }
       }
 
       // Step 3: Workflow Generation
-      logger.info(`[Pipeline] Step 3: Generating workflow from pattern + graph insights`);
+      logger.info(
+        `[Pipeline] Step 3: Generating workflow from pattern + graph insights`
+      );
       const workflowStart = Date.now();
-      const workflowResult = await this.runWorkflowGeneration(goal, result.pattern);
+      const workflowResult = await this.runWorkflowGeneration(
+        goal,
+        result.pattern
+      );
       result.executionStats.workflowGenerationTime = Date.now() - workflowStart;
 
       if (!workflowResult.success) {
-        result.errors.push(`Workflow generation failed: ${workflowResult.error}`);
+        result.errors.push(
+          `Workflow generation failed: ${workflowResult.error}`
+        );
         return result;
       }
 
       result.workflow = workflowResult.result?.workflow || null;
-      logger.info(`[Pipeline] Workflow generated with ${result.workflow?.nodes?.length || 0} nodes`);
+      logger.info(
+        `[Pipeline] Workflow generated with ${
+          result.workflow?.nodes?.length || 0
+        } nodes`
+      );
 
       // Step 4: Validation
       logger.info(`[Pipeline] Step 4: Validating generated workflow`);
@@ -175,11 +212,17 @@ export class GraphRAGNanoOrchestrator {
       result.success = true;
       result.executionStats.totalTime = Date.now() - startTime;
 
-      logger.info(`[Pipeline] ✅ Complete pipeline succeeded in ${result.executionStats.totalTime}ms`);
+      logger.info(
+        `[Pipeline] ✅ Complete pipeline succeeded in ${result.executionStats.totalTime}ms`
+      );
       return result;
     } catch (error) {
-      result.errors.push(`Pipeline error: ${error instanceof Error ? error.message : String(error)}`);
-      logger.error('[Pipeline] Pipeline error:', error);
+      result.errors.push(
+        `Pipeline error: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      logger.error("[Pipeline] Pipeline error:", error);
       return result;
     }
   }
@@ -193,23 +236,23 @@ export class GraphRAGNanoOrchestrator {
         goal,
         context: {
           timestamp: new Date().toISOString(),
-          sourceType: 'graphrag-orchestrator',
+          sourceType: "graphrag-orchestrator",
         },
       };
 
       const output = await this.patternAgent.execute(input);
 
       if (!output.success) {
-        logger.warn('[Pattern Agent] Discovery failed:', output.error);
+        logger.warn("[Pattern Agent] Discovery failed:", output.error);
       }
 
       return output;
     } catch (error) {
-      logger.error('[Pattern Agent] Execution error:', error);
+      logger.error("[Pattern Agent] Execution error:", error);
       return {
         success: false,
         result: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
         executionTime: 0,
       };
     }
@@ -232,7 +275,7 @@ export class GraphRAGNanoOrchestrator {
         goal,
         pattern.patternName,
         ...pattern.suggestedNodes.slice(0, 3), // Include first 3 suggested nodes
-      ].join(' ');
+      ].join(" ");
 
       logger.debug(`[GraphRAG] Querying: "${queryTerms}"`);
 
@@ -241,10 +284,14 @@ export class GraphRAGNanoOrchestrator {
         top_k: 8, // Get more nodes for comprehensive understanding
       });
 
-      logger.debug(`[GraphRAG] Returned ${result.nodes?.length || 0} nodes and ${result.edges?.length || 0} edges`);
+      logger.debug(
+        `[GraphRAG] Returned ${result.nodes?.length || 0} nodes and ${
+          result.edges?.length || 0
+        } edges`
+      );
       return result;
     } catch (error) {
-      logger.error('[GraphRAG] Query error:', error);
+      logger.error("[GraphRAG] Query error:", error);
       return null;
     }
   }
@@ -252,9 +299,12 @@ export class GraphRAGNanoOrchestrator {
   /**
    * Step 3: Run workflow generation agent
    */
-  private async runWorkflowGeneration(goal: string, pattern: PatternMatch | null): Promise<AgentOutput> {
+  private async runWorkflowGeneration(
+    goal: string,
+    pattern: PatternMatch | null
+  ): Promise<AgentOutput> {
     try {
-      const graphInsights = await this.sharedMemory.get('graph-insights');
+      const graphInsights = await this.sharedMemory.get("graph-insights");
       const input: AgentInput = {
         goal,
         context: {
@@ -267,16 +317,16 @@ export class GraphRAGNanoOrchestrator {
       const output = await this.workflowAgent.execute(input);
 
       if (!output.success) {
-        logger.warn('[Workflow Agent] Generation failed:', output.error);
+        logger.warn("[Workflow Agent] Generation failed:", output.error);
       }
 
       return output;
     } catch (error) {
-      logger.error('[Workflow Agent] Execution error:', error);
+      logger.error("[Workflow Agent] Execution error:", error);
       return {
         success: false,
         result: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
         executionTime: 0,
       };
     }
@@ -285,7 +335,10 @@ export class GraphRAGNanoOrchestrator {
   /**
    * Step 4: Run validation agent
    */
-  private async runValidation(goal: string, workflow: any): Promise<AgentOutput> {
+  private async runValidation(
+    goal: string,
+    workflow: any
+  ): Promise<AgentOutput> {
     try {
       const input: AgentInput = {
         goal,
@@ -298,16 +351,16 @@ export class GraphRAGNanoOrchestrator {
       const output = await this.validatorAgent.execute(input);
 
       if (!output.success) {
-        logger.warn('[Validator Agent] Validation failed:', output.error);
+        logger.warn("[Validator Agent] Validation failed:", output.error);
       }
 
       return output;
     } catch (error) {
-      logger.error('[Validator Agent] Execution error:', error);
+      logger.error("[Validator Agent] Execution error:", error);
       return {
         success: false,
         result: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
         executionTime: 0,
       };
     }
@@ -324,7 +377,7 @@ export class GraphRAGNanoOrchestrator {
    * Cleanup
    */
   async cleanup(): Promise<void> {
-    logger.info('[GraphRAG Orchestrator] Cleaning up...');
+    logger.info("[GraphRAG Orchestrator] Cleaning up...");
     // Cleanup any resources if needed
   }
 }

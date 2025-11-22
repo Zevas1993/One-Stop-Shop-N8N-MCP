@@ -11,8 +11,8 @@ from pathlib import Path
 from datetime import datetime
 import json
 
-from ..storage.database import Database
-from ..storage.models import Node, Edge, Embedding, GraphMetadata
+from storage.database import Database
+from storage.models import Node, Edge, Embedding, GraphMetadata
 from .entity_extractor import AgenticEntityExtractor, AgenticNode
 from .relationship_builder import AgenticRelationshipBuilder, AgenticEdge, RelationshipType
 

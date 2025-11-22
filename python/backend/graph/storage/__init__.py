@@ -4,7 +4,7 @@ Handles all database operations for the knowledge graph
 """
 
 from .database import Database
-from .models import Node, Edge, Embedding, GraphMetadata, QueryLog
+from .models import Node, Edge, Embedding, GraphMetadata, QueryLog, RelationshipType, EntityType
 from .schema import SCHEMA
 
 __all__ = [
@@ -14,5 +14,7 @@ __all__ = [
     'Embedding',
     'GraphMetadata',
     'QueryLog',
+    'RelationshipType',
+    'EntityType',
     'SCHEMA',
 ]

@@ -18,7 +18,7 @@ from typing import List, Dict, Optional
 from enum import Enum
 import logging
 
-from ..storage import Database, Node
+from storage import Database, Node
 from .semantic_search import SearchResult
 from .graph_traversal import Path
 

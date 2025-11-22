@@ -215,22 +215,37 @@ export async function handleExecutePatternDiscovery(args: { goal: string }): Pro
 
     const orchestrator = await ensureOrchestratorReady();
 
-    // Access the pattern agent through shared memory
-    const sharedMemory = orchestrator.getSharedMemory();
+    // Run pattern discovery by executing the full pipeline
+    // then returning just the pattern results
+    const pipelineResult = await orchestrator.executePipeline(args.goal);
+
+    logger.info(
+      `[Nano Agents] Pattern discovery completed`,
+      {
+        success: pipelineResult.success,
+        patternFound: !!pipelineResult.pattern,
+      }
+    );
 
     return {
-      success: true,
-      message: 'Pattern discovery agent ready',
+      success: pipelineResult.success,
       goal: args.goal,
+      pattern: pipelineResult.pattern,
+      executionTime: pipelineResult.executionStats.patternDiscoveryTime,
       guidance:
-        'For full workflow generation, use execute_agent_pipeline. ' +
-        'This tool is for pattern exploration only.',
+        pipelineResult.pattern
+          ? 'Pattern found! Use this pattern ID with execute_workflow_generation or include in execute_agent_pipeline for full workflow generation.'
+          : 'No matching pattern found. Try rephrasing your goal or use execute_agent_pipeline for a custom workflow generation.',
+      errors: pipelineResult.errors,
     };
   } catch (error) {
     logger.error('[Nano Agents] Pattern discovery error:', error);
     return {
       success: false,
+      goal: args.goal,
+      pattern: null,
       error: error instanceof Error ? error.message : 'Unknown error',
+      guidance: 'Pattern discovery failed. Check logs for details.',
     };
   }
 }
@@ -277,23 +292,48 @@ export async function handleExecuteGraphRAGQuery(args: { query: string; topK?: n
  */
 export async function handleExecuteWorkflowGeneration(args: { goal: string; patternId?: string }): Promise<any> {
   try {
-    logger.info(`[Nano Agents] Workflow generation for: "${args.goal}"`);
+    logger.info(`[Nano Agents] Workflow generation for: "${args.goal}"${args.patternId ? ` with pattern ${args.patternId}` : ''}`);
 
     const orchestrator = await ensureOrchestratorReady();
 
+    // Execute workflow generation by running the full pipeline
+    // which includes pattern discovery → graph query → workflow generation
+    const pipelineResult = await orchestrator.executePipeline(args.goal);
+
+    logger.info(
+      `[Nano Agents] Workflow generation completed`,
+      {
+        success: pipelineResult.success,
+        workflowGenerated: !!pipelineResult.workflow,
+        nodeCount: pipelineResult.workflow?.nodes?.length || 0,
+        validationPassed: pipelineResult.validationResult?.valid || false,
+      }
+    );
+
     return {
-      success: true,
-      message: 'Workflow generation agent ready',
+      success: pipelineResult.success,
       goal: args.goal,
+      patternId: args.patternId,
+      workflow: pipelineResult.workflow,
+      pattern: pipelineResult.pattern,
+      graphInsights: pipelineResult.graphInsights,
+      validationResult: pipelineResult.validationResult,
+      executionTime: pipelineResult.executionStats.workflowGenerationTime,
+      totalExecutionTime: pipelineResult.executionStats.totalTime,
       guidance:
-        'For full pipeline including validation, use execute_agent_pipeline. ' +
-        'This tool is for generation exploration only.',
+        pipelineResult.success && pipelineResult.workflow
+          ? 'Workflow generated and validated successfully! Ready to deploy to n8n.'
+          : 'Workflow generation incomplete. Check errors for details.',
+      errors: pipelineResult.errors,
     };
   } catch (error) {
     logger.error('[Nano Agents] Workflow generation error:', error);
     return {
       success: false,
+      goal: args.goal,
+      workflow: null,
       error: error instanceof Error ? error.message : 'Unknown error',
+      guidance: 'Workflow generation failed. Check logs for details.',
     };
   }
 }

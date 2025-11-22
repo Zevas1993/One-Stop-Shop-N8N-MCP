@@ -21,7 +21,7 @@ from datetime import datetime
 import json
 import logging
 
-from ..storage import Database, Node, Edge, RelationshipType
+from storage import Database, Node, Edge, RelationshipType
 
 logger = logging.getLogger(__name__)
 

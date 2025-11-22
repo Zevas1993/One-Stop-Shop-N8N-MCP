@@ -7,7 +7,15 @@ export interface QueryGraphParams {
 }
 
 export interface QueryGraphResult {
-  nodes: Array<{ id: string; label: string }>;
+  nodes: Array<{
+    id: string;
+    label: string;
+    type: string;
+    description?: string;
+    score?: number;
+    confidence?: number;
+    metadata?: any;
+  }>;
   edges: Array<{ source: string; target: string; type: string }>;
   summary: string;
 }

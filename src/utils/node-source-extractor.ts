@@ -1,6 +1,6 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { logger } from './logger';
+import * as fs from "fs/promises";
+import * as path from "path";
+import { logger } from "./logger";
 
 export interface NodeSourceInfo {
   nodeType: string;
@@ -12,33 +12,69 @@ export interface NodeSourceInfo {
 
 export class NodeSourceExtractor {
   private n8nBasePaths = [
-    '/usr/local/lib/node_modules/n8n/node_modules',
-    '/app/node_modules',
-    '/home/node/.n8n/custom/nodes',
-    './node_modules',
+    "/usr/local/lib/node_modules/n8n/node_modules",
+    "/app/node_modules",
+    "/home/node/.n8n/custom/nodes",
+    "./node_modules",
     // Docker volume paths
-    '/var/lib/docker/volumes/n8n-mcp_n8n_modules/_data',
-    '/n8n-modules',
+    "/var/lib/docker/volumes/n8n-mcp_n8n_modules/_data",
+    "/n8n-modules",
     // Common n8n installation paths
-    process.env.N8N_CUSTOM_EXTENSIONS || '',
+    process.env.N8N_CUSTOM_EXTENSIONS || "",
     // Additional local path for testing
-    path.join(process.cwd(), 'node_modules'),
+    path.join(process.cwd(), "node_modules"),
   ].filter(Boolean);
 
   /**
    * Extract source code for a specific n8n node
    */
-  async extractNodeSource(nodeType: string): Promise<NodeSourceInfo> {
+  async extractNodeSource(
+    nodeType: string,
+    knownPath?: string
+  ): Promise<NodeSourceInfo> {
+    console.error(
+      `[NodeSourceExtractor] Extracting source for: ${nodeType} ${
+        knownPath ? `(known path: ${knownPath})` : ""
+      }`
+    );
     logger.info(`Extracting source code for node: ${nodeType}`);
-    
+
+    // If we have a known path, try to load it directly
+    if (knownPath) {
+      try {
+        const { packageName, nodeName } = this.parseNodeType(nodeType);
+        // We need to find the package base path to look for credentials/package.json
+        // This is a bit of a guess, but we can try to walk up from the known path
+        const packageBasePath =
+          knownPath.split("n8n-nodes-base")[0] + "n8n-nodes-base";
+
+        const result = await this.tryLoadNodeFile(
+          knownPath,
+          packageName,
+          nodeName,
+          packageBasePath
+        );
+        if (result) return result;
+      } catch (error) {
+        logger.warn(`Failed to load from known path ${knownPath}: ${error}`);
+      }
+    }
+
     // Parse node type to get package and node name
     const { packageName, nodeName } = this.parseNodeType(nodeType);
-    
+
     // Search for the node in known locations
     for (const basePath of this.n8nBasePaths) {
       try {
-        const nodeInfo = await this.searchNodeInPath(basePath, packageName, nodeName);
+        const nodeInfo = await this.searchNodeInPath(
+          basePath,
+          packageName,
+          nodeName
+        );
         if (nodeInfo) {
+          console.error(
+            `[NodeSourceExtractor] Found source at: ${nodeInfo.location}`
+          );
           logger.info(`Found node source at: ${nodeInfo.location}`);
           return nodeInfo;
         }
@@ -46,26 +82,29 @@ export class NodeSourceExtractor {
         logger.debug(`Failed to search in ${basePath}: ${error}`);
       }
     }
-    
+
     throw new Error(`Node source code not found for: ${nodeType}`);
   }
 
   /**
    * Parse node type identifier
    */
-  private parseNodeType(nodeType: string): { packageName: string; nodeName: string } {
+  private parseNodeType(nodeType: string): {
+    packageName: string;
+    nodeName: string;
+  } {
     // Handle different formats:
     // - @n8n/n8n-nodes-langchain.Agent
     // - n8n-nodes-base.HttpRequest
     // - customNode
-    
-    if (nodeType.includes('.')) {
-      const [pkg, node] = nodeType.split('.');
+
+    if (nodeType.includes(".")) {
+      const [pkg, node] = nodeType.split(".");
       return { packageName: pkg, nodeName: node };
     }
-    
+
     // Default to n8n-nodes-base for simple node names
-    return { packageName: 'n8n-nodes-base', nodeName: nodeType };
+    return { packageName: "n8n-nodes-base", nodeName: nodeType };
   }
 
   /**
@@ -84,7 +123,7 @@ export class NodeSourceExtractor {
         nodeName.toLowerCase(), // All lowercase
         nodeName.toUpperCase(), // All uppercase
       ];
-      
+
       // First, try standard patterns with all case variants
       for (const nameVariant of nodeNameVariants) {
         const standardPatterns = [
@@ -107,23 +146,37 @@ export class NodeSourceExtractor {
         // Try standard patterns first
         for (const pattern of standardPatterns) {
           const fullPath = path.join(basePath, pattern);
-          const result = await this.tryLoadNodeFile(fullPath, packageName, nodeName, basePath);
+          const result = await this.tryLoadNodeFile(
+            fullPath,
+            packageName,
+            nodeName,
+            basePath
+          );
           if (result) return result;
         }
 
         // Try nested patterns (with glob-like search)
         for (const pattern of nestedPatterns) {
-          const result = await this.searchWithGlobPattern(basePath, pattern, packageName, nodeName);
+          const result = await this.searchWithGlobPattern(
+            basePath,
+            pattern,
+            packageName,
+            nodeName
+          );
           if (result) return result;
         }
       }
 
       // If basePath contains .pnpm, search in pnpm structure
-      if (basePath.includes('node_modules')) {
-        const pnpmPath = path.join(basePath, '.pnpm');
+      if (basePath.includes("node_modules")) {
+        const pnpmPath = path.join(basePath, ".pnpm");
         try {
           await fs.access(pnpmPath);
-          const result = await this.searchInPnpm(pnpmPath, packageName, nodeName);
+          const result = await this.searchInPnpm(
+            pnpmPath,
+            packageName,
+            nodeName
+          );
           if (result) return result;
         } catch {
           // .pnpm directory doesn't exist
@@ -146,16 +199,22 @@ export class NodeSourceExtractor {
   ): Promise<NodeSourceInfo | null> {
     try {
       const entries = await fs.readdir(pnpmPath);
-      
+
       // Filter entries that might contain our package
-      const packageEntries = entries.filter(entry => 
-        entry.includes(packageName.replace('/', '+')) || 
-        entry.includes(packageName)
+      const packageEntries = entries.filter(
+        (entry) =>
+          entry.includes(packageName.replace("/", "+")) ||
+          entry.includes(packageName)
       );
 
       for (const entry of packageEntries) {
-        const entryPath = path.join(pnpmPath, entry, 'node_modules', packageName);
-        
+        const entryPath = path.join(
+          pnpmPath,
+          entry,
+          "node_modules",
+          packageName
+        );
+
         // Search patterns within the pnpm package directory
         const patterns = [
           `dist/nodes/${nodeName}/${nodeName}.node.js`,
@@ -165,12 +224,22 @@ export class NodeSourceExtractor {
         ];
 
         for (const pattern of patterns) {
-          if (pattern.includes('*')) {
-            const result = await this.searchWithGlobPattern(entryPath, pattern, packageName, nodeName);
+          if (pattern.includes("*")) {
+            const result = await this.searchWithGlobPattern(
+              entryPath,
+              pattern,
+              packageName,
+              nodeName
+            );
             if (result) return result;
           } else {
             const fullPath = path.join(entryPath, pattern);
-            const result = await this.tryLoadNodeFile(fullPath, packageName, nodeName, entryPath);
+            const result = await this.tryLoadNodeFile(
+              fullPath,
+              packageName,
+              nodeName,
+              entryPath
+            );
             if (result) return result;
           }
         }
@@ -192,15 +261,18 @@ export class NodeSourceExtractor {
     nodeName: string
   ): Promise<NodeSourceInfo | null> {
     // Convert glob pattern to regex parts
-    const parts = pattern.split('/');
+    const parts = pattern.split("/");
     const targetFile = `${nodeName}.node.js`;
-    
-    async function searchDir(currentPath: string, remainingParts: string[]): Promise<string | null> {
+
+    async function searchDir(
+      currentPath: string,
+      remainingParts: string[]
+    ): Promise<string | null> {
       if (remainingParts.length === 0) return null;
-      
+
       const part = remainingParts[0];
       const isLastPart = remainingParts.length === 1;
-      
+
       try {
         if (isLastPart && part === targetFile) {
           // Check if file exists
@@ -208,22 +280,25 @@ export class NodeSourceExtractor {
           await fs.access(fullPath);
           return fullPath;
         }
-        
+
         const entries = await fs.readdir(currentPath, { withFileTypes: true });
-        
+
         for (const entry of entries) {
           if (!entry.isDirectory() && !isLastPart) continue;
-          
-          if (part === '*' || part === '**') {
+
+          if (part === "*" || part === "**") {
             // Match any directory
             if (entry.isDirectory()) {
               const result = await searchDir(
                 path.join(currentPath, entry.name),
-                part === '**' ? remainingParts : remainingParts.slice(1)
+                part === "**" ? remainingParts : remainingParts.slice(1)
               );
               if (result) return result;
             }
-          } else if (entry.name === part || (isLastPart && entry.name === targetFile)) {
+          } else if (
+            entry.name === part ||
+            (isLastPart && entry.name === targetFile)
+          ) {
             if (isLastPart && entry.isFile()) {
               return path.join(currentPath, entry.name);
             } else if (!isLastPart && entry.isDirectory()) {
@@ -238,15 +313,15 @@ export class NodeSourceExtractor {
       } catch {
         // Directory doesn't exist or can't be read
       }
-      
+
       return null;
     }
-    
+
     const foundPath = await searchDir(basePath, parts);
     if (foundPath) {
       return this.tryLoadNodeFile(foundPath, packageName, nodeName, basePath);
     }
-    
+
     return null;
   }
 
@@ -260,68 +335,125 @@ export class NodeSourceExtractor {
     packageBasePath: string
   ): Promise<NodeSourceInfo | null> {
     try {
-      const sourceCode = await fs.readFile(fullPath, 'utf-8');
-      
+      const sourceCode = await fs.readFile(fullPath, "utf-8");
+
       // Try to find credential files
       let credentialCode: string | undefined;
-      
+
       // First, try alongside the node file
-      const credentialPath = fullPath.replace('.node.js', '.credentials.js');
+      const credentialPath = fullPath.replace(".node.js", ".credentials.js");
       try {
-        credentialCode = await fs.readFile(credentialPath, 'utf-8');
+        credentialCode = await fs.readFile(credentialPath, "utf-8");
       } catch {
         // Try in the credentials directory
         const possibleCredentialPaths = [
           // Standard n8n structure: dist/credentials/NodeNameApi.credentials.js
-          path.join(packageBasePath, packageName, 'dist/credentials', `${nodeName}Api.credentials.js`),
-          path.join(packageBasePath, packageName, 'dist/credentials', `${nodeName}OAuth2Api.credentials.js`),
-          path.join(packageBasePath, packageName, 'credentials', `${nodeName}Api.credentials.js`),
-          path.join(packageBasePath, packageName, 'credentials', `${nodeName}OAuth2Api.credentials.js`),
+          path.join(
+            packageBasePath,
+            packageName,
+            "dist/credentials",
+            `${nodeName}Api.credentials.js`
+          ),
+          path.join(
+            packageBasePath,
+            packageName,
+            "dist/credentials",
+            `${nodeName}OAuth2Api.credentials.js`
+          ),
+          path.join(
+            packageBasePath,
+            packageName,
+            "credentials",
+            `${nodeName}Api.credentials.js`
+          ),
+          path.join(
+            packageBasePath,
+            packageName,
+            "credentials",
+            `${nodeName}OAuth2Api.credentials.js`
+          ),
           // Without packageName in path
-          path.join(packageBasePath, 'dist/credentials', `${nodeName}Api.credentials.js`),
-          path.join(packageBasePath, 'dist/credentials', `${nodeName}OAuth2Api.credentials.js`),
-          path.join(packageBasePath, 'credentials', `${nodeName}Api.credentials.js`),
-          path.join(packageBasePath, 'credentials', `${nodeName}OAuth2Api.credentials.js`),
+          path.join(
+            packageBasePath,
+            "dist/credentials",
+            `${nodeName}Api.credentials.js`
+          ),
+          path.join(
+            packageBasePath,
+            "dist/credentials",
+            `${nodeName}OAuth2Api.credentials.js`
+          ),
+          path.join(
+            packageBasePath,
+            "credentials",
+            `${nodeName}Api.credentials.js`
+          ),
+          path.join(
+            packageBasePath,
+            "credentials",
+            `${nodeName}OAuth2Api.credentials.js`
+          ),
           // Try relative to node location
-          path.join(path.dirname(path.dirname(fullPath)), 'credentials', `${nodeName}Api.credentials.js`),
-          path.join(path.dirname(path.dirname(fullPath)), 'credentials', `${nodeName}OAuth2Api.credentials.js`),
-          path.join(path.dirname(path.dirname(path.dirname(fullPath))), 'credentials', `${nodeName}Api.credentials.js`),
-          path.join(path.dirname(path.dirname(path.dirname(fullPath))), 'credentials', `${nodeName}OAuth2Api.credentials.js`),
+          path.join(
+            path.dirname(path.dirname(fullPath)),
+            "credentials",
+            `${nodeName}Api.credentials.js`
+          ),
+          path.join(
+            path.dirname(path.dirname(fullPath)),
+            "credentials",
+            `${nodeName}OAuth2Api.credentials.js`
+          ),
+          path.join(
+            path.dirname(path.dirname(path.dirname(fullPath))),
+            "credentials",
+            `${nodeName}Api.credentials.js`
+          ),
+          path.join(
+            path.dirname(path.dirname(path.dirname(fullPath))),
+            "credentials",
+            `${nodeName}OAuth2Api.credentials.js`
+          ),
         ];
-        
+
         // Try to find any credential file
         const allCredentials: string[] = [];
         for (const credPath of possibleCredentialPaths) {
           try {
-            const content = await fs.readFile(credPath, 'utf-8');
+            const content = await fs.readFile(credPath, "utf-8");
             allCredentials.push(content);
             logger.debug(`Found credential file at: ${credPath}`);
           } catch {
             // Continue searching
           }
         }
-        
+
         // If we found credentials, combine them
         if (allCredentials.length > 0) {
-          credentialCode = allCredentials.join('\n\n// --- Next Credential File ---\n\n');
+          credentialCode = allCredentials.join(
+            "\n\n// --- Next Credential File ---\n\n"
+          );
         }
       }
 
       // Try to get package.json info
       let packageInfo: any;
       const possiblePackageJsonPaths = [
-        path.join(packageBasePath, 'package.json'),
-        path.join(packageBasePath, packageName, 'package.json'),
-        path.join(path.dirname(path.dirname(fullPath)), 'package.json'),
-        path.join(path.dirname(path.dirname(path.dirname(fullPath))), 'package.json'),
+        path.join(packageBasePath, "package.json"),
+        path.join(packageBasePath, packageName, "package.json"),
+        path.join(path.dirname(path.dirname(fullPath)), "package.json"),
+        path.join(
+          path.dirname(path.dirname(path.dirname(fullPath))),
+          "package.json"
+        ),
         // Try to go up from the node location to find package.json
-        path.join(fullPath.split('/dist/')[0], 'package.json'),
-        path.join(fullPath.split('/nodes/')[0], 'package.json'),
+        path.join(fullPath.split("/dist/")[0], "package.json"),
+        path.join(fullPath.split("/nodes/")[0], "package.json"),
       ];
 
       for (const packageJsonPath of possiblePackageJsonPaths) {
         try {
-          const packageJson = await fs.readFile(packageJsonPath, 'utf-8');
+          const packageJson = await fs.readFile(packageJsonPath, "utf-8");
           packageInfo = JSON.parse(packageJson);
           logger.debug(`Found package.json at: ${packageJsonPath}`);
           break;
@@ -348,23 +480,59 @@ export class NodeSourceExtractor {
   async listAvailableNodes(category?: string, search?: string): Promise<any[]> {
     const nodes: any[] = [];
     const seenNodes = new Set<string>(); // Track unique nodes
-    
+
     for (const basePath of this.n8nBasePaths) {
+      console.error(`[NodeSourceExtractor] Checking base path: ${basePath}`);
+      logger.debug(`Checking base path: ${basePath}`);
       try {
         // Check for n8n-nodes-base specifically
-        const n8nNodesBasePath = path.join(basePath, 'n8n-nodes-base', 'dist', 'nodes');
+        const n8nNodesBasePath = path.join(
+          basePath,
+          "n8n-nodes-base",
+          "dist",
+          "nodes"
+        );
+        console.error(
+          `[NodeSourceExtractor] Checking specific path: ${n8nNodesBasePath}`
+        );
+        logger.debug(`Checking specific path: ${n8nNodesBasePath}`);
         try {
           await fs.access(n8nNodesBasePath);
-          await this.scanDirectoryForNodes(n8nNodesBasePath, nodes, category, search, seenNodes);
+          console.error(
+            `[NodeSourceExtractor] Path exists, scanning: ${n8nNodesBasePath}`
+          );
+          logger.debug(`Path exists, scanning: ${n8nNodesBasePath}`);
+          await this.scanDirectoryForNodes(
+            n8nNodesBasePath,
+            nodes,
+            category,
+            search,
+            seenNodes
+          );
         } catch {
           // Try without dist
-          const altPath = path.join(basePath, 'n8n-nodes-base', 'nodes');
+          const altPath = path.join(basePath, "n8n-nodes-base", "nodes");
+          logger.debug(`Checking alt path: ${altPath}`);
           try {
             await fs.access(altPath);
-            await this.scanDirectoryForNodes(altPath, nodes, category, search, seenNodes);
+            logger.debug(`Alt path exists, scanning: ${altPath}`);
+            await this.scanDirectoryForNodes(
+              altPath,
+              nodes,
+              category,
+              search,
+              seenNodes
+            );
           } catch {
             // Try the base path directly
-            await this.scanDirectoryForNodes(basePath, nodes, category, search, seenNodes);
+            logger.debug(`Scanning base path directly: ${basePath}`);
+            await this.scanDirectoryForNodes(
+              basePath,
+              nodes,
+              category,
+              search,
+              seenNodes
+            );
           }
         }
       } catch (error) {
@@ -386,39 +554,62 @@ export class NodeSourceExtractor {
     seenNodes?: Set<string>
   ): Promise<void> {
     try {
+      // console.error(`[NodeSourceExtractor] Scanning directory: ${dirPath}`);
       const entries = await fs.readdir(dirPath, { withFileTypes: true });
-      
+
       for (const entry of entries) {
-        if (entry.isFile() && entry.name.endsWith('.node.js')) {
+        if (entry.isFile() && entry.name.endsWith(".node.js")) {
+          console.error(
+            `[NodeSourceExtractor] Found node file: ${entry.name} in ${dirPath}`
+          );
           try {
             const fullPath = path.join(dirPath, entry.name);
-            const content = await fs.readFile(fullPath, 'utf-8');
-            
+            const content = await fs.readFile(fullPath, "utf-8");
+
             // Extract basic info from the source
-            const nameMatch = content.match(/displayName:\s*['"`]([^'"`]+)['"`]/);
-            const descriptionMatch = content.match(/description:\s*['"`]([^'"`]+)['"`]/);
-            
+            const nameMatch = content.match(
+              /displayName:\s*['"`]([^'"`]+)['"`]/
+            );
+            const descriptionMatch = content.match(
+              /description:\s*['"`]([^'"`]+)['"`]/
+            );
+
             if (nameMatch) {
-              const nodeName = entry.name.replace('.node.js', '');
-              
+              const nodeName = entry.name.replace(".node.js", "");
+              console.error(
+                `[NodeSourceExtractor] Extracted node: ${nodeName}`
+              );
+
               // Skip if we've already seen this node
               if (seenNodes && seenNodes.has(nodeName)) {
                 continue;
               }
-              
+
               const nodeInfo = {
                 name: nodeName,
                 displayName: nameMatch[1],
-                description: descriptionMatch ? descriptionMatch[1] : '',
+                description: descriptionMatch ? descriptionMatch[1] : "",
                 location: fullPath,
               };
 
               // Apply filters
-              if (category && !nodeInfo.displayName.toLowerCase().includes(category.toLowerCase())) {
+              if (
+                category &&
+                !nodeInfo.displayName
+                  .toLowerCase()
+                  .includes(category.toLowerCase())
+              ) {
                 continue;
               }
-              if (search && !nodeInfo.displayName.toLowerCase().includes(search.toLowerCase()) &&
-                  !nodeInfo.description.toLowerCase().includes(search.toLowerCase())) {
+              if (
+                search &&
+                !nodeInfo.displayName
+                  .toLowerCase()
+                  .includes(search.toLowerCase()) &&
+                !nodeInfo.description
+                  .toLowerCase()
+                  .includes(search.toLowerCase())
+              ) {
                 continue;
               }
 
@@ -432,11 +623,23 @@ export class NodeSourceExtractor {
           }
         } else if (entry.isDirectory()) {
           // Special handling for .pnpm directories
-          if (entry.name === '.pnpm') {
-            await this.scanPnpmDirectory(path.join(dirPath, entry.name), nodes, category, search, seenNodes);
-          } else if (entry.name !== 'node_modules') {
+          if (entry.name === ".pnpm") {
+            await this.scanPnpmDirectory(
+              path.join(dirPath, entry.name),
+              nodes,
+              category,
+              search,
+              seenNodes
+            );
+          } else if (entry.name !== "node_modules") {
             // Recursively scan subdirectories
-            await this.scanDirectoryForNodes(path.join(dirPath, entry.name), nodes, category, search, seenNodes);
+            await this.scanDirectoryForNodes(
+              path.join(dirPath, entry.name),
+              nodes,
+              category,
+              search,
+              seenNodes
+            );
           }
         }
       }
@@ -457,12 +660,18 @@ export class NodeSourceExtractor {
   ): Promise<void> {
     try {
       const entries = await fs.readdir(pnpmPath);
-      
+
       for (const entry of entries) {
-        const entryPath = path.join(pnpmPath, entry, 'node_modules');
+        const entryPath = path.join(pnpmPath, entry, "node_modules");
         try {
           await fs.access(entryPath);
-          await this.scanDirectoryForNodes(entryPath, nodes, category, search, seenNodes);
+          await this.scanDirectoryForNodes(
+            entryPath,
+            nodes,
+            category,
+            search,
+            seenNodes
+          );
         } catch {
           // Skip if node_modules doesn't exist
         }
@@ -477,6 +686,6 @@ export class NodeSourceExtractor {
    */
   async extractAIAgentNode(): Promise<NodeSourceInfo> {
     // AI Agent is typically in @n8n/n8n-nodes-langchain package
-    return this.extractNodeSource('@n8n/n8n-nodes-langchain.Agent');
+    return this.extractNodeSource("@n8n/n8n-nodes-langchain.Agent");
   }
 }
