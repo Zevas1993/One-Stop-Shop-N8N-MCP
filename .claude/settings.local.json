@@ -21,7 +21,13 @@
       "Bash(taskkill:*)",
       "Bash(nul)",
       "Bash(node test-orchestrator-init.js:*)",
-      "Bash(node test-agentic-graphrag-live-v2.js:*)"
+      "Bash(node test-agentic-graphrag-live-v2.js:*)",
+      "Bash(for file in \"PRODUCTION_READY_REPORT.md\" \"QUICK_START.md\" \"FIXES_IMPLEMENTED.md\" \"README_SHARE_THIS.txt\")",
+      "Bash(do if [ -f \"$file\" ])",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(for file in \"COMPREHENSIVE_FINDINGS_REPORT.md\" \"EXECUTIVE_SUMMARY.md\" \"DOCUMENTS_TO_SHARE.md\" \"GEMINI_3_PRO_REVIEW_PACKAGE.md\")",
+      "Bash(npm run validate:*)"
     ],
     "deny": [],
     "ask": []

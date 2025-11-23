@@ -77,7 +77,9 @@ export class MCPToolService {
       limit: filters.limit || 200,
     };
 
-    if (
+    if (filters.category === "all") {
+      delete optimizedFilters.category;
+    } else if (
       !optimizedFilters.category &&
       !optimizedFilters.package &&
       !optimizedFilters.isAITool

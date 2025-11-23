@@ -83,12 +83,28 @@ export class GraphOptimizationService {
    * Select nodes that need optimization
    */
   private async selectNodesForReview(): Promise<any[]> {
-    // Placeholder: In the future, query GraphRAG for nodes with:
-    // - Low confidence scores
-    // - High query traffic but low relevance
-    // - "Pending" status from learning service
+    // Active Agentic Behavior:
+    // Query the graph for nodes that haven't been optimized recently.
+    // For demonstration, we'll pick a random sample of nodes from the bridge.
 
-    // For now, we return an empty array to avoid spamming until we have real metrics
+    try {
+      // Get a few nodes from the graph bridge to "review"
+      // Since we don't have a direct list method, we query for common nodes
+      const result = await this.graphBridge.queryGraph({
+        text: "microsoft",
+        top_k: 10,
+      });
+
+      if (result && result.nodes && result.nodes.length > 0) {
+        // Pick 1 random node to optimize per cycle
+        const randomNode =
+          result.nodes[Math.floor(Math.random() * result.nodes.length)];
+        return [randomNode];
+      }
+    } catch (error) {
+      logger.warn("Failed to select nodes for optimization review", error);
+    }
+
     return [];
   }
 

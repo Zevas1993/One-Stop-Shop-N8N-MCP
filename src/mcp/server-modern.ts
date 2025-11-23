@@ -88,9 +88,9 @@ export class UnifiedMCPServer {
 
   private findDatabasePath(): string {
     const possiblePaths = [
-      path.join(process.cwd(), "data", "nodes-v2.db"),
-      path.join(__dirname, "../../data", "nodes-v2.db"),
-      "./data/nodes-v2.db",
+      path.join(process.cwd(), "data", "nodes.db"),
+      path.join(__dirname, "../../data", "nodes.db"),
+      "./data/nodes.db",
     ];
 
     for (const p of possiblePaths) {
@@ -100,7 +100,7 @@ export class UnifiedMCPServer {
     }
 
     // Default to creating in data directory
-    return path.join(process.cwd(), "data", "nodes-v2.db");
+    return path.join(process.cwd(), "data", "nodes.db");
   }
 
   private async ensureInitialized(): Promise<void> {
@@ -158,7 +158,7 @@ export class UnifiedMCPServer {
         ]),
         query: z.string().optional(),
         category: z
-          .enum(["trigger", "transform", "output", "input", "AI"])
+          .enum(["trigger", "transform", "output", "input", "AI", "all"])
           .optional(),
         package: z.string().optional(),
         limit: z.number().optional(),
@@ -306,6 +306,17 @@ export class UnifiedMCPServer {
         query: z.string().optional(),
         format: z.enum(["full", "simplified"]).optional(),
         autoFix: z.boolean().optional(),
+        mode: z
+          .enum([
+            "full",
+            "quick",
+            "remote",
+            "structure",
+            "connections",
+            "expressions",
+            "nodes",
+          ])
+          .optional(),
       },
       async (args) => {
         const { action, id, changes, filters, query } = args as any;
@@ -329,7 +340,8 @@ export class UnifiedMCPServer {
             return this.formatResponse(
               await this.toolService!.validateWorkflowUnified({
                 workflow,
-                mode: "full",
+                workflowId: id,
+                mode: args.mode || "full",
               })
             );
           }
@@ -908,7 +920,9 @@ export class UnifiedMCPServer {
   async run(): Promise<void> {
     // Initialize nano agent orchestrator on server startup
     try {
-      logger.info("[Server] Initializing nano agent orchestrator on startup...");
+      logger.info(
+        "[Server] Initializing nano agent orchestrator on startup..."
+      );
       await this.initializeNanoAgentOrchestrator();
       logger.info("[Server] ✅ Nano agent orchestrator initialized");
     } catch (error) {

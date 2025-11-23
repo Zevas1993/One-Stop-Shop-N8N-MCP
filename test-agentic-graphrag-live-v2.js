@@ -5,16 +5,16 @@
  * Properly handles MCP response format
  */
 
-const { spawn } = require('child_process');
-const readline = require('readline');
+const { spawn } = require("child_process");
+const readline = require("readline");
 
 let requestId = 0;
 const responses = new Map();
 
 // Start the MCP server
-const server = spawn('node', ['dist/mcp/index.js'], {
+const server = spawn("node", ["dist/mcp/index.js"], {
   cwd: process.cwd(),
-  stdio: ['pipe', 'pipe', 'pipe'],
+  stdio: ["pipe", "pipe", "pipe"],
 });
 
 // Create readline interface for server output
@@ -24,7 +24,7 @@ const rl = readline.createInterface({
 });
 
 // Listen for server output
-rl.on('line', (line) => {
+rl.on("line", (line) => {
   try {
     const message = JSON.parse(line);
 
@@ -61,16 +61,16 @@ rl.on('line', (line) => {
     }
   } catch (e) {
     // Non-JSON output
-    if (line && !line.includes('[DEBUG]')) {
-      console.log('[SERVER LOG]', line);
+    if (line && !line.includes("[DEBUG]")) {
+      console.log("[SERVER LOG]", line);
     }
   }
 });
 
-server.stderr.on('data', (data) => {
+server.stderr.on("data", (data) => {
   const text = data.toString();
-  if (text && !text.includes('DEBUG')) {
-    console.error('[STDERR]', text);
+  if (text && !text.includes("DEBUG")) {
+    console.error("[STDERR]", text);
   }
 });
 
@@ -78,8 +78,8 @@ server.stderr.on('data', (data) => {
 function sendRequest(method, params = {}) {
   const id = ++requestId;
   const request = {
-    jsonrpc: '2.0',
-    method: 'tools/call',
+    jsonrpc: "2.0",
+    method: "tools/call",
     params: {
       name: method,
       arguments: params,
@@ -87,7 +87,7 @@ function sendRequest(method, params = {}) {
     id,
   };
 
-  server.stdin.write(JSON.stringify(request) + '\n');
+  server.stdin.write(JSON.stringify(request) + "\n");
 
   return new Promise((resolve) => {
     const checkResponse = setInterval(() => {
@@ -104,7 +104,7 @@ function sendRequest(method, params = {}) {
       clearInterval(checkResponse);
       resolve({
         success: false,
-        error: 'TIMEOUT',
+        error: "TIMEOUT",
         data: null,
       });
     }, 30000);
@@ -113,37 +113,41 @@ function sendRequest(method, params = {}) {
 
 // Format test output
 function printTest(name, success, result) {
-  console.log(`\n${'─'.repeat(60)}`);
+  console.log(`\n${"─".repeat(60)}`);
   console.log(`TEST: ${name}`);
-  console.log('─'.repeat(60));
+  console.log("─".repeat(60));
 
   if (!success) {
-    console.log('❌ FAILED');
+    console.log("❌ FAILED");
     if (result.error) {
-      console.log('Error:', result.error);
+      console.log("Error:", result.error);
     }
     if (result.data) {
-      console.log('Response:', JSON.stringify(result.data, null, 2).substring(0, 500));
+      console.log(
+        "Response:",
+        JSON.stringify(result.data, null, 2).substring(0, 500)
+      );
     }
   } else {
-    console.log('✅ SUCCESS');
+    console.log("✅ SUCCESS");
     const data = result.data;
-    if (data && typeof data === 'object') {
+    if (data && typeof data === "object") {
       Object.entries(data).forEach(([key, value]) => {
-        if (key !== 'errors' && key !== 'guidance') {
-          const displayValue = typeof value === 'object' && value !== null
-            ? `[object] (${Object.keys(value).length} keys)`
-            : String(value).substring(0, 100);
+        if (key !== "errors" && key !== "guidance") {
+          const displayValue =
+            typeof value === "object" && value !== null
+              ? `[object] (${Object.keys(value).length} keys)`
+              : String(value).substring(0, 100);
           console.log(`  • ${key}: ${displayValue}`);
         }
       });
 
       if (data.errors?.length > 0) {
-        console.log('\n❌ ERRORS:');
-        data.errors.forEach(e => console.log(`    - ${e}`));
+        console.log("\n❌ ERRORS:");
+        data.errors.forEach((e) => console.log(`    - ${e}`));
       }
       if (data.guidance) {
-        console.log('\n💡 GUIDANCE:');
+        console.log("\n💡 GUIDANCE:");
         console.log(`    ${data.guidance}`);
       }
     }
@@ -152,87 +156,122 @@ function printTest(name, success, result) {
 
 // Wait for server to be ready
 setTimeout(async () => {
-  console.log('\n╔════════════════════════════════════════════════════════════╗');
-  console.log('║  Testing Agentic GraphRAG via Live MCP Server             ║');
-  console.log('║  (v2 - Proper MCP Response Parsing)                      ║');
-  console.log('╚════════════════════════════════════════════════════════════╝');
+  console.log(
+    "\n╔════════════════════════════════════════════════════════════╗"
+  );
+  console.log("║  Testing Agentic GraphRAG via Live MCP Server             ║");
+  console.log("║  (v2 - Proper MCP Response Parsing)                      ║");
+  console.log("╚════════════════════════════════════════════════════════════╝");
 
   try {
     // Test 1
-    const status = await sendRequest('get_agent_status', { includeHistory: false });
-    printTest('get_agent_status', status.success, status);
+    const status = await sendRequest("get_agent_status", {
+      includeHistory: false,
+    });
+    printTest("get_agent_status", status.success, status);
 
     // Test 2
-    const pattern = await sendRequest('execute_pattern_discovery', {
-      goal: 'Send Slack notifications when data changes',
+    const pattern = await sendRequest("execute_pattern_discovery", {
+      goal: "Send Slack notifications when data changes",
     });
-    printTest('execute_pattern_discovery', pattern.success, pattern);
+    printTest("execute_pattern_discovery", pattern.success, pattern);
 
     // Test 3
-    const workflow = await sendRequest('execute_workflow_generation', {
-      goal: 'Fetch data from API and store in database',
+    const workflow = await sendRequest("execute_workflow_generation", {
+      goal: "Fetch data from API and store in database",
     });
-    printTest('execute_workflow_generation', workflow.success, workflow);
+    printTest("execute_workflow_generation", workflow.success, workflow);
 
     // Test 4
-    const pipeline = await sendRequest('execute_agent_pipeline', {
-      goal: 'Monitor email and categorize by priority',
+    const pipeline = await sendRequest("execute_agent_pipeline", {
+      goal: "Monitor email and categorize by priority",
       enableGraphRAG: true,
       shareInsights: true,
     });
-    printTest('execute_agent_pipeline', pipeline.success, pipeline);
+    printTest("execute_agent_pipeline", pipeline.success, pipeline);
+
+    if (pipeline.success && pipeline.data && pipeline.data.graphInsights) {
+      console.log("\n--- GRAPH INSIGHTS (Standard Goal) ---");
+      console.log(JSON.stringify(pipeline.data.graphInsights, null, 2));
+      console.log("--------------------------------------\n");
+    }
+
+    // Test 5 (Custom Goal)
+    const customGoal = await sendRequest("execute_agent_pipeline", {
+      goal: "Monitor Outlook emails, use RAG to answer questions, and reply via Teams",
+      enableGraphRAG: true,
+      shareInsights: true,
+    });
+    printTest(
+      "execute_agent_pipeline (Custom Goal)",
+      customGoal.success,
+      customGoal
+    );
+
+    if (customGoal.success && customGoal.data && customGoal.data.workflow) {
+      console.log("\n--- CUSTOM WORKFLOW SUGGESTION ---");
+      console.log(JSON.stringify(customGoal.data.workflow, null, 2));
+      console.log("----------------------------------\n");
+    }
 
     // Summary
-    console.log('\n╔════════════════════════════════════════════════════════════╗');
-    console.log('║                        SUMMARY                            ║');
-    console.log('╚════════════════════════════════════════════════════════════╝');
+    console.log(
+      "\n╔════════════════════════════════════════════════════════════╗"
+    );
+    console.log(
+      "║                        SUMMARY                            ║"
+    );
+    console.log(
+      "╚════════════════════════════════════════════════════════════╝"
+    );
 
     const tests = [
-      { name: 'get_agent_status', result: status },
-      { name: 'execute_pattern_discovery', result: pattern },
-      { name: 'execute_workflow_generation', result: workflow },
-      { name: 'execute_agent_pipeline', result: pipeline },
+      { name: "get_agent_status", result: status },
+      { name: "execute_pattern_discovery", result: pattern },
+      { name: "execute_workflow_generation", result: workflow },
+      { name: "execute_agent_pipeline", result: pipeline },
+      { name: "execute_agent_pipeline (Custom Goal)", result: customGoal },
     ];
 
-    const passed = tests.filter(t => t.result.success).length;
+    const passed = tests.filter((t) => t.result.success).length;
     const total = tests.length;
 
     console.log(`\nTests Passed: ${passed}/${total}`);
-    tests.forEach(t => {
-      const icon = t.result.success ? '✅' : '❌';
+    tests.forEach((t) => {
+      const icon = t.result.success ? "✅" : "❌";
       console.log(`${icon} ${t.name}`);
     });
 
     if (passed === 0) {
-      console.log('\n⚠️  ALL TESTS FAILED');
-      console.log('The agentic GraphRAG system is NOT working via MCP.');
-      console.log('\nNext steps:');
-      console.log('1. Check server logs for errors');
-      console.log('2. Verify orchestrator initialization');
-      console.log('3. Check if handlers are being called');
+      console.log("\n⚠️  ALL TESTS FAILED");
+      console.log("The agentic GraphRAG system is NOT working via MCP.");
+      console.log("\nNext steps:");
+      console.log("1. Check server logs for errors");
+      console.log("2. Verify orchestrator initialization");
+      console.log("3. Check if handlers are being called");
     } else if (passed === total) {
-      console.log('\n✅ ALL TESTS PASSED');
-      console.log('The agentic GraphRAG system is fully functional!');
+      console.log("\n✅ ALL TESTS PASSED");
+      console.log("The agentic GraphRAG system is fully functional!");
     } else {
       console.log(`\n⚠️  ${total - passed} test(s) failed`);
     }
 
     process.exit(passed === total ? 0 : 1);
   } catch (error) {
-    console.error('\nTest error:', error);
+    console.error("\nTest error:", error);
     process.exit(1);
   }
 }, 3000);
 
 // Handle server errors
-server.on('error', (error) => {
-  console.error('Server error:', error);
+server.on("error", (error) => {
+  console.error("Server error:", error);
   process.exit(1);
 });
 
 // Timeout
 setTimeout(() => {
-  console.error('\nTests timed out');
+  console.error("\nTests timed out");
   server.kill();
   process.exit(1);
 }, 180000);

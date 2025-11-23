@@ -257,7 +257,7 @@ export class PatternAgent extends BaseAgent {
         name: "Email Workflow",
         description: "Send emails with templates and attachments",
         keywords: ["email", "mail", "send", "message"],
-        nodes: ["n8n-nodes-base.emailSend", "n8n-nodes-base.httpRequest"],
+        nodes: ["n8n-nodes-base.sendemail", "n8n-nodes-base.httprequest"],
         complexity: "simple",
       },
       {
@@ -268,7 +268,7 @@ export class PatternAgent extends BaseAgent {
         nodes: [
           "n8n-nodes-base.set",
           "n8n-nodes-base.code",
-          "n8n-nodes-base.function",
+          "n8n-nodes-base.aitransform",
         ],
         complexity: "medium",
       },
@@ -277,7 +277,7 @@ export class PatternAgent extends BaseAgent {
         name: "API Integration",
         description: "Connect to external APIs",
         keywords: ["api", "http", "request", "fetch", "external"],
-        nodes: ["n8n-nodes-base.httpRequest", "n8n-nodes-base.set"],
+        nodes: ["n8n-nodes-base.httprequest", "n8n-nodes-base.set"],
         complexity: "medium",
       },
       {
@@ -318,8 +318,8 @@ export class PatternAgent extends BaseAgent {
         description: "Handle errors and retry logic",
         keywords: ["error", "retry", "fail", "catch", "exception"],
         nodes: [
-          "n8n-nodes-base.errorHandler",
-          "n8n-nodes-base.set",
+          "n8n-nodes-base.errortrigger",
+          "n8n-nodes-base.stopanderror",
           "n8n-nodes-base.if",
         ],
         complexity: "medium",
@@ -329,7 +329,7 @@ export class PatternAgent extends BaseAgent {
         name: "Scheduled Execution",
         description: "Run workflow on schedule",
         keywords: ["schedule", "cron", "daily", "weekly", "hourly", "timer"],
-        nodes: ["n8n-nodes-base.schedule", "n8n-nodes-base.cron"],
+        nodes: ["n8n-nodes-base.scheduletrigger", "n8n-nodes-base.wait"],
         complexity: "simple",
       },
       {
@@ -338,9 +338,9 @@ export class PatternAgent extends BaseAgent {
         description: "Read, write, and manage files",
         keywords: ["file", "upload", "download", "read", "write", "store"],
         nodes: [
-          "n8n-nodes-base.fileCreate",
-          "n8n-nodes-base.googleDrive",
-          "s3",
+          "n8n-nodes-base.readwritefile",
+          "n8n-nodes-base.converttofile",
+          "n8n-nodes-base.httprequest",
         ],
         complexity: "medium",
       },
@@ -351,7 +351,7 @@ export class PatternAgent extends BaseAgent {
         keywords: ["workflow", "process", "pipeline", "steps", "chain"],
         nodes: [
           "n8n-nodes-base.set",
-          "n8n-nodes-base.httpRequest",
+          "n8n-nodes-base.httprequest",
           "n8n-nodes-base.switch",
         ],
         complexity: "complex",

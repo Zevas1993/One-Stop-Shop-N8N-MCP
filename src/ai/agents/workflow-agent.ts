@@ -249,7 +249,7 @@ export class WorkflowAgent extends BaseAgent {
         },
         {
           name: 'Send Email',
-          type: 'n8n-nodes-base.emailSend',
+          type: 'n8n-nodes-base.sendemail',
           position: [300, 100],
           parameters: {
             toEmail: 'recipient@example.com',
@@ -320,7 +320,7 @@ export class WorkflowAgent extends BaseAgent {
         },
         {
           name: 'HTTP Request',
-          type: 'n8n-nodes-base.httpRequest',
+          type: 'n8n-nodes-base.httprequest',
           position: [300, 100],
           parameters: {
             url: 'https://api.example.com/data',
@@ -401,12 +401,12 @@ export class WorkflowAgent extends BaseAgent {
         },
         {
           name: 'True Path',
-          type: 'n8n-nodes-base.noOp',
+          type: 'n8n-nodes-base.noop',
           position: [500, 50],
         },
         {
           name: 'False Path',
-          type: 'n8n-nodes-base.noOp',
+          type: 'n8n-nodes-base.noop',
           position: [500, 150],
         },
       ],
@@ -439,7 +439,7 @@ export class WorkflowAgent extends BaseAgent {
         },
         {
           name: 'Risky Operation',
-          type: 'n8n-nodes-base.httpRequest',
+          type: 'n8n-nodes-base.httprequest',
           position: [300, 100],
           parameters: {
             url: 'https://api.example.com/data',
@@ -448,7 +448,7 @@ export class WorkflowAgent extends BaseAgent {
         },
         {
           name: 'Error Handler',
-          type: 'n8n-nodes-base.noOp',
+          type: 'n8n-nodes-base.noop',
           position: [500, 100],
         },
       ],
@@ -482,7 +482,7 @@ export class WorkflowAgent extends BaseAgent {
         },
         {
           name: 'Execute Task',
-          type: 'n8n-nodes-base.httpRequest',
+          type: 'n8n-nodes-base.httprequest',
           position: [300, 100],
           parameters: {
             url: 'https://api.example.com/task',
@@ -513,7 +513,7 @@ export class WorkflowAgent extends BaseAgent {
         },
         {
           name: 'File Operation',
-          type: 'n8n-nodes-base.fileCreate',
+          type: 'n8n-nodes-base.readwritefile',
           position: [300, 100],
           parameters: {
             fileName: 'output.txt',
@@ -545,7 +545,7 @@ export class WorkflowAgent extends BaseAgent {
         },
         {
           name: 'Step 1: Fetch Data',
-          type: 'n8n-nodes-base.httpRequest',
+          type: 'n8n-nodes-base.httprequest',
           position: [300, 100],
           parameters: {
             url: 'https://api.example.com/data',
@@ -570,7 +570,7 @@ export class WorkflowAgent extends BaseAgent {
         },
         {
           name: 'Step 3: Store Results',
-          type: 'n8n-nodes-base.noOp',
+          type: 'n8n-nodes-base.noop',
           position: [700, 100],
         },
       ],
@@ -624,7 +624,7 @@ export class WorkflowAgent extends BaseAgent {
       },
       {
         name: 'HTTP Request',
-        type: 'n8n-nodes-base.httpRequest',
+        type: 'n8n-nodes-base.httprequest',
         description: 'Make HTTP requests',
       },
       {
@@ -634,7 +634,7 @@ export class WorkflowAgent extends BaseAgent {
       },
       {
         name: 'Email Send',
-        type: 'n8n-nodes-base.emailSend',
+        type: 'n8n-nodes-base.sendemail',
         description: 'Send emails',
       },
       {
@@ -649,7 +649,7 @@ export class WorkflowAgent extends BaseAgent {
       },
       {
         name: 'No Operation',
-        type: 'n8n-nodes-base.noOp',
+        type: 'n8n-nodes-base.noop',
         description: 'Placeholder node',
       },
       {
