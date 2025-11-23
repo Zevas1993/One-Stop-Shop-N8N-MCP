@@ -36,6 +36,11 @@ import {
   handleGetRecentErrors,
   handleGetAgentMemoryStats,
 } from "./handlers-agent-memory-query";
+import {
+  getRoutingRecommendation,
+  getRoutingStats,
+  clearRoutingHistory,
+} from "./router-integration";
 
 /**
  * Unified MCP Server (MCP 2.0)
@@ -982,6 +987,90 @@ export class UnifiedMCPServer {
           return this.formatResponse(result);
         } catch (error) {
           return this.formatErrorResponse(error, "get_agent_memory_stats");
+        }
+      }
+    );
+
+    // PHASE 4 INTELLIGENCE: Smart Execution Router Tools
+    // These tools enable intelligent routing between agent and handler pipelines
+
+    // 1. Get Routing Recommendation
+    this.server.tool(
+      "get_routing_recommendation",
+      "Get smart routing recommendation for a workflow request (agent vs handler pipeline)",
+      {
+        goal: z
+          .string()
+          .optional()
+          .describe("High-level goal or requirement (use agent pipeline)"),
+        workflow: z
+          .any()
+          .optional()
+          .describe("Workflow JSON to deploy (use handler pipeline)"),
+        context: z
+          .string()
+          .optional()
+          .describe("Additional context for routing decision"),
+        forceAgent: z
+          .boolean()
+          .optional()
+          .describe("Force routing to agent pipeline"),
+        forceHandler: z
+          .boolean()
+          .optional()
+          .describe("Force routing to handler pipeline"),
+      },
+      async (args) => {
+        try {
+          const result = await getRoutingRecommendation({
+            goal: args.goal,
+            workflow: args.workflow,
+            context: args.context,
+            forceAgent: args.forceAgent,
+            forceHandler: args.forceHandler,
+          });
+          return this.formatResponse({
+            ...result,
+            explanation: `Selected ${result.selectedPath} pipeline (${(result.confidence * 100).toFixed(1)}% confidence, ${(result.successRate * 100).toFixed(1)}% success rate)`,
+          });
+        } catch (error) {
+          return this.formatErrorResponse(error, "get_routing_recommendation");
+        }
+      }
+    );
+
+    // 2. Get Routing Statistics
+    this.server.tool(
+      "get_routing_statistics",
+      "Get execution statistics and routing preferences based on historical success rates",
+      {},
+      async (args) => {
+        try {
+          const result = await getRoutingStats();
+          return this.formatResponse({
+            ...result,
+            summary: `Agent success: ${(result.agentSuccessRate * 100).toFixed(1)}%, Handler success: ${(result.handlerSuccessRate * 100).toFixed(1)}%, Current preference: ${result.currentPreference}`,
+          });
+        } catch (error) {
+          return this.formatErrorResponse(error, "get_routing_statistics");
+        }
+      }
+    );
+
+    // 3. Clear Routing History (for testing/reset)
+    this.server.tool(
+      "clear_routing_history",
+      "Clear execution history and routing metrics (useful for testing or starting fresh)",
+      {},
+      async (args) => {
+        try {
+          await clearRoutingHistory();
+          return this.formatResponse({
+            success: true,
+            message: "Routing history cleared successfully",
+          });
+        } catch (error) {
+          return this.formatErrorResponse(error, "clear_routing_history");
         }
       }
     );
