@@ -26,6 +26,11 @@ import { WorkflowValidator } from "../services/workflow-validator";
 import { EnhancedConfigValidator } from "../services/enhanced-config-validator";
 import { NodeRepository } from "../database/node-repository";
 import { validationCache } from "../utils/validation-cache";
+import {
+  getAgentGeneratedWorkflow,
+  recordWorkflowCreation,
+  recordExecutionError,
+} from "../mcp/handler-shared-memory";
 
 // Singleton n8n API client instance
 let apiClient: N8nApiClient | null = null;
@@ -138,20 +143,38 @@ export async function handleCreateWorkflow(
   args: unknown,
   repository: NodeRepository
 ): Promise<McpToolResponse> {
+  const startTime = Date.now();
+
   try {
     const client = ensureApiConfigured();
     const input = createWorkflowSchema.parse(args);
 
+    // PHASE 2 INTEGRATION: Check if agents already generated a workflow
+    let workflowInput = input;
+    const agentWorkflow = await getAgentGeneratedWorkflow();
+    if (agentWorkflow) {
+      logger.info(
+        "[handleCreateWorkflow] Using agent-generated workflow from SharedMemory"
+      );
+      workflowInput = agentWorkflow;
+    }
+
     // Check workflow size to prevent API failures
-    const sizeValidation = validateWorkflowSize(input, 1); // 1MB limit
+    const sizeValidation = validateWorkflowSize(workflowInput, 1); // 1MB limit
     if (!sizeValidation.valid) {
+      await recordExecutionError(
+        `workflow_creation:${input.name}`,
+        sizeValidation.error || "Workflow too large",
+        "validation",
+        { sizeKB: sizeValidation.sizeKB }
+      );
       return createErrorResponse(sizeValidation.error || "Workflow too large", "WORKFLOW_SIZE_ERROR", {
         sizeKB: sizeValidation.sizeKB
       });
     }
 
     // ENFORCE VALIDATION REQUIREMENT - Check validation cache first
-    const validationStatus = validationCache.isValidatedAndValid(input);
+    const validationStatus = validationCache.isValidatedAndValid(workflowInput);
 
     // If not in cache, run full validation immediately
     if (!validationStatus.validated) {
@@ -166,7 +189,7 @@ export async function handleCreateWorkflow(
       // We need to cast input to WorkflowJson-like structure.
       // The schema uses z.any() for nodes/connections but validator expects typed objects.
       // At runtime, input.nodes and input.connections are the objects we need.
-      const validationResult = await validator.validateWorkflow(input as any, {
+      const validationResult = await validator.validateWorkflow(workflowInput as any, {
         validateNodes: true,
         validateConnections: true,
         profile: "runtime",
@@ -174,11 +197,19 @@ export async function handleCreateWorkflow(
 
       if (!validationResult.valid) {
         // Record the invalid validation result in cache for next time
-        validationCache.recordValidation(input, {
+        validationCache.recordValidation(workflowInput, {
           valid: false,
           errors: validationResult.errors,
           warnings: validationResult.warnings || []
         });
+
+        // PHASE 2 INTEGRATION: Record error for agent feedback
+        await recordExecutionError(
+          `workflow_creation:${(workflowInput as any).name || "unknown"}`,
+          `Validation failed with ${validationResult.errors.length} errors`,
+          "validation",
+          { errors: validationResult.errors, warnings: validationResult.warnings }
+        );
 
         return {
           success: false,
@@ -197,13 +228,20 @@ export async function handleCreateWorkflow(
       logger.info("[handleCreateWorkflow] Immediate validation passed");
 
       // Record the valid validation result in cache for next time
-      validationCache.recordValidation(input, {
+      validationCache.recordValidation(workflowInput, {
         valid: true,
         errors: [],
         warnings: validationResult.warnings || []
       });
     } else if (!validationStatus.valid) {
       // It was in cache but marked invalid
+      await recordExecutionError(
+        `workflow_creation:${(workflowInput as any).name || "unknown"}`,
+        "Workflow has cached validation errors",
+        "validation",
+        { cachedErrors: validationStatus.errors }
+      );
+
       return {
         success: false,
         error:
@@ -218,13 +256,30 @@ export async function handleCreateWorkflow(
     }
 
     // Additional basic validation (keep existing for safety)
-    const errors = validateWorkflowStructure(input);
+    const errors = validateWorkflowStructure(workflowInput);
     if (errors.length > 0) {
+      await recordExecutionError(
+        `workflow_creation:${(workflowInput as any).name || "unknown"}`,
+        "Workflow structure validation failed",
+        "validation",
+        { structureErrors: errors }
+      );
       return createErrorResponse("Workflow validation failed", "WORKFLOW_STRUCTURE_ERROR", { errors });
     }
 
     // Create workflow
-    const workflow = await client.createWorkflow(input);
+    const workflow = await client.createWorkflow(workflowInput);
+
+    // PHASE 2 INTEGRATION: Record successful workflow creation for agent feedback
+    if (workflow.id) {
+      await recordWorkflowCreation(
+        workflow.id,
+        workflow.name || "Unknown",
+        true, // success
+        undefined, // no error
+        Date.now() - startTime
+      );
+    }
 
     return {
       success: true,
@@ -232,11 +287,24 @@ export async function handleCreateWorkflow(
       message: `Workflow "${workflow.name}" created successfully with ID: ${workflow.id}`,
     };
   } catch (error) {
+    // PHASE 2 INTEGRATION: Record error for agent feedback
     if (error instanceof z.ZodError) {
+      await recordExecutionError(
+        `workflow_creation:unknown`,
+        "Input validation failed (Zod schema error)",
+        "validation",
+        { errors: error.errors }
+      );
       return createErrorResponse("Invalid input", "VALIDATION_ERROR", { errors: error.errors });
     }
 
     if (error instanceof N8nApiError) {
+      await recordExecutionError(
+        `workflow_creation:${(args as any)?.name || "unknown"}`,
+        error.message,
+        "api",
+        { code: error.code, details: error.details }
+      );
       return createErrorResponse(
         getUserFriendlyErrorMessage(error),
         error.code,
@@ -244,8 +312,16 @@ export async function handleCreateWorkflow(
       );
     }
 
+    const errorMsg = error instanceof Error ? error.message : "Unknown error occurred";
+    await recordExecutionError(
+      `workflow_creation:${(args as any)?.name || "unknown"}`,
+      errorMsg,
+      "unknown",
+      { stack: error instanceof Error ? error.stack : undefined }
+    );
+
     return createErrorResponse(
-      error instanceof Error ? error.message : "Unknown error occurred",
+      errorMsg,
       "UNKNOWN_ERROR"
     );
   }

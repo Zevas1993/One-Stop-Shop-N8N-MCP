@@ -27,6 +27,15 @@ import { nanoLLMTools } from "./tools-nano-llm";
 import { getNanoLLMPipelineHandler } from "./handlers-nano-llm-pipeline";
 import { existsSync } from "fs";
 import path from "path";
+import {
+  handleQueryAgentMemory,
+  handleGetGraphInsights,
+  handleGetValidationHistory,
+  handleGetPatternRecommendations,
+  handleGetWorkflowExecutionHistory,
+  handleGetRecentErrors,
+  handleGetAgentMemoryStats,
+} from "./handlers-agent-memory-query";
 
 /**
  * Unified MCP Server (MCP 2.0)
@@ -794,6 +803,186 @@ export class UnifiedMCPServer {
           });
         }
         return this.formatResponse(result);
+      }
+    );
+
+    // PHASE 2 INTEGRATION: Agent Memory Query Tools
+    // These tools expose the Agentic GraphRAG system's insights to users
+
+    // 1. Query Agent Memory
+    this.server.tool(
+      "query_agent_memory",
+      "Query agent insights and SharedMemory for transparency into agent decisions and recommendations",
+      {
+        pattern: z
+          .string()
+          .optional()
+          .describe('Search pattern (e.g., "validation", "pattern", "workflow"). Supports glob patterns.'),
+        agentId: z
+          .string()
+          .optional()
+          .describe('Filter by agent ID (e.g., "validator-agent", "workflow-agent")'),
+        keywordType: z
+          .enum(["validation", "pattern", "workflow", "insight", "error", "all"])
+          .optional()
+          .describe("Filter by entry type"),
+        limit: z
+          .number()
+          .optional()
+          .default(50)
+          .describe("Maximum results (default 50)"),
+        maxAgeHours: z
+          .number()
+          .optional()
+          .default(24)
+          .describe("Maximum age of entries in hours (default 24)"),
+      },
+      async (args) => {
+        try {
+          const result = await handleQueryAgentMemory(args);
+          return this.formatResponse(result);
+        } catch (error) {
+          return this.formatErrorResponse(error, "query_agent_memory");
+        }
+      }
+    );
+
+    // 2. Get Graph Insights
+    this.server.tool(
+      "get_graph_insights",
+      "Retrieve GraphRAG semantic knowledge including relationships, patterns, and recommendations",
+      {
+        detailed: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("Return detailed insights (default false for summary)"),
+      },
+      async (args) => {
+        try {
+          const result = await handleGetGraphInsights(args);
+          return this.formatResponse(result);
+        } catch (error) {
+          return this.formatErrorResponse(error, "get_graph_insights");
+        }
+      }
+    );
+
+    // 3. Get Validation History
+    this.server.tool(
+      "get_validation_history",
+      "Get validation history to understand workflow compliance",
+      {
+        limit: z
+          .number()
+          .optional()
+          .default(20)
+          .describe("Number of records to return (default 20)"),
+        successOnly: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("Only return successful validations"),
+      },
+      async (args) => {
+        try {
+          const result = await handleGetValidationHistory(args);
+          return this.formatResponse(result);
+        } catch (error) {
+          return this.formatErrorResponse(error, "get_validation_history");
+        }
+      }
+    );
+
+    // 4. Get Pattern Recommendations
+    this.server.tool(
+      "get_pattern_recommendations",
+      "Get workflow pattern recommendations from agent analysis",
+      {
+        goal: z
+          .string()
+          .optional()
+          .describe("Filter by goal/context"),
+        limit: z
+          .number()
+          .optional()
+          .default(10)
+          .describe("Number of recommendations (default 10)"),
+      },
+      async (args) => {
+        try {
+          const result = await handleGetPatternRecommendations(args);
+          return this.formatResponse(result);
+        } catch (error) {
+          return this.formatErrorResponse(error, "get_pattern_recommendations");
+        }
+      }
+    );
+
+    // 5. Get Workflow Execution History
+    this.server.tool(
+      "get_workflow_execution_history",
+      "Get history of workflow executions via handlers",
+      {
+        limit: z
+          .number()
+          .optional()
+          .default(20)
+          .describe("Number of records (default 20)"),
+        successOnly: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("Only successful executions"),
+      },
+      async (args) => {
+        try {
+          const result = await handleGetWorkflowExecutionHistory(args);
+          return this.formatResponse(result);
+        } catch (error) {
+          return this.formatErrorResponse(error, "get_workflow_execution_history");
+        }
+      }
+    );
+
+    // 6. Get Recent Errors
+    this.server.tool(
+      "get_recent_errors",
+      "Get recent errors for debugging and monitoring",
+      {
+        limit: z
+          .number()
+          .optional()
+          .default(20)
+          .describe("Number of records (default 20)"),
+        errorType: z
+          .enum(["validation", "api", "network", "unknown", "all"])
+          .optional()
+          .default("all")
+          .describe("Filter by error type"),
+      },
+      async (args) => {
+        try {
+          const result = await handleGetRecentErrors(args);
+          return this.formatResponse(result);
+        } catch (error) {
+          return this.formatErrorResponse(error, "get_recent_errors");
+        }
+      }
+    );
+
+    // 7. Get Agent Memory Stats
+    this.server.tool(
+      "get_agent_memory_stats",
+      "Get statistics about agent memory usage and composition",
+      {},
+      async (args) => {
+        try {
+          const result = await handleGetAgentMemoryStats(args);
+          return this.formatResponse(result);
+        } catch (error) {
+          return this.formatErrorResponse(error, "get_agent_memory_stats");
+        }
       }
     );
   }
