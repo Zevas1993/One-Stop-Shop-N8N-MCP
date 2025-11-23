@@ -28,7 +28,11 @@
       "Bash(done)",
       "Bash(for file in \"COMPREHENSIVE_FINDINGS_REPORT.md\" \"EXECUTIVE_SUMMARY.md\" \"DOCUMENTS_TO_SHARE.md\" \"GEMINI_3_PRO_REVIEW_PACKAGE.md\")",
       "Bash(npm run validate:*)",
-      "Bash(timeout 30 node:*)"
+      "Bash(timeout 30 node:*)",
+      "Bash(git rev-list:*)",
+      "Bash(if grep -r \"emailSend\\|httpRequest\\|errorHandler\\|fileCreate\\|noOp\\|\\.cron\\|googleDrive\" src/ai/agents/ --include=*.ts)",
+      "Bash(then echo \"❌ Found remaining issues\")",
+      "Bash(else echo \"✅ NO INCORRECT NODE NAMES FOUND\")"
     ],
     "deny": [],
     "ask": []
