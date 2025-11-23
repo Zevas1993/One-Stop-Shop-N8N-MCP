@@ -27,7 +27,8 @@
       "Bash(fi)",
       "Bash(done)",
       "Bash(for file in \"COMPREHENSIVE_FINDINGS_REPORT.md\" \"EXECUTIVE_SUMMARY.md\" \"DOCUMENTS_TO_SHARE.md\" \"GEMINI_3_PRO_REVIEW_PACKAGE.md\")",
-      "Bash(npm run validate:*)"
+      "Bash(npm run validate:*)",
+      "Bash(timeout 30 node:*)"
     ],
     "deny": [],
     "ask": []

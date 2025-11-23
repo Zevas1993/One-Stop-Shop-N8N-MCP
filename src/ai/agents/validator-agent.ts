@@ -463,23 +463,23 @@ export class ValidatorAgent extends BaseAgent {
     // Trigger node types
     const triggerTypes = [
       'n8n-nodes-base.manualTrigger',
-      'n8n-nodes-base.schedule',
+      'n8n-nodes-base.scheduletrigger',
       'n8n-nodes-base.webhook',
-      'n8n-nodes-base.cron',
+      'n8n-nodes-base.wait',
       'n8n-nodes-base.interval',
     ];
 
     // Action node types (sample - these would be much larger in production)
     const actionTypes = [
-      'n8n-nodes-base.httpRequest',
+      'n8n-nodes-base.httprequest',
       'n8n-nodes-base.slack',
-      'n8n-nodes-base.emailSend',
+      'n8n-nodes-base.sendemail',
       'n8n-nodes-base.set',
       'n8n-nodes-base.if',
-      'n8n-nodes-base.noOp',
+      'n8n-nodes-base.noop',
       'n8n-nodes-base.postgres',
       'n8n-nodes-base.mysql',
-      'n8n-nodes-base.fileCreate',
+      'n8n-nodes-base.readwritefile',
       'n8n-nodes-base.function',
       'n8n-nodes-base.code',
       'n8n-nodes-base.switch',
