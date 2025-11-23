@@ -1,0 +1,291 @@
+{
+  "description": "8 New Node Configurations - Ready to Import",
+  "version": "1.0.0",
+  "verified": "Extracted from n8n-nodes-base v2 source code",
+  "date": "2025-11-22",
+  "nodes": [
+    {
+      "id": "webhook-auth",
+      "name": "Webhook Auth Check",
+      "type": "n8n-nodes-base.function",
+      "position": [400, 300],
+      "notes": "INSERT BETWEEN: Open WebUI Chat Interface → Parse Chat Input",
+      "parameters": {
+        "functionCode": "// Validate webhook authentication token\nconst authHeader = $input.item.json.headers?.authorization || '';\nconst expectedToken = $env.WEBHOOK_AUTH_TOKEN;\n\nif (!expectedToken) {\n  throw new Error('WEBHOOK_AUTH_TOKEN environment variable not configured');\n}\n\nif (!authHeader) {\n  throw new Error('Unauthorized: Missing Authorization header');\n}\n\nif (authHeader !== `Bearer ${expectedToken}`) {\n  throw new Error('Unauthorized: Invalid authentication token');\n}\n\n// Authentication successful, pass through\nreturn $input.item;"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "teams-channel-tool",
+      "name": "Teams Channel Tool",
+      "type": "n8n-nodes-base.microsoftTeams",
+      "position": [940, 50],
+      "notes": "CONNECT TO: Main Email Assistant as ai_tool",
+      "parameters": {
+        "resource": "channelMessage",
+        "operation": "create",
+        "teamId": "={{ $fromAI('team_id') }}",
+        "channelId": "={{ $fromAI('channel_id') }}",
+        "messageType": "text",
+        "message": "={{ $fromAI('message_content') }}"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "teams-urgent-notify",
+      "name": "Teams Urgent Notification",
+      "type": "n8n-nodes-base.microsoftTeams",
+      "position": [2040, 500],
+      "notes": "CONNECT FROM: Email Category Router (urgent output) → AFTER Update Categories",
+      "parameters": {
+        "resource": "channelMessage",
+        "operation": "create",
+        "teamId": "={{ $env.TEAMS_TEAM_ID }}",
+        "channelId": "={{ $env.TEAMS_URGENT_CHANNEL_ID }}",
+        "messageType": "text",
+        "message": "🚨 **URGENT EMAIL RECEIVED**\\n\\n**From:** {{ $json.sender.name }} ({{ $json.sender.address }})\\n**Subject:** {{ $json.subject }}\\n\\n**Preview:**\\n{{ $json.cleanBody.substring(0, 200) }}...\\n\\n---\\n*Classified as: {{ $('AI Email Classifier').item.json.category }}*\\n*Received: {{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}*"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "teams-business-notify",
+      "name": "Teams Business Notification",
+      "type": "n8n-nodes-base.microsoftTeams",
+      "position": [2040, 600],
+      "notes": "CONNECT FROM: Business Inquiry Agent (output)",
+      "parameters": {
+        "resource": "channelMessage",
+        "operation": "create",
+        "teamId": "={{ $env.TEAMS_TEAM_ID }}",
+        "channelId": "={{ $env.TEAMS_BUSINESS_CHANNEL_ID }}",
+        "messageType": "text",
+        "message": "💼 **NEW BUSINESS INQUIRY**\\n\\n**From:** {{ $json.sender.name }} ({{ $json.sender.address }})\\n**Subject:** {{ $json.subject }}\\n\\n**AI Analysis:**\\n{{ $json.output }}\\n\\n---\\n*Draft response created in Outlook Drafts*\\n*Received: {{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}*"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "calendar-availability-tool",
+      "name": "Calendar Availability Tool",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "position": [940, 500],
+      "notes": "CONNECT TO: Main Email Assistant as ai_tool",
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 100,
+        "filters": {
+          "startDateTime": "={{ $fromAI('start_date') || $now.toISO() }}",
+          "endDateTime": "={{ $fromAI('end_date') || $now.plus({ days: 7 }).toISO() }}"
+        }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "calendar-create-event-tool",
+      "name": "Calendar Create Event Tool",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "position": [940, 600],
+      "notes": "CONNECT TO: Main Email Assistant as ai_tool",
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "subject": "={{ $fromAI('event_subject') }}",
+        "start": "={{ $fromAI('start_time') }}",
+        "end": "={{ $fromAI('end_time') }}",
+        "additionalFields": {
+          "attendees": "={{ $fromAI('attendees') }}",
+          "body": "={{ $fromAI('event_description') || 'Meeting scheduled via AI Assistant' }}",
+          "isReminderOn": true,
+          "reminderMinutesBeforeStart": 15
+        }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "check-attachments",
+      "name": "Check and Route Attachments",
+      "type": "n8n-nodes-base.switch",
+      "position": [1300, 600],
+      "notes": "INSERT AFTER: Extract Email Metadata → BEFORE AI Email Classifier",
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "has_attachments",
+              "conditions": {
+                "options": {
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true"
+                    },
+                    "leftValue": "={{ $json.hasAttachments }}",
+                    "rightValue": ""
+                  }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "no_attachments",
+              "conditions": {
+                "options": {
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "false"
+                    },
+                    "leftValue": "={{ $json.hasAttachments }}",
+                    "rightValue": ""
+                  }
+                ]
+              },
+              "renameOutput": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "typeVersion": 3.2
+    },
+    {
+      "id": "download-attachments",
+      "name": "Download Email Attachments",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "position": [1520, 700],
+      "notes": "CONNECT FROM: Check Attachments (has_attachments output) → MERGE TO: AI Email Classifier",
+      "parameters": {
+        "resource": "messageAttachment",
+        "operation": "getAll",
+        "messageId": "={{ $json.emailId }}",
+        "returnAll": true,
+        "options": {}
+      },
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "webhook-auth": {
+      "input": "Open WebUI Chat Interface (webhook)",
+      "output": "Parse Chat Input"
+    },
+    "teams-channel-tool": {
+      "connection_type": "ai_tool",
+      "connects_to": "Main Email Assistant"
+    },
+    "teams-urgent-notify": {
+      "input": "Update Email Categories",
+      "output": "none (end of path)"
+    },
+    "teams-business-notify": {
+      "input": "Business Inquiry Agent",
+      "output": "none (end of path)"
+    },
+    "calendar-availability-tool": {
+      "connection_type": "ai_tool",
+      "connects_to": "Main Email Assistant"
+    },
+    "calendar-create-event-tool": {
+      "connection_type": "ai_tool",
+      "connects_to": "Main Email Assistant"
+    },
+    "check-attachments": {
+      "input": "Extract Email Metadata",
+      "output_no_attachments": "AI Email Classifier",
+      "output_has_attachments": "Download Email Attachments"
+    },
+    "download-attachments": {
+      "input": "Check Attachments (has_attachments)",
+      "output": "AI Email Classifier (merge with no_attachments path)"
+    }
+  },
+  "environment_variables_required": [
+    {
+      "name": "WEBHOOK_AUTH_TOKEN",
+      "description": "Secure random token for webhook authentication",
+      "generate_command": "openssl rand -base64 32",
+      "example": "XYZ123abc456DEF789..."
+    },
+    {
+      "name": "TEAMS_TEAM_ID",
+      "description": "Microsoft Teams team identifier",
+      "how_to_find": "Teams → Click team name → Get link → Extract team ID from URL",
+      "example": "12345678-1234-1234-1234-123456789012"
+    },
+    {
+      "name": "TEAMS_URGENT_CHANNEL_ID",
+      "description": "Channel ID for urgent email notifications",
+      "how_to_find": "Teams → Right-click channel → Get link → Extract channel ID",
+      "example": "19:abc123def456@thread.tacv2"
+    },
+    {
+      "name": "TEAMS_BUSINESS_CHANNEL_ID",
+      "description": "Channel ID for business inquiry notifications",
+      "how_to_find": "Teams → Right-click channel → Get link → Extract channel ID",
+      "example": "19:xyz789uvw123@thread.tacv2"
+    }
+  ],
+  "oauth_credentials_required": [
+    {
+      "name": "microsoftOutlookOAuth2Api",
+      "type": "OAuth2",
+      "status": "EXISTS (needs scope update)",
+      "new_scopes": [
+        "Calendars.ReadWrite"
+      ],
+      "existing_scopes": [
+        "Mail.ReadWrite",
+        "Mail.Send",
+        "offline_access"
+      ]
+    },
+    {
+      "name": "microsoftTeamsOAuth2Api",
+      "type": "OAuth2",
+      "status": "NEW (needs to be created)",
+      "required_scopes": [
+        "Channel.ReadBasic.All",
+        "ChannelMessage.Send",
+        "Team.ReadBasic.All",
+        "offline_access"
+      ]
+    }
+  ],
+  "updated_agent_prompts": {
+    "main-email-assistant": {
+      "node_id": "main-agent",
+      "updated_system_message": "You are an intelligent email assistant with comprehensive capabilities:\n\n**EMAIL MANAGEMENT:**\n- Search emails by sender, subject, content, or date\n- Create and send professional responses\n- Categorize and organize emails\n- Handle attachments and extract information\n\n**CALENDAR FUNCTIONS:**\n- Check availability: Use calendar_availability tool with start_date and end_date\n- Schedule meetings: Use calendar_create_event tool with event_subject, start_time, end_time, attendees\n- Manage calendar events and appointments\n- Send meeting invitations\n\n**TEAMS INTEGRATION:**\n- Post to Teams channels: Use teams_channel tool with team_id, channel_id, message_content\n- Send notifications to specific channels\n- Share important updates with the team\n\n**KNOWLEDGE & CONTEXT:**\n- Search email history for past communications\n- Access knowledge base for relevant information\n- Provide context from previous interactions\n\n**COMMON COMMANDS:**\n- 'Check emails from [sender]'\n- 'Send email to [recipient] about [topic]'\n- 'Schedule meeting with [person] on [date] at [time]'\n- \"What's my availability on [date]?\"\n- 'Post to Teams that [message]'\n- 'Show urgent emails'\n- 'Create draft response'\n- 'What meetings do I have today?'\n- 'Search emails about [topic]'\n\n**ATTACHMENT HANDLING:**\n- When emails have attachments, mention them in summaries\n- Attachments are automatically downloaded and available\n- You can reference attachment names and types in responses\n\nAlways confirm important actions before executing. Provide clear, actionable responses.",
+      "note": "Updated to include calendar and Teams capabilities with specific tool names"
+    },
+    "business-inquiry-agent": {
+      "node_id": "business-agent",
+      "updated_system_message": "You are a professional business development assistant. For business inquiries:\n\n1. **Analyze** the opportunity and requirements\n2. **Search** knowledge base for relevant information\n3. **Create** professional draft responses\n4. **Include** relevant company capabilities\n5. **Suggest** next steps\n6. **Notify** team via Teams channel (automatic)\n\n**Available Tools:**\n- create_draft: Generate professional email drafts\n- knowledge_search: Find relevant company information\n\n**Workflow:**\n1. Analyze the inquiry for key requirements\n2. Search knowledge base for matching capabilities\n3. Draft a professional response\n4. Return analysis and suggested actions\n5. Team will be notified automatically in Teams\n\n**Response Format:**\nProvide a structured analysis including:\n- Opportunity size/value\n- Key requirements identified\n- Matching capabilities\n- Recommended next steps\n- Draft response preview\n\nAlways maintain professional tone and highlight relevant experience.",
+      "note": "Updated to mention automatic Teams notification"
+    }
+  },
+  "installation_instructions": {
+    "step_1": "Backup current workflow JSON",
+    "step_2": "Configure environment variables (see environment_variables_required)",
+    "step_3": "Update Outlook OAuth credential with Calendars.ReadWrite scope",
+    "step_4": "Create new Teams OAuth credential with required scopes",
+    "step_5": "Add nodes in this order: webhook-auth, calendar tools, teams tools, attachment nodes",
+    "step_6": "Connect nodes according to connections section",
+    "step_7": "Update Main Email Assistant and Business Agent system prompts",
+    "step_8": "Test each phase before proceeding to next",
+    "step_9": "Activate workflow after all tests pass"
+  },
+  "testing_commands": {
+    "calendar_availability": "What's my availability tomorrow?",
+    "calendar_create": "Schedule a meeting with john@example.com tomorrow at 2pm",
+    "teams_post": "Post to Teams that the deployment completed successfully",
+    "email_search": "Show me emails from sarah about the project",
+    "complete_workflow": "Check my calendar, find a free slot, and schedule a meeting with the sales team"
+  }
+}
