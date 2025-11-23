@@ -23,7 +23,7 @@ import {
   SourceControlPushResult,
 } from '../types/n8n-api';
 import { handleN8nApiError, logN8nError } from '../utils/n8n-errors';
-import { cleanWorkflowForCreate, cleanWorkflowForUpdate } from './n8n-validation';
+import { cleanWorkflowForCreate, cleanWorkflowForUpdate, cleanAndFixWorkflowForCreate, cleanAndFixWorkflowForUpdate } from './n8n-validation';
 
 export interface N8nApiClientConfig {
   baseUrl: string;
@@ -168,8 +168,14 @@ export class N8nApiClient {
   // Workflow Management
   async createWorkflow(workflow: Partial<Workflow>): Promise<Workflow> {
     try {
-      const cleanedWorkflow = cleanWorkflowForCreate(workflow);
-      const response = await this.client.post('/workflows', cleanedWorkflow);
+      // Use enhanced cleaning that also fixes common API schema issues
+      const { cleaned, fixed } = cleanAndFixWorkflowForCreate(workflow as any);
+
+      if (fixed.length > 0) {
+        logger.info('[n8n-api-client] Applied API schema fixes:', fixed);
+      }
+
+      const response = await this.client.post('/workflows', cleaned);
       return response.data;
     } catch (error) {
       throw handleN8nApiError(error);
@@ -187,16 +193,22 @@ export class N8nApiClient {
 
   async updateWorkflow(id: string, workflow: Partial<Workflow>): Promise<Workflow> {
     try {
+      // Use enhanced cleaning that also fixes common API schema issues
+      const { cleaned, fixed } = cleanAndFixWorkflowForUpdate(workflow as any);
+
+      if (fixed.length > 0) {
+        logger.info('[n8n-api-client] Applied API schema fixes:', fixed);
+      }
+
       // First, try PUT method (newer n8n versions)
-      const cleanedWorkflow = cleanWorkflowForUpdate(workflow as Workflow);
       try {
-        const response = await this.client.put(`/workflows/${id}`, cleanedWorkflow);
+        const response = await this.client.put(`/workflows/${id}`, cleaned);
         return response.data;
       } catch (putError: any) {
         // If PUT fails with 405 (Method Not Allowed), try PATCH
         if (putError.response?.status === 405) {
           logger.debug('PUT method not supported, falling back to PATCH');
-          const response = await this.client.patch(`/workflows/${id}`, cleanedWorkflow);
+          const response = await this.client.patch(`/workflows/${id}`, cleaned);
           return response.data;
         }
         throw putError;

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { WorkflowNode, WorkflowConnection, Workflow } from '../types/n8n-api';
+import { APISchemaLoader } from '../ai/knowledge/api-schema-loader';
+import { logger } from '../utils/logger';
 
 // Zod schemas for n8n API validation
 
@@ -356,4 +358,89 @@ export function validateWorkflowSize(
       error: 'Workflow contains invalid data that cannot be serialized'
     };
   }
+}
+
+/**
+ * Enhanced workflow cleaning with API schema compliance
+ * Removes system-managed fields AND fixes common API issues
+ */
+export function cleanAndFixWorkflowForCreate(workflow: any): { cleaned: Partial<Workflow>; fixed: string[] } {
+  const fixes: string[] = [];
+  let cleaned = cleanWorkflowForCreate(workflow);
+
+  // Fix nodes with API schema validation
+  if (cleaned.nodes && Array.isArray(cleaned.nodes)) {
+    cleaned.nodes = cleaned.nodes.map((node: any) => {
+      const fixedNode = { ...node };
+
+      // Add missing typeVersion
+      if (!fixedNode.typeVersion && fixedNode.typeVersion !== 0) {
+        fixedNode.typeVersion = 1;
+        fixes.push(`✅ Added typeVersion: 1 to node '${node.name}'`);
+      }
+
+      // Fix node type format - add package prefix if missing
+      if (fixedNode.type && !fixedNode.type.includes('.')) {
+        fixedNode.type = `n8n-nodes-base.${fixedNode.type}`;
+        fixes.push(`✅ Fixed node type for '${node.name}': added package prefix`);
+      }
+      // Fix incomplete prefix
+      else if (fixedNode.type && fixedNode.type.startsWith('nodes-base.')) {
+        fixedNode.type = `n8n-${fixedNode.type}`;
+        fixes.push(`✅ Fixed node type for '${node.name}': corrected incomplete prefix`);
+      }
+
+      // Ensure parameters object exists
+      if (!fixedNode.parameters || typeof fixedNode.parameters !== 'object') {
+        fixedNode.parameters = {};
+        fixes.push(`✅ Added missing parameters object to node '${node.name}'`);
+      }
+
+      return fixedNode;
+    });
+  }
+
+  return { cleaned, fixed: fixes };
+}
+
+/**
+ * Enhanced workflow update cleaning with API schema compliance
+ */
+export function cleanAndFixWorkflowForUpdate(workflow: any): { cleaned: Partial<Workflow>; fixed: string[] } {
+  const fixes: string[] = [];
+  let cleaned = cleanWorkflowForUpdate(workflow as any);
+
+  // Fix nodes with API schema validation
+  if (cleaned.nodes && Array.isArray(cleaned.nodes)) {
+    cleaned.nodes = cleaned.nodes.map((node: any) => {
+      const fixedNode = { ...node };
+
+      // Add missing typeVersion
+      if (!fixedNode.typeVersion && fixedNode.typeVersion !== 0) {
+        fixedNode.typeVersion = 1;
+        fixes.push(`✅ Added typeVersion: 1 to node '${node.name}'`);
+      }
+
+      // Fix node type format - add package prefix if missing
+      if (fixedNode.type && !fixedNode.type.includes('.')) {
+        fixedNode.type = `n8n-nodes-base.${fixedNode.type}`;
+        fixes.push(`✅ Fixed node type for '${node.name}': added package prefix`);
+      }
+      // Fix incomplete prefix
+      else if (fixedNode.type && fixedNode.type.startsWith('nodes-base.')) {
+        fixedNode.type = `n8n-${fixedNode.type}`;
+        fixes.push(`✅ Fixed node type for '${node.name}': corrected incomplete prefix`);
+      }
+
+      // Ensure parameters object exists
+      if (!fixedNode.parameters || typeof fixedNode.parameters !== 'object') {
+        fixedNode.parameters = {};
+        fixes.push(`✅ Added missing parameters object to node '${node.name}'`);
+      }
+
+      return fixedNode;
+    });
+  }
+
+  return { cleaned, fixed: fixes };
 }
