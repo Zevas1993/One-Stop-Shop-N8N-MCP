@@ -46,9 +46,19 @@ export class PatternAgent extends BaseAgent {
     await super.initialize();
     this.loadPatterns();
     this.buildKeywordIndex();
-    this.logger.info(
-      "Pattern agent initialized with " + this.patterns.size + " patterns"
-    );
+
+    // Log that API schema knowledge is available for pattern matching
+    if (this.apiSchemaKnowledge) {
+      this.logger.info(
+        "Pattern agent initialized with " +
+          this.patterns.size +
+          " patterns and official n8n API schema knowledge"
+      );
+    } else {
+      this.logger.info(
+        "Pattern agent initialized with " + this.patterns.size + " patterns"
+      );
+    }
   }
 
   /**

@@ -166,6 +166,11 @@ export class ValidatorAgent extends BaseAgent {
       return { valid: false, nodeCount: 0, connectionCount: 0, errors, warnings, stats };
     }
 
+    // Validate against API schema requirements if available
+    if (this.apiSchemaKnowledge) {
+      this.validateAgainstApiSchema(workflow, errors, warnings);
+    }
+
     // Check required fields
     if (!workflow.name || typeof workflow.name !== 'string') {
       errors.push({
@@ -505,5 +510,99 @@ export class ValidatorAgent extends BaseAgent {
     }
 
     this.logger.debug(`Loaded ${this.validNodeTypes.size} valid node types`);
+  }
+
+  /**
+   * Validate workflow against official n8n API schema
+   */
+  private validateAgainstApiSchema(
+    workflow: any,
+    errors: ValidationError[],
+    warnings: ValidationWarning[]
+  ): void {
+    // Check for system-managed fields that should never be sent
+    const systemManagedFields = [
+      'id',
+      'createdAt',
+      'updatedAt',
+      'versionId',
+      'isArchived',
+      'triggerCount',
+      'usedCredentials',
+      'sharedWithProjects',
+      'meta',
+      'shared',
+    ];
+
+    for (const field of systemManagedFields) {
+      if (field in workflow) {
+        warnings.push({
+          type: 'SYSTEM_MANAGED_FIELD',
+          message: `Workflow contains system-managed field "${field}" that should not be sent in API requests`,
+          suggestion: `Remove the "${field}" field before creating/updating workflows in n8n API`,
+        });
+      }
+    }
+
+    // Check connection format: must use node NAMES not IDs
+    if (workflow.connections && typeof workflow.connections === 'object') {
+      const nodeNames = new Set((workflow.nodes || []).map((n: any) => n.name));
+
+      for (const [sourceName, connData] of Object.entries(workflow.connections)) {
+        // Check if source node name is valid
+        if (!nodeNames.has(sourceName as string)) {
+          errors.push({
+            type: 'INVALID_CONNECTION_NODE_NAME',
+            message: `Connection references unknown source node name: "${sourceName}". All connection keys must match existing node names.`,
+            severity: 'high',
+          });
+        }
+
+        // Check target nodes in connections
+        const conn = connData as any;
+        if (conn.main && Array.isArray(conn.main)) {
+          for (const connPath of conn.main) {
+            if (Array.isArray(connPath)) {
+              for (const connPoint of connPath) {
+                if (connPoint.node && !nodeNames.has(connPoint.node)) {
+                  errors.push({
+                    type: 'INVALID_CONNECTION_TARGET',
+                    message: `Connection target references unknown node name: "${connPoint.node}". Node names are case-sensitive and must match exactly.`,
+                    severity: 'high',
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Check node types include package prefix
+    if (Array.isArray(workflow.nodes)) {
+      for (const node of workflow.nodes) {
+        if (node.type && typeof node.type === 'string') {
+          // Check for common mistakes
+          if (node.type === 'webhook' || node.type === 'nodes-base.webhook') {
+            errors.push({
+              type: 'INVALID_NODE_TYPE_FORMAT',
+              message: `Node "${node.name}" has invalid type "${node.type}". Must use full package prefix like "n8n-nodes-base.webhook"`,
+              severity: 'critical',
+            });
+          }
+
+          // Warn if missing n8n-nodes-base prefix
+          if (!node.type.includes('.')) {
+            errors.push({
+              type: 'MISSING_NODE_TYPE_PREFIX',
+              message: `Node "${node.name}" type "${node.type}" is missing the package prefix. Should be "n8n-nodes-base.${node.type}" or similar.`,
+              severity: 'critical',
+            });
+          }
+        }
+      }
+    }
+
+    this.logger.debug('API schema validation completed');
   }
 }

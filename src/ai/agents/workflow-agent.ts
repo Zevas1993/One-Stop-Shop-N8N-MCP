@@ -151,6 +151,9 @@ export class WorkflowAgent extends BaseAgent {
       // Enhance workflow with specific user goal details
       this.enhanceWorkflowWithGoal(workflow, goal);
 
+      // Ensure workflow complies with n8n API schema
+      this.ensureApiCompliance(workflow);
+
       return workflow;
     } catch (error) {
       this.logger.error('Failed to generate workflow from pattern', error as Error);
@@ -662,6 +665,80 @@ export class WorkflowAgent extends BaseAgent {
     for (const node of nodes) {
       this.nodeRegistry.set(node.type, node);
     }
+  }
+
+  /**
+   * Ensure generated workflow complies with n8n API schema
+   */
+  private ensureApiCompliance(workflow: GeneratedWorkflow): void {
+    // Ensure all nodes have required fields for API compliance
+    for (const node of workflow.nodes) {
+      // Ensure typeVersion is set (required by n8n API)
+      if (node.typeVersion === undefined) {
+        node.typeVersion = 1;
+        this.logger.debug(`Added default typeVersion=1 to node "${node.name}"`);
+      }
+
+      // Ensure node type has proper package prefix
+      if (!node.type.includes('.')) {
+        node.type = `n8n-nodes-base.${node.type}`;
+        this.logger.debug(`Added package prefix to node type: ${node.type}`);
+      }
+
+      // Ensure parameters object exists
+      if (!node.parameters) {
+        node.parameters = {};
+      }
+    }
+
+    // Remove any system-managed fields that might have been accidentally added
+    const systemManagedFields = [
+      'id',
+      'createdAt',
+      'updatedAt',
+      'versionId',
+      'isArchived',
+      'triggerCount',
+      'usedCredentials',
+      'sharedWithProjects',
+      'meta',
+      'shared',
+    ];
+
+    for (const field of systemManagedFields) {
+      if (field in (workflow as any)) {
+        delete (workflow as any)[field];
+        this.logger.debug(`Removed system-managed field "${field}" from workflow`);
+      }
+    }
+
+    // Ensure connections use node NAMES not IDs
+    const nodeNames = new Set(workflow.nodes.map((n) => n.name));
+
+    for (const [source, connData] of Object.entries(workflow.connections)) {
+      if (!nodeNames.has(source)) {
+        this.logger.warn(
+          `Connection source "${source}" does not match any node name. Check connection format.`
+        );
+      }
+
+      const conn = connData as any;
+      if (conn.main && Array.isArray(conn.main)) {
+        for (const connPath of conn.main) {
+          if (Array.isArray(connPath)) {
+            for (const connPoint of connPath) {
+              if (connPoint.node && !nodeNames.has(connPoint.node)) {
+                this.logger.warn(
+                  `Connection target "${connPoint.node}" does not match any node name. Check connection format.`
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+
+    this.logger.debug('Workflow API compliance check completed');
   }
 }
 

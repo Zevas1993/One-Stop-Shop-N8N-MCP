@@ -5,6 +5,7 @@
 
 import { SharedMemory } from '../shared-memory';
 import { Logger } from '../../utils/logger';
+import { APISchemaLoader } from '../knowledge/api-schema-loader';
 
 export interface AgentConfig {
   id: string;
@@ -49,11 +50,14 @@ export abstract class BaseAgent {
   protected sharedMemory: SharedMemory;
   protected logger: Logger;
   protected isRunning = false;
+  protected apiSchemaLoader: APISchemaLoader;
+  protected apiSchemaKnowledge: string = '';
 
   constructor(config: AgentConfig, sharedMemory: SharedMemory) {
     this.config = config;
     this.sharedMemory = sharedMemory;
     this.logger = new Logger({ prefix: `Agent[${config.id}]` });
+    this.apiSchemaLoader = APISchemaLoader.getInstance();
   }
 
   /**
@@ -68,6 +72,16 @@ export abstract class BaseAgent {
    */
   async initialize(): Promise<void> {
     this.logger.info(`Initializing agent: ${this.config.name}`);
+
+    // Load API schema knowledge
+    try {
+      this.apiSchemaKnowledge = await this.apiSchemaLoader.getAgentKnowledge();
+      this.logger.debug('API schema knowledge loaded successfully');
+    } catch (error) {
+      this.logger.warn('Failed to load API schema knowledge', error);
+      // Continue with empty knowledge - fallback will be used
+    }
+
     // Subclasses can override for custom initialization
   }
 
@@ -248,6 +262,25 @@ export abstract class BaseAgent {
   async shutdown(): Promise<void> {
     this.logger.info(`Shutting down agent: ${this.config.name}`);
     // Subclasses can override for custom cleanup
+  }
+
+  /**
+   * Get context-specific API schema guidance
+   */
+  protected async getApiGuidance(context: string): Promise<string> {
+    try {
+      return await this.apiSchemaLoader.getGuidanceFor(context);
+    } catch (error) {
+      this.logger.warn(`Failed to get API guidance for context: ${context}`, error);
+      return '';
+    }
+  }
+
+  /**
+   * Get full API schema knowledge for use in prompts
+   */
+  protected getApiSchemaKnowledge(): string {
+    return this.apiSchemaKnowledge;
   }
 }
 
