@@ -4,8 +4,8 @@
  * Helps agents understand the correct API structure, field requirements, and constraints
  */
 
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Logger } from '../../utils/logger';
 
 export interface APISchemaInfo {
