@@ -32,6 +32,30 @@ export interface N8nApiClientConfig {
   maxRetries?: number;
 }
 
+/**
+ * Validate headers before sending to prevent invalid requests
+ */
+function validateHeaders(headers: Record<string, any>): string | null {
+  for (const [key, value] of Object.entries(headers)) {
+    // Headers should be strings or arrays of strings
+    if (typeof value !== 'string' && !Array.isArray(value)) {
+      return `Invalid header "${key}": headers must be strings or string arrays, got ${typeof value}`;
+    }
+
+    // Header values should not be null, undefined, or NaN
+    if (value === null || value === undefined || (typeof value === 'string' && value === 'NaN')) {
+      return `Invalid header "${key}": header value cannot be null, undefined, or "NaN" string`;
+    }
+
+    // Common security headers validation
+    if (key === 'Authorization' && typeof value === 'string' && value && !value.startsWith('Bearer ')) {
+      logger.warn(`Authorization header may be invalid - expected "Bearer <token>" format`);
+    }
+  }
+
+  return null;
+}
+
 export class N8nApiClient {
   private client: AxiosInstance;
   private maxRetries: number;
@@ -57,12 +81,22 @@ export class N8nApiClient {
       },
     });
 
-    // Request interceptor for logging
+    // Request interceptor for logging and validation
     this.client.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
+        // Validate headers before sending
+        const headerError = validateHeaders(config.headers as Record<string, any>);
+        if (headerError) {
+          logger.warn(`Header validation warning: ${headerError}`);
+          // Don't reject, just log - this is a warning not a blocking error
+        }
+
+        // Log request info without sensitive data (params/data can contain credentials)
         logger.debug(`n8n API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-          params: config.params,
-          data: config.data,
+          // Only log param keys, not values (to avoid exposing credentials)
+          paramKeys: config.params ? Object.keys(config.params) : [],
+          // Only log request size, not content (to avoid exposing workflows/credentials)
+          dataSize: config.data ? JSON.stringify(config.data).length : 0,
         });
         return config;
       },

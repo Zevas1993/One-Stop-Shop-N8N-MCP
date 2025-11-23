@@ -151,7 +151,6 @@ export async function handleCreateWorkflow(
     }
 
     // ENFORCE VALIDATION REQUIREMENT - Check validation cache first
-    const { validationCache } = await import("../utils/validation-cache");
     const validationStatus = validationCache.isValidatedAndValid(input);
 
     // If not in cache, run full validation immediately
