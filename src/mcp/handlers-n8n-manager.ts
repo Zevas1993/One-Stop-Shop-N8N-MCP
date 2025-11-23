@@ -132,7 +132,8 @@ const listExecutionsSchema = z.object({
 // Workflow Management Handlers
 
 export async function handleCreateWorkflow(
-  args: unknown
+  args: unknown,
+  repository: NodeRepository
 ): Promise<McpToolResponse> {
   try {
     const client = ensureApiConfigured();
@@ -142,26 +143,47 @@ export async function handleCreateWorkflow(
     const { validationCache } = await import("../utils/validation-cache");
     const validationStatus = validationCache.isValidatedAndValid(input);
 
+    // If not in cache, run full validation immediately
     if (!validationStatus.validated) {
-      return {
-        success: false,
-        error:
-          "🚨 VALIDATION REQUIRED: You must run validate_workflow tool BEFORE creating workflows!",
-        details: {
-          requiredStep: "Run validate_workflow tool first",
-          workflow:
-            "1️⃣ validate_workflow → 2️⃣ Fix errors → 3️⃣ n8n_create_workflow",
-          message:
-            "This tool REQUIRES validation to prevent broken workflows. Use validate_workflow tool first.",
-        },
-      };
-    }
+      logger.info(
+        "[handleCreateWorkflow] Workflow not in validation cache, running immediate validation"
+      );
 
-    if (!validationStatus.valid) {
+      const validator = new WorkflowValidator(
+        repository,
+        EnhancedConfigValidator
+      );
+      // We need to cast input to WorkflowJson-like structure.
+      // The schema uses z.any() for nodes/connections but validator expects typed objects.
+      // At runtime, input.nodes and input.connections are the objects we need.
+      const validationResult = await validator.validateWorkflow(input as any, {
+        validateNodes: true,
+        validateConnections: true,
+        profile: "runtime",
+      });
+
+      if (!validationResult.valid) {
+        return {
+          success: false,
+          error:
+            "🚨 VALIDATION FAILED: Workflow rejected by strict validation enforcement.",
+          details: {
+            errors: validationResult.errors,
+            message:
+              "The Agentic GraphRAG system rejected this workflow because it contains errors that would prevent it from running in n8n.",
+            workflow: "1️⃣ Fix errors listed above → 2️⃣ Retry creation",
+            validationStats: validationResult.statistics,
+          },
+        };
+      }
+
+      logger.info("[handleCreateWorkflow] Immediate validation passed");
+    } else if (!validationStatus.valid) {
+      // It was in cache but marked invalid
       return {
         success: false,
         error:
-          "🚨 VALIDATION FAILED: Workflow has validation errors and cannot be created!",
+          "🚨 VALIDATION FAILED: Workflow has known validation errors and cannot be created!",
         details: {
           errors: validationStatus.errors,
           message: "Fix all validation errors before creating workflow",
@@ -410,7 +432,8 @@ export async function handleGetWorkflowMinimal(
 }
 
 export async function handleUpdateWorkflow(
-  args: unknown
+  args: unknown,
+  repository: NodeRepository
 ): Promise<McpToolResponse> {
   try {
     const client = ensureApiConfigured();
@@ -421,12 +444,43 @@ export async function handleUpdateWorkflow(
     if (updateData.nodes || updateData.connections) {
       // Fetch current workflow if only partial update
       let fullWorkflow = updateData as Partial<Workflow>;
+      let workflowToValidate = updateData;
 
       if (!updateData.nodes || !updateData.connections) {
         const current = await client.getWorkflow(id);
         fullWorkflow = {
           ...current,
           ...updateData,
+        };
+        workflowToValidate = fullWorkflow;
+      }
+
+      // ENFORCE VALIDATION
+      logger.info("[handleUpdateWorkflow] Running strict validation on update");
+      const validator = new WorkflowValidator(
+        repository,
+        EnhancedConfigValidator
+      );
+      const validationResult = await validator.validateWorkflow(
+        workflowToValidate as any,
+        {
+          validateNodes: true,
+          validateConnections: true,
+          profile: "runtime",
+        }
+      );
+
+      if (!validationResult.valid) {
+        return {
+          success: false,
+          error:
+            "🚨 VALIDATION FAILED: Update rejected by strict validation enforcement.",
+          details: {
+            errors: validationResult.errors,
+            message:
+              "The Agentic GraphRAG system rejected this update because it would result in a broken workflow.",
+            validationStats: validationResult.statistics,
+          },
         };
       }
 
@@ -1079,11 +1133,18 @@ export async function handleListAvailableTools(): Promise<McpToolResponse> {
             maxRetries: config.maxRetries,
           }
         : null,
+      capabilities: [
+        "✅ Activate/deactivate workflows via n8n_activate_workflow",
+        "✅ Execute workflows directly via n8n_run_workflow (no webhook needed)",
+        "✅ Stop running executions via n8n_stop_execution",
+        "✅ Full tag management (create, read, update, delete)",
+        "✅ Full credential management (create, read, update, delete)",
+        "✅ Complete workflow lifecycle: create → validate → deploy → execute → monitor",
+      ],
       limitations: [
-        "Cannot activate/deactivate workflows via API",
-        "Cannot execute workflows directly (must use webhooks)",
-        "Cannot stop running executions",
-        "Tags and credentials have limited API support",
+        "Workflow deployment requires proper validation before activation",
+        "Execution data may have size limits depending on n8n instance configuration",
+        "Some credential types may have restricted API access (check n8n security settings)",
       ],
     },
   };
@@ -1391,6 +1452,138 @@ export async function handleDeleteCredential(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
+}
+
+// Workflow Recovery Handler
+
+/**
+ * Clean a broken workflow by removing system-managed fields that prevent updates.
+ * This is critical for fixing workflows that are corrupted with read-only fields.
+ */
+export async function handleCleanWorkflow(
+  args: unknown,
+  repository: NodeRepository
+): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const { id } = z.object({ id: z.string() }).parse(args);
+
+    logger.info(`[handleCleanWorkflow] Attempting to clean workflow: ${id}`);
+
+    // Fetch the broken workflow
+    const workflow = await client.getWorkflow(id);
+
+    // List of system-managed fields that n8n doesn't allow in API updates
+    const systemManagedFields = [
+      'id',
+      'createdAt',
+      'updatedAt',
+      'versionId',
+      'active',
+      'tags',
+      'triggerCount',
+      'shared',
+      'isArchived',
+    ];
+
+    // Create a cleaned copy with only allowed fields
+    const cleanedWorkflow: Record<string, unknown> = {
+      name: workflow.name,
+      nodes: workflow.nodes,
+      connections: workflow.connections,
+    };
+
+    // Optional fields that are allowed
+    if (workflow.settings) {
+      cleanedWorkflow.settings = workflow.settings;
+    }
+    if ((workflow as any).staticData) {
+      cleanedWorkflow.staticData = (workflow as any).staticData;
+    }
+    if ((workflow as any).pinData) {
+      cleanedWorkflow.pinData = (workflow as any).pinData;
+    }
+    if ((workflow as any).meta) {
+      cleanedWorkflow.meta = (workflow as any).meta;
+    }
+
+    logger.info(
+      `[handleCleanWorkflow] Removed ${systemManagedFields.length} system-managed fields`
+    );
+
+    // Validate the cleaned workflow
+    const validator = new WorkflowValidator(repository, EnhancedConfigValidator);
+    const validationResult = await validator.validateWorkflow(cleanedWorkflow as any, {
+      validateNodes: true,
+      validateConnections: true,
+      profile: 'strict',
+    });
+
+    if (!validationResult.valid) {
+      logger.warn(
+        `[handleCleanWorkflow] Cleaned workflow still has validation errors: ${validationResult.errors.length}`
+      );
+
+      return {
+        success: false,
+        error:
+          '⚠️ Workflow cleaned but has structural errors that need manual fixing',
+        details: {
+          cleaned: true,
+          systemFieldsRemoved: systemManagedFields,
+          errors: validationResult.errors,
+          message:
+            'The system-managed fields have been identified and removed. However, the workflow has additional structural issues that must be fixed manually.',
+          suggestions: validationResult.suggestions,
+          validationStats: validationResult.statistics,
+        },
+      };
+    }
+
+    logger.info(
+      `[handleCleanWorkflow] Validation passed after cleaning. Safe to update.`
+    );
+
+    return {
+      success: true,
+      data: {
+        cleaned: true,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        systemFieldsRemoved: systemManagedFields,
+        cleanedWorkflow: cleanedWorkflow,
+        validationResult: {
+          valid: validationResult.valid,
+          errors: validationResult.errors,
+          warnings: validationResult.warnings,
+          statistics: validationResult.statistics,
+        },
+      },
+      message:
+        '✅ Workflow cleaned successfully! System-managed fields removed. The workflow is now safe to update via n8n_update_workflow.',
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: 'Invalid input',
+        details: { errors: error.errors },
+      };
+    }
+
+    if (error instanceof N8nApiError) {
+      return {
+        success: false,
+        error: getUserFriendlyErrorMessage(error),
+        code: error.code,
+      };
+    }
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
     };
   }
 }

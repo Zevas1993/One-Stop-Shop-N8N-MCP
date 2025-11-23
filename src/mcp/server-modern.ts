@@ -352,7 +352,10 @@ export class UnifiedMCPServer {
             case "create":
               if (!workflow) throw new Error("workflow required");
               return this.formatResponse(
-                await n8nHandlers.handleCreateWorkflow(workflow)
+                await n8nHandlers.handleCreateWorkflow(
+                  workflow,
+                  this.initManager.getRepository()
+                )
               );
             case "get":
               if (!id) throw new Error("id required");
@@ -362,7 +365,10 @@ export class UnifiedMCPServer {
             case "update":
               if (!id || !changes) throw new Error("id and changes required");
               return this.formatResponse(
-                await n8nHandlers.handleUpdateWorkflow({ id, ...changes })
+                await n8nHandlers.handleUpdateWorkflow(
+                  { id, ...changes },
+                  this.initManager.getRepository()
+                )
               );
             case "list":
               return this.formatResponse(

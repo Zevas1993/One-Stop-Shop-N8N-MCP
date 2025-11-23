@@ -234,14 +234,14 @@ export class N8nApiClient {
       const webhookPath = url.pathname;
       
       // Make request directly to webhook endpoint
+      // Remove API key from headers for webhook endpoints
+      const webhookHeaders = { ...headers };
+      delete webhookHeaders['X-N8N-API-KEY'];
+
       const config: AxiosRequestConfig = {
         method: httpMethod,
         url: webhookPath,
-        headers: {
-          ...headers,
-          // Don't override API key header for webhook endpoints
-          'X-N8N-API-KEY': undefined,
-        },
+        headers: webhookHeaders,
         data: httpMethod !== 'GET' ? data : undefined,
         params: httpMethod === 'GET' ? data : undefined,
         // Webhooks might take longer

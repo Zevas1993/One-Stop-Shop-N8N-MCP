@@ -80,8 +80,8 @@ async function testN8nManagerIntegration() {
         }
       ],
       connections: {
-        '1': {
-          main: [[{ node: '2', type: 'main', index: 0 }]]
+        'Start': {  // Use node NAME (not ID '1')
+          main: [[{ node: 'Set', type: 'main', index: 0 }]]  // Use target node NAME (not ID '2')
         }
       },
       settings: {

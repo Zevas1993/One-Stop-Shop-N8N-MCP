@@ -778,9 +778,13 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
         return n8nHandlers.handleDiagnostic({
           params: { arguments: { verbose } },
         });
+      case "n8n_create_workflow":
+        return await n8nHandlers.handleCreateWorkflow(args, this.repository);
+      case "n8n_update_workflow":
+        return await n8nHandlers.handleUpdateWorkflow(args, this.repository);
       default:
         throw new Error(
-          `INVALID: operation "${operation}". Valid options: health, list_tools, diagnose.`
+          `INVALID: operation "${operation}". Valid options: health, list_tools, diagnose, n8n_create_workflow, n8n_update_workflow.`
         );
     }
   }

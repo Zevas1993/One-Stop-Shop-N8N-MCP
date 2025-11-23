@@ -48,6 +48,7 @@
     "test:update-partial:debug": "node dist/scripts/test-update-partial-debug.js",
     "test:v3": "node dist/scripts/test-v3-implementation.js",
     "test:v3:runtime": "node scripts/test-v3-runtime.js",
+    "update:outlook-workflow": "node dist/scripts/update-outlook-workflow.js",
     "benchmark": "node scripts/benchmark.js",
     "dashboard": "node dist/dashboard/dashboard-server.js",
     "dashboard:dev": "nodemon --watch src/dashboard --ext ts --exec 'npm run build && npm run dashboard'",

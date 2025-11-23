@@ -95,15 +95,12 @@ export function cleanWorkflowForCreate(workflow: Partial<Workflow>): Partial<Wor
 
 export function cleanWorkflowForUpdate(workflow: Workflow): Partial<Workflow> {
   const {
-    // Remove read-only/computed fields
+    // Remove read-only/system-managed fields
     id,
     createdAt,
     updatedAt,
     versionId,
     meta,
-    staticData,
-    // Remove fields that cause API errors
-    pinData,
     tags,
     // Remove additional fields that n8n API doesn't accept
     isArchived,
@@ -111,7 +108,10 @@ export function cleanWorkflowForUpdate(workflow: Workflow): Partial<Workflow> {
     sharedWithProjects,
     triggerCount,
     shared,
-    active,
+    // NOTE: Allow these fields for updates
+    // - active: Can be updated (used by activation endpoint)
+    // - staticData: User-settable node state
+    // - pinData: User-settable pinned execution data
     // Keep everything else
     ...cleanedWorkflow
   } = workflow as any;
