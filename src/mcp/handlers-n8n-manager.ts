@@ -22,8 +22,6 @@ import {
 } from "../utils/n8n-errors";
 import { logger } from "../utils/logger";
 import { z } from "zod";
-import { WorkflowValidator } from "../services/workflow-validator";
-import { EnhancedConfigValidator } from "../services/enhanced-config-validator";
 import { NodeRepository } from "../database/node-repository";
 import { validationCache } from "../utils/validation-cache";
 import {
@@ -31,6 +29,7 @@ import {
   recordWorkflowCreation,
   recordExecutionError,
 } from "../mcp/handler-shared-memory";
+import { validateWorkflowUnified } from "../mcp/unified-validation";
 
 // Singleton n8n API client instance
 let apiClient: N8nApiClient | null = null;
@@ -179,17 +178,11 @@ export async function handleCreateWorkflow(
     // If not in cache, run full validation immediately
     if (!validationStatus.validated) {
       logger.info(
-        "[handleCreateWorkflow] Workflow not in validation cache, running immediate validation"
+        "[handleCreateWorkflow] Workflow not in validation cache, running validation via unified system"
       );
 
-      const validator = new WorkflowValidator(
-        repository,
-        EnhancedConfigValidator
-      );
-      // We need to cast input to WorkflowJson-like structure.
-      // The schema uses z.any() for nodes/connections but validator expects typed objects.
-      // At runtime, input.nodes and input.connections are the objects we need.
-      const validationResult = await validator.validateWorkflow(workflowInput as any, {
+      // PHASE 3 INTEGRATION: Use unified validation system (single point of truth)
+      const validationResult = await validateWorkflowUnified(workflowInput as any, repository, {
         validateNodes: true,
         validateConnections: true,
         profile: "runtime",
@@ -555,13 +548,12 @@ export async function handleUpdateWorkflow(
       }
 
       // ENFORCE VALIDATION
-      logger.info("[handleUpdateWorkflow] Running strict validation on update");
-      const validator = new WorkflowValidator(
-        repository,
-        EnhancedConfigValidator
-      );
-      const validationResult = await validator.validateWorkflow(
+      logger.info("[handleUpdateWorkflow] Running strict validation on update via unified system");
+
+      // PHASE 3 INTEGRATION: Use unified validation system (single point of truth)
+      const validationResult = await validateWorkflowUnified(
         workflowToValidate as any,
+        repository,
         {
           validateNodes: true,
           validateConnections: true,
@@ -821,15 +813,10 @@ export async function handleValidateWorkflow(
 
     const workflow = workflowResponse.data as Workflow;
 
-    // Create validator instance using the provided repository
-    const validator = new WorkflowValidator(
-      repository,
-      EnhancedConfigValidator
-    );
-
-    // Run validation
-    const validationResult = await validator.validateWorkflow(
+    // PHASE 3 INTEGRATION: Use unified validation system (single point of truth)
+    const validationResult = await validateWorkflowUnified(
       workflow,
+      repository,
       input.options
     );
 
@@ -851,7 +838,7 @@ export async function handleValidateWorkflow(
     };
 
     if (validationResult.errors.length > 0) {
-      response.errors = validationResult.errors.map((e) => ({
+      response.errors = validationResult.errors.map((e: any) => ({
         node: e.nodeName || "workflow",
         message: e.message,
         details: e.details,
@@ -859,7 +846,7 @@ export async function handleValidateWorkflow(
     }
 
     if (validationResult.warnings.length > 0) {
-      response.warnings = validationResult.warnings.map((w) => ({
+      response.warnings = validationResult.warnings.map((w: any) => ({
         node: w.nodeName || "workflow",
         message: w.message,
         details: w.details,
@@ -1612,9 +1599,9 @@ export async function handleCleanWorkflow(
       `[handleCleanWorkflow] Removed ${systemManagedFields.length} system-managed fields`
     );
 
-    // Validate the cleaned workflow
-    const validator = new WorkflowValidator(repository, EnhancedConfigValidator);
-    const validationResult = await validator.validateWorkflow(cleanedWorkflow as any, {
+    // Validate the cleaned workflow using unified system
+    // PHASE 3 INTEGRATION: Use unified validation system (single point of truth)
+    const validationResult = await validateWorkflowUnified(cleanedWorkflow as any, repository, {
       validateNodes: true,
       validateConnections: true,
       profile: 'strict',
