@@ -134,3 +134,27 @@ export function logN8nError(error: N8nApiError, context?: string): void {
     logger.error('n8n API error', errorInfo);
   }
 }
+
+/**
+ * Standardized error response formatter for MCP tools
+ * Ensures consistent error response structure across all handlers
+ */
+export interface StandardErrorResponse {
+  success: false;
+  error: string;
+  code?: string;
+  details?: Record<string, unknown>;
+}
+
+export function createErrorResponse(
+  message: string,
+  code?: string,
+  details?: Record<string, unknown>
+): StandardErrorResponse {
+  return {
+    success: false,
+    error: message,
+    ...(code && { code }),
+    ...(details && { details }),
+  };
+}

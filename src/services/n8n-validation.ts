@@ -307,21 +307,53 @@ IMPORTANT: In connections, use the node NAME (e.g., "Manual Trigger"), NOT the n
 // Helper function to fix common workflow issues
 export function getWorkflowFixSuggestions(errors: string[]): string[] {
   const suggestions: string[] = [];
-  
+
   if (errors.some(e => e.includes('empty connections'))) {
     suggestions.push('Add connections between your nodes. Each node (except endpoints) should connect to another node.');
     suggestions.push('Connection format: connections: { "Source Node Name": { "main": [[{ "node": "Target Node Name", "type": "main", "index": 0 }]] } }');
   }
-  
+
   if (errors.some(e => e.includes('Single-node workflows'))) {
     suggestions.push('Add at least one more node to process data. Common patterns: Trigger → Process → Output');
     suggestions.push('Examples: Manual Trigger → Set, Webhook → HTTP Request, Schedule Trigger → Database Query');
   }
-  
+
   if (errors.some(e => e.includes('node ID') && e.includes('instead of node name'))) {
     suggestions.push('Replace node IDs with node names in connections. The name is what appears in the node header.');
     suggestions.push('Wrong: connections: { "set-1": {...} }, Right: connections: { "Set Data": {...} }');
   }
-  
+
   return suggestions;
+}
+
+/**
+ * Validate workflow request size to prevent API failures
+ * n8n has practical limits on request size (typically 1-2 MB depending on instance configuration)
+ * This ensures workflows don't exceed reasonable limits
+ */
+export function validateWorkflowSize(
+  workflow: Partial<Workflow>,
+  maxSizeMB: number = 1
+): { valid: boolean; error?: string; sizeKB?: number } {
+  try {
+    const json = JSON.stringify(workflow);
+    const sizeKB = Buffer.byteLength(json, 'utf8') / 1024;
+    const sizeMB = sizeKB / 1024;
+
+    if (sizeMB > maxSizeMB) {
+      return {
+        valid: false,
+        error: `Workflow exceeds size limit. Current: ${sizeMB.toFixed(2)}MB, Max: ${maxSizeMB}MB. Reduce node count or parameter complexity.`,
+        sizeKB
+      };
+    }
+
+    return { valid: true, sizeKB };
+  } catch (error) {
+    // If JSON serialization fails, the workflow has circular references or other issues
+    return {
+      valid: false,
+      error: 'Workflow contains invalid data that cannot be serialized'
+    };
+  }
 }

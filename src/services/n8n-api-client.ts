@@ -97,9 +97,33 @@ export class N8nApiClient {
       // This is a fallback for older n8n versions
       try {
         await this.client.get('/workflows', { params: { limit: 1 } });
-        return { 
+
+        // Fallback endpoint succeeded, now try to detect features
+        const features: Record<string, boolean> = {
+          sourceControl: false,
+          externalHooks: false,
+          workers: false,
+        };
+
+        // Try to detect source control support
+        try {
+          await this.client.get('/source-control/status');
+          features.sourceControl = true;
+        } catch {
+          // Source control not available
+        }
+
+        // Try to detect external hooks support
+        try {
+          await this.client.get('/external-hooks');
+          features.externalHooks = true;
+        } catch {
+          // External hooks not available
+        }
+
+        return {
           status: 'ok',
-          features: {} // We can't determine features without proper health endpoint
+          features
         };
       } catch (fallbackError) {
         throw handleN8nApiError(fallbackError);

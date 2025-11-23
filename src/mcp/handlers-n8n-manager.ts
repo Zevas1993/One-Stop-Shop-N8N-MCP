@@ -10,6 +10,7 @@ import {
 } from "../types/n8n-api";
 import {
   validateWorkflowStructure,
+  validateWorkflowSize,
   hasWebhookTrigger,
   getWebhookUrl,
 } from "../services/n8n-validation";
@@ -17,12 +18,14 @@ import {
   N8nApiError,
   N8nNotFoundError,
   getUserFriendlyErrorMessage,
+  createErrorResponse,
 } from "../utils/n8n-errors";
 import { logger } from "../utils/logger";
 import { z } from "zod";
 import { WorkflowValidator } from "../services/workflow-validator";
 import { EnhancedConfigValidator } from "../services/enhanced-config-validator";
 import { NodeRepository } from "../database/node-repository";
+import { validationCache } from "../utils/validation-cache";
 
 // Singleton n8n API client instance
 let apiClient: N8nApiClient | null = null;
@@ -139,6 +142,14 @@ export async function handleCreateWorkflow(
     const client = ensureApiConfigured();
     const input = createWorkflowSchema.parse(args);
 
+    // Check workflow size to prevent API failures
+    const sizeValidation = validateWorkflowSize(input, 1); // 1MB limit
+    if (!sizeValidation.valid) {
+      return createErrorResponse(sizeValidation.error || "Workflow too large", "WORKFLOW_SIZE_ERROR", {
+        sizeKB: sizeValidation.sizeKB
+      });
+    }
+
     // ENFORCE VALIDATION REQUIREMENT - Check validation cache first
     const { validationCache } = await import("../utils/validation-cache");
     const validationStatus = validationCache.isValidatedAndValid(input);
@@ -163,6 +174,13 @@ export async function handleCreateWorkflow(
       });
 
       if (!validationResult.valid) {
+        // Record the invalid validation result in cache for next time
+        validationCache.recordValidation(input, {
+          valid: false,
+          errors: validationResult.errors,
+          warnings: validationResult.warnings || []
+        });
+
         return {
           success: false,
           error:
@@ -178,6 +196,13 @@ export async function handleCreateWorkflow(
       }
 
       logger.info("[handleCreateWorkflow] Immediate validation passed");
+
+      // Record the valid validation result in cache for next time
+      validationCache.recordValidation(input, {
+        valid: true,
+        errors: [],
+        warnings: validationResult.warnings || []
+      });
     } else if (!validationStatus.valid) {
       // It was in cache but marked invalid
       return {
@@ -196,11 +221,7 @@ export async function handleCreateWorkflow(
     // Additional basic validation (keep existing for safety)
     const errors = validateWorkflowStructure(input);
     if (errors.length > 0) {
-      return {
-        success: false,
-        error: "Workflow validation failed",
-        details: { errors },
-      };
+      return createErrorResponse("Workflow validation failed", "WORKFLOW_STRUCTURE_ERROR", { errors });
     }
 
     // Create workflow
@@ -213,26 +234,21 @@ export async function handleCreateWorkflow(
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: "Invalid input",
-        details: { errors: error.errors },
-      };
+      return createErrorResponse("Invalid input", "VALIDATION_ERROR", { errors: error.errors });
     }
 
     if (error instanceof N8nApiError) {
-      return {
-        success: false,
-        error: getUserFriendlyErrorMessage(error),
-        code: error.code,
-        details: error.details as Record<string, unknown> | undefined,
-      };
+      return createErrorResponse(
+        getUserFriendlyErrorMessage(error),
+        error.code,
+        error.details as Record<string, unknown> | undefined
+      );
     }
 
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-    };
+    return createErrorResponse(
+      error instanceof Error ? error.message : "Unknown error occurred",
+      "UNKNOWN_ERROR"
+    );
   }
 }
 
@@ -455,6 +471,14 @@ export async function handleUpdateWorkflow(
         workflowToValidate = fullWorkflow;
       }
 
+      // Check workflow size to prevent API failures
+      const sizeValidation = validateWorkflowSize(fullWorkflow, 1); // 1MB limit
+      if (!sizeValidation.valid) {
+        return createErrorResponse(sizeValidation.error || "Workflow too large", "WORKFLOW_SIZE_ERROR", {
+          sizeKB: sizeValidation.sizeKB
+        });
+      }
+
       // ENFORCE VALIDATION
       logger.info("[handleUpdateWorkflow] Running strict validation on update");
       const validator = new WorkflowValidator(
@@ -471,6 +495,13 @@ export async function handleUpdateWorkflow(
       );
 
       if (!validationResult.valid) {
+        // Record the invalid validation result in cache
+        validationCache.recordValidation(workflowToValidate, {
+          valid: false,
+          errors: validationResult.errors,
+          warnings: validationResult.warnings || []
+        });
+
         return {
           success: false,
           error:
@@ -484,13 +515,16 @@ export async function handleUpdateWorkflow(
         };
       }
 
+      // Record the valid validation result in cache
+      validationCache.recordValidation(workflowToValidate, {
+        valid: true,
+        errors: [],
+        warnings: validationResult.warnings || []
+      });
+
       const errors = validateWorkflowStructure(fullWorkflow);
       if (errors.length > 0) {
-        return {
-          success: false,
-          error: "Workflow validation failed",
-          details: { errors },
-        };
+        return createErrorResponse("Workflow validation failed", "WORKFLOW_STRUCTURE_ERROR", { errors });
       }
     }
 
@@ -504,26 +538,21 @@ export async function handleUpdateWorkflow(
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: "Invalid input",
-        details: { errors: error.errors },
-      };
+      return createErrorResponse("Invalid input", "VALIDATION_ERROR", { errors: error.errors });
     }
 
     if (error instanceof N8nApiError) {
-      return {
-        success: false,
-        error: getUserFriendlyErrorMessage(error),
-        code: error.code,
-        details: error.details as Record<string, unknown> | undefined,
-      };
+      return createErrorResponse(
+        getUserFriendlyErrorMessage(error),
+        error.code,
+        error.details as Record<string, unknown> | undefined
+      );
     }
 
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-    };
+    return createErrorResponse(
+      error instanceof Error ? error.message : "Unknown error occurred",
+      "UNKNOWN_ERROR"
+    );
   }
 }
 
@@ -820,26 +849,21 @@ export async function handleTriggerWebhookWorkflow(
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: "Invalid input",
-        details: { errors: error.errors },
-      };
+      return createErrorResponse("Invalid input", "VALIDATION_ERROR", { errors: error.errors });
     }
 
     if (error instanceof N8nApiError) {
-      return {
-        success: false,
-        error: getUserFriendlyErrorMessage(error),
-        code: error.code,
-        details: error.details as Record<string, unknown> | undefined,
-      };
+      return createErrorResponse(
+        getUserFriendlyErrorMessage(error),
+        error.code,
+        error.details as Record<string, unknown> | undefined
+      );
     }
 
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-    };
+    return createErrorResponse(
+      error instanceof Error ? error.message : "Unknown error occurred",
+      "UNKNOWN_ERROR"
+    );
   }
 }
 

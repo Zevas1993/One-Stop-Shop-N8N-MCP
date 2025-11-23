@@ -236,21 +236,31 @@ export class WorkflowDiffEngine {
   // Node operation validators
   private validateAddNode(workflow: Workflow, operation: AddNodeOperation): string | null {
     const { node } = operation;
-    
+
     // Check if node with same name already exists
     if (workflow.nodes.some(n => n.name === node.name)) {
       return `Node with name "${node.name}" already exists`;
     }
-    
+
     // Validate node type format
     if (!node.type.includes('.')) {
       return `Invalid node type "${node.type}". Must include package prefix (e.g., "n8n-nodes-base.webhook")`;
     }
-    
+
     if (node.type.startsWith('nodes-base.')) {
       return `Invalid node type "${node.type}". Use "n8n-nodes-base.${node.type.substring(11)}" instead`;
     }
-    
+
+    // Validate typeVersion (required for versioned nodes)
+    if (node.typeVersion === undefined || node.typeVersion === null) {
+      return `Node "${node.name}" of type "${node.type}" requires a typeVersion. Typically use typeVersion: 1`;
+    }
+
+    // Validate typeVersion is a non-negative number
+    if (typeof node.typeVersion !== 'number' || node.typeVersion < 0) {
+      return `Invalid typeVersion "${node.typeVersion}" for node "${node.name}". typeVersion must be a non-negative number`;
+    }
+
     return null;
   }
 
@@ -282,6 +292,15 @@ export class WorkflowDiffEngine {
     if (!node) {
       return `Node not found: ${operation.nodeId || operation.nodeName}`;
     }
+
+    // If typeVersion is being updated, validate it
+    if (operation.changes?.typeVersion !== undefined) {
+      const typeVersion = operation.changes.typeVersion;
+      if (typeof typeVersion !== 'number' || typeVersion < 0) {
+        return `Invalid typeVersion "${typeVersion}" for node "${node.name}". typeVersion must be a non-negative number`;
+      }
+    }
+
     return null;
   }
 
