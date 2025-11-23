@@ -473,7 +473,7 @@ export class WorkflowAgent extends BaseAgent {
       nodes: [
         {
           name: 'Schedule Trigger',
-          type: 'n8n-nodes-base.schedule',
+          type: 'n8n-nodes-base.scheduletrigger',
           position: [100, 100],
           parameters: {
             interval: ['days'],
@@ -614,7 +614,7 @@ export class WorkflowAgent extends BaseAgent {
       },
       {
         name: 'Schedule Trigger',
-        type: 'n8n-nodes-base.schedule',
+        type: 'n8n-nodes-base.scheduletrigger',
         description: 'Trigger a workflow on a schedule',
       },
       {
