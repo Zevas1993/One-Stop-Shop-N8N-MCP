@@ -51,7 +51,9 @@
       "Bash(python3:*)",
       "Bash(npm run test:workflow-validation:*)",
       "Bash(npm test:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run rebuild:local:*)",
+      "Bash(timeout 10 node:*)"
     ],
     "deny": [],
     "ask": []

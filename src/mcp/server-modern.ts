@@ -1202,20 +1202,18 @@ export class UnifiedMCPServer {
   }
 
   async run(): Promise<void> {
-    // Initialize nano agent orchestrator on server startup
-    try {
-      logger.info(
-        "[Server] Initializing nano agent orchestrator on startup..."
-      );
-      await this.initializeNanoAgentOrchestrator();
-      logger.info("[Server] ✅ Nano agent orchestrator initialized");
-    } catch (error) {
-      logger.warn(
-        "[Server] Failed to initialize nano agent orchestrator on startup:",
-        error instanceof Error ? error.message : String(error)
-      );
-      // Don't fail server startup, but log the warning
-    }
+    // Initialize nano agent orchestrator in background (non-blocking)
+    // This prevents the server from hanging during startup
+    this.initializeNanoAgentOrchestrator()
+      .then(() => {
+        logger.info("[Server] ✅ Nano agent orchestrator initialized");
+      })
+      .catch((error) => {
+        logger.warn(
+          "[Server] Failed to initialize nano agent orchestrator:",
+          error instanceof Error ? error.message : String(error)
+        );
+      });
 
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
@@ -1224,10 +1222,25 @@ export class UnifiedMCPServer {
 
   /**
    * Initialize nano agent orchestrator if not already done
+   * Uses timeout to prevent hanging during startup
    */
   private async initializeNanoAgentOrchestrator(): Promise<void> {
-    const { ensureOrchestratorReady } = await import("./tools-nano-agents");
-    await ensureOrchestratorReady();
+    try {
+      const { ensureOrchestratorReady } = await import("./tools-nano-agents");
+
+      // Wrap with timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Orchestrator initialization timeout (30s)")), 30000)
+      );
+
+      await Promise.race([ensureOrchestratorReady(), timeoutPromise]);
+    } catch (error) {
+      // Don't rethrow - orchestrator is optional for basic functionality
+      logger.warn(
+        "[Server] Orchestrator initialization skipped:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
   }
 
   async connect(transport: any): Promise<void> {
