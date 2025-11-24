@@ -167,9 +167,13 @@ export async function handleCreateWorkflow(
         "validation",
         { sizeKB: sizeValidation.sizeKB }
       );
-      return createErrorResponse(sizeValidation.error || "Workflow too large", "WORKFLOW_SIZE_ERROR", {
-        sizeKB: sizeValidation.sizeKB
-      });
+      return createErrorResponse(
+        sizeValidation.error || "Workflow too large",
+        "WORKFLOW_SIZE_ERROR",
+        {
+          sizeKB: sizeValidation.sizeKB,
+        }
+      );
     }
 
     // ENFORCE VALIDATION REQUIREMENT - Check validation cache first
@@ -182,18 +186,22 @@ export async function handleCreateWorkflow(
       );
 
       // PHASE 3 INTEGRATION: Use unified validation system (single point of truth)
-      const validationResult = await validateWorkflowUnified(workflowInput as any, repository, {
-        validateNodes: true,
-        validateConnections: true,
-        profile: "runtime",
-      });
+      const validationResult = await validateWorkflowUnified(
+        workflowInput as any,
+        repository,
+        {
+          validateNodes: true,
+          validateConnections: true,
+          profile: "runtime",
+        }
+      );
 
       if (!validationResult.valid) {
         // Record the invalid validation result in cache for next time
         validationCache.recordValidation(workflowInput, {
           valid: false,
           errors: validationResult.errors,
-          warnings: validationResult.warnings || []
+          warnings: validationResult.warnings || [],
         });
 
         // PHASE 2 INTEGRATION: Record error for agent feedback
@@ -201,7 +209,10 @@ export async function handleCreateWorkflow(
           `workflow_creation:${(workflowInput as any).name || "unknown"}`,
           `Validation failed with ${validationResult.errors.length} errors`,
           "validation",
-          { errors: validationResult.errors, warnings: validationResult.warnings }
+          {
+            errors: validationResult.errors,
+            warnings: validationResult.warnings,
+          }
         );
 
         return {
@@ -224,7 +235,7 @@ export async function handleCreateWorkflow(
       validationCache.recordValidation(workflowInput, {
         valid: true,
         errors: [],
-        warnings: validationResult.warnings || []
+        warnings: validationResult.warnings || [],
       });
     } else if (!validationStatus.valid) {
       // It was in cache but marked invalid
@@ -257,7 +268,11 @@ export async function handleCreateWorkflow(
         "validation",
         { structureErrors: errors }
       );
-      return createErrorResponse("Workflow validation failed", "WORKFLOW_STRUCTURE_ERROR", { errors });
+      return createErrorResponse(
+        "Workflow validation failed",
+        "WORKFLOW_STRUCTURE_ERROR",
+        { errors }
+      );
     }
 
     // Create workflow
@@ -288,7 +303,9 @@ export async function handleCreateWorkflow(
         "validation",
         { errors: error.errors }
       );
-      return createErrorResponse("Invalid input", "VALIDATION_ERROR", { errors: error.errors });
+      return createErrorResponse("Invalid input", "VALIDATION_ERROR", {
+        errors: error.errors,
+      });
     }
 
     if (error instanceof N8nApiError) {
@@ -305,7 +322,8 @@ export async function handleCreateWorkflow(
       );
     }
 
-    const errorMsg = error instanceof Error ? error.message : "Unknown error occurred";
+    const errorMsg =
+      error instanceof Error ? error.message : "Unknown error occurred";
     await recordExecutionError(
       `workflow_creation:${(args as any)?.name || "unknown"}`,
       errorMsg,
@@ -313,10 +331,7 @@ export async function handleCreateWorkflow(
       { stack: error instanceof Error ? error.stack : undefined }
     );
 
-    return createErrorResponse(
-      errorMsg,
-      "UNKNOWN_ERROR"
-    );
+    return createErrorResponse(errorMsg, "UNKNOWN_ERROR");
   }
 }
 
@@ -526,6 +541,24 @@ export async function handleUpdateWorkflow(
 
     // If nodes/connections are being updated, validate the structure
     if (updateData.nodes || updateData.connections) {
+      // AUTO-CLEAN: Remove system fields that might cause validation errors
+      const systemFields = [
+        "createdAt",
+        "updatedAt",
+        "active",
+        "tags",
+        "versionId",
+        "triggerCount",
+        "shared",
+        "isArchived",
+      ];
+
+      for (const field of systemFields) {
+        if (field in updateData) {
+          delete (updateData as any)[field];
+        }
+      }
+
       // Fetch current workflow if only partial update
       let fullWorkflow = updateData as Partial<Workflow>;
       let workflowToValidate = updateData;
@@ -542,13 +575,19 @@ export async function handleUpdateWorkflow(
       // Check workflow size to prevent API failures
       const sizeValidation = validateWorkflowSize(fullWorkflow, 1); // 1MB limit
       if (!sizeValidation.valid) {
-        return createErrorResponse(sizeValidation.error || "Workflow too large", "WORKFLOW_SIZE_ERROR", {
-          sizeKB: sizeValidation.sizeKB
-        });
+        return createErrorResponse(
+          sizeValidation.error || "Workflow too large",
+          "WORKFLOW_SIZE_ERROR",
+          {
+            sizeKB: sizeValidation.sizeKB,
+          }
+        );
       }
 
       // ENFORCE VALIDATION
-      logger.info("[handleUpdateWorkflow] Running strict validation on update via unified system");
+      logger.info(
+        "[handleUpdateWorkflow] Running strict validation on update via unified system"
+      );
 
       // PHASE 3 INTEGRATION: Use unified validation system (single point of truth)
       const validationResult = await validateWorkflowUnified(
@@ -566,7 +605,7 @@ export async function handleUpdateWorkflow(
         validationCache.recordValidation(workflowToValidate, {
           valid: false,
           errors: validationResult.errors,
-          warnings: validationResult.warnings || []
+          warnings: validationResult.warnings || [],
         });
 
         return {
@@ -586,12 +625,16 @@ export async function handleUpdateWorkflow(
       validationCache.recordValidation(workflowToValidate, {
         valid: true,
         errors: [],
-        warnings: validationResult.warnings || []
+        warnings: validationResult.warnings || [],
       });
 
       const errors = validateWorkflowStructure(fullWorkflow);
       if (errors.length > 0) {
-        return createErrorResponse("Workflow validation failed", "WORKFLOW_STRUCTURE_ERROR", { errors });
+        return createErrorResponse(
+          "Workflow validation failed",
+          "WORKFLOW_STRUCTURE_ERROR",
+          { errors }
+        );
       }
     }
 
@@ -605,7 +648,9 @@ export async function handleUpdateWorkflow(
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return createErrorResponse("Invalid input", "VALIDATION_ERROR", { errors: error.errors });
+      return createErrorResponse("Invalid input", "VALIDATION_ERROR", {
+        errors: error.errors,
+      });
     }
 
     if (error instanceof N8nApiError) {
@@ -911,7 +956,9 @@ export async function handleTriggerWebhookWorkflow(
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return createErrorResponse("Invalid input", "VALIDATION_ERROR", { errors: error.errors });
+      return createErrorResponse("Invalid input", "VALIDATION_ERROR", {
+        errors: error.errors,
+      });
     }
 
     if (error instanceof N8nApiError) {
@@ -1563,15 +1610,15 @@ export async function handleCleanWorkflow(
 
     // List of system-managed fields that n8n doesn't allow in API updates
     const systemManagedFields = [
-      'id',
-      'createdAt',
-      'updatedAt',
-      'versionId',
-      'active',
-      'tags',
-      'triggerCount',
-      'shared',
-      'isArchived',
+      "id",
+      "createdAt",
+      "updatedAt",
+      "versionId",
+      "active",
+      "tags",
+      "triggerCount",
+      "shared",
+      "isArchived",
     ];
 
     // Create a cleaned copy with only allowed fields
@@ -1601,11 +1648,15 @@ export async function handleCleanWorkflow(
 
     // Validate the cleaned workflow using unified system
     // PHASE 3 INTEGRATION: Use unified validation system (single point of truth)
-    const validationResult = await validateWorkflowUnified(cleanedWorkflow as any, repository, {
-      validateNodes: true,
-      validateConnections: true,
-      profile: 'strict',
-    });
+    const validationResult = await validateWorkflowUnified(
+      cleanedWorkflow as any,
+      repository,
+      {
+        validateNodes: true,
+        validateConnections: true,
+        profile: "strict",
+      }
+    );
 
     if (!validationResult.valid) {
       logger.warn(
@@ -1615,13 +1666,13 @@ export async function handleCleanWorkflow(
       return {
         success: false,
         error:
-          '⚠️ Workflow cleaned but has structural errors that need manual fixing',
+          "⚠️ Workflow cleaned but has structural errors that need manual fixing",
         details: {
           cleaned: true,
           systemFieldsRemoved: systemManagedFields,
           errors: validationResult.errors,
           message:
-            'The system-managed fields have been identified and removed. However, the workflow has additional structural issues that must be fixed manually.',
+            "The system-managed fields have been identified and removed. However, the workflow has additional structural issues that must be fixed manually.",
           suggestions: validationResult.suggestions,
           validationStats: validationResult.statistics,
         },
@@ -1648,13 +1699,13 @@ export async function handleCleanWorkflow(
         },
       },
       message:
-        '✅ Workflow cleaned successfully! System-managed fields removed. The workflow is now safe to update via n8n_update_workflow.',
+        "✅ Workflow cleaned successfully! System-managed fields removed. The workflow is now safe to update via n8n_update_workflow.",
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: 'Invalid input',
+        error: "Invalid input",
         details: { errors: error.errors },
       };
     }
@@ -1669,7 +1720,7 @@ export async function handleCleanWorkflow(
 
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: error instanceof Error ? error.message : "Unknown error occurred",
     };
   }
 }
