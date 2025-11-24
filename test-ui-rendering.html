@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>n8n Workflow Rendering Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #ff6d5a;
+            padding-bottom: 10px;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+        .error { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+        .warning { background: #fff3cd; color: #856404; border-left: 4px solid #ffc107; }
+        .info { background: #d1ecf1; color: #0c5460; border-left: 4px solid #17a2b8; }
+        button {
+            background: #ff6d5a;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #ff5a45;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .node-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .node-card {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .node-card h4 {
+            margin: 0 0 5px 0;
+            color: #007bff;
+        }
+        .node-card p {
+            margin: 5px 0;
+            font-size: 12px;
+            color: #666;
+        }
+        #test-results {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 n8n Workflow Rendering Diagnostic Tool</h1>
+
+    <div class="section">
+        <h2>Test Configuration</h2>
+        <div>
+            <label>n8n API URL:</label>
+            <input type="text" id="apiUrl" value="http://localhost:5678" style="width: 300px; padding: 5px;">
+        </div>
+        <div style="margin-top: 10px;">
+            <label>Workflow ID:</label>
+            <input type="text" id="workflowId" value="2dTTm6g4qFmcTob1" style="width: 300px; padding: 5px;">
+        </div>
+        <div style="margin-top: 10px;">
+            <label>API Key:</label>
+            <input type="password" id="apiKey" style="width: 500px; padding: 5px;">
+        </div>
+        <div style="margin-top: 10px;">
+            <button onclick="runTests()">▶️ Run Diagnostic Tests</button>
+            <button onclick="clearResults()">🗑️ Clear Results</button>
+            <button onclick="openWorkflow()">🌐 Open Workflow in n8n UI</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Diagnostic Instructions</h2>
+        <div class="info">
+            <strong>How to diagnose the rendering issue:</strong>
+            <ol>
+                <li>Enter your n8n API key above</li>
+                <li>Click "Run Diagnostic Tests" to fetch and analyze the workflow</li>
+                <li>Click "Open Workflow in n8n UI" to open it in a new tab</li>
+                <li>While that tab is open, press <strong>F12</strong> to open browser DevTools</li>
+                <li>Go to the <strong>Console</strong> tab</li>
+                <li>Look for any RED error messages</li>
+                <li>Copy those errors and share them</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Test Results</h2>
+        <div id="test-results"></div>
+    </div>
+
+    <div class="section" id="workflow-details" style="display: none;">
+        <h2>Workflow Details</h2>
+        <div id="workflow-info"></div>
+    </div>
+
+    <script>
+        let workflowData = null;
+
+        function log(message, type = 'info') {
+            const results = document.getElementById('test-results');
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function clearResults() {
+            document.getElementById('test-results').innerHTML = '';
+            document.getElementById('workflow-details').style.display = 'none';
+        }
+
+        async function runTests() {
+            clearResults();
+            const apiUrl = document.getElementById('apiUrl').value;
+            const workflowId = document.getElementById('workflowId').value;
+            const apiKey = document.getElementById('apiKey').value;
+
+            if (!apiKey) {
+                log('❌ Please enter your n8n API key', 'error');
+                return;
+            }
+
+            log('🚀 Starting diagnostic tests...', 'info');
+
+            // Test 1: Check API connectivity
+            log('Test 1: Checking n8n API connectivity...', 'info');
+            try {
+                const response = await fetch(`${apiUrl}/api/v1/workflows/${workflowId}`, {
+                    headers: {
+                        'X-N8N-API-KEY': apiKey
+                    }
+                });
+
+                if (!response.ok) {
+                    log(`❌ API request failed: ${response.status} ${response.statusText}`, 'error');
+                    return;
+                }
+
+                log('✅ Successfully connected to n8n API', 'success');
+                workflowData = await response.json();
+
+                // Test 2: Validate JSON structure
+                log('Test 2: Validating JSON structure...', 'info');
+                if (!workflowData.nodes || !Array.isArray(workflowData.nodes)) {
+                    log('❌ Missing or invalid nodes array', 'error');
+                } else {
+                    log(`✅ Found ${workflowData.nodes.length} nodes`, 'success');
+                }
+
+                if (typeof workflowData.connections !== 'object') {
+                    log('❌ Missing or invalid connections object', 'error');
+                } else {
+                    log(`✅ Found ${Object.keys(workflowData.connections).length} connection sources`, 'success');
+                }
+
+                // Test 3: Validate node structure
+                log('Test 3: Validating node structures...', 'info');
+                let nodeErrors = 0;
+                workflowData.nodes.forEach((node, index) => {
+                    if (!node.id) {
+                        log(`❌ Node ${index}: Missing ID`, 'error');
+                        nodeErrors++;
+                    }
+                    if (!node.name) {
+                        log(`❌ Node ${index}: Missing name`, 'error');
+                        nodeErrors++;
+                    }
+                    if (!node.type) {
+                        log(`❌ Node ${index}: Missing type`, 'error');
+                        nodeErrors++;
+                    }
+                    if (!Array.isArray(node.position) || node.position.length !== 2) {
+                        log(`❌ Node ${node.name || index}: Invalid position array`, 'error');
+                        nodeErrors++;
+                    }
+                    if (!node.typeVersion) {
+                        log(`⚠️ Node ${node.name || index}: Missing typeVersion`, 'warning');
+                    }
+                });
+
+                if (nodeErrors === 0) {
+                    log('✅ All nodes have valid structure', 'success');
+                } else {
+                    log(`❌ Found ${nodeErrors} node structure errors`, 'error');
+                }
+
+                // Test 4: Validate connections
+                log('Test 4: Validating connections...', 'info');
+                let connectionErrors = 0;
+                const nodeNames = new Set(workflowData.nodes.map(n => n.name));
+
+                Object.entries(workflowData.connections).forEach(([sourceName, outputs]) => {
+                    if (!nodeNames.has(sourceName)) {
+                        log(`❌ Connection source "${sourceName}" doesn't match any node`, 'error');
+                        connectionErrors++;
+                    }
+
+                    Object.values(outputs).forEach(groups => {
+                        if (Array.isArray(groups)) {
+                            groups.forEach(group => {
+                                if (Array.isArray(group)) {
+                                    group.forEach(conn => {
+                                        if (!nodeNames.has(conn.node)) {
+                                            log(`❌ Connection target "${conn.node}" doesn't exist`, 'error');
+                                            connectionErrors++;
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                });
+
+                if (connectionErrors === 0) {
+                    log('✅ All connections are valid', 'success');
+                } else {
+                    log(`❌ Found ${connectionErrors} connection errors`, 'error');
+                }
+
+                // Test 5: Check for circular references
+                log('Test 5: Checking for circular references...', 'info');
+                try {
+                    JSON.stringify(workflowData);
+                    log('✅ No circular references detected', 'success');
+                } catch (e) {
+                    log(`❌ Circular reference detected: ${e.message}`, 'error');
+                }
+
+                // Test 6: Check node types
+                log('Test 6: Analyzing node types...', 'info');
+                const nodeTypes = {};
+                workflowData.nodes.forEach(node => {
+                    if (!nodeTypes[node.type]) {
+                        nodeTypes[node.type] = 0;
+                    }
+                    nodeTypes[node.type]++;
+                });
+
+                Object.entries(nodeTypes).forEach(([type, count]) => {
+                    log(`📦 ${type}: ${count} node(s)`, 'info');
+                });
+
+                // Display workflow details
+                displayWorkflowDetails();
+
+                log('✅ All diagnostic tests complete!', 'success');
+                log('', 'info');
+                log('🎯 NEXT STEP: Click "Open Workflow in n8n UI" and check browser console for errors', 'warning');
+
+            } catch (error) {
+                log(`❌ Error during tests: ${error.message}`, 'error');
+                console.error('Test error:', error);
+            }
+        }
+
+        function displayWorkflowDetails() {
+            if (!workflowData) return;
+
+            const detailsSection = document.getElementById('workflow-details');
+            const infoDiv = document.getElementById('workflow-info');
+
+            let html = `
+                <div class="info">
+                    <strong>Workflow: ${workflowData.name}</strong><br>
+                    ID: ${workflowData.id}<br>
+                    Created: ${new Date(workflowData.createdAt).toLocaleString()}<br>
+                    Updated: ${new Date(workflowData.updatedAt).toLocaleString()}<br>
+                    Active: ${workflowData.active ? 'Yes' : 'No'}
+                </div>
+
+                <h3>Nodes (${workflowData.nodes.length})</h3>
+                <div class="node-list">
+            `;
+
+            workflowData.nodes.forEach(node => {
+                html += `
+                    <div class="node-card">
+                        <h4>${node.name}</h4>
+                        <p><strong>Type:</strong> ${node.type}</p>
+                        <p><strong>ID:</strong> ${node.id}</p>
+                        <p><strong>Position:</strong> [${node.position.join(', ')}]</p>
+                        <p><strong>Version:</strong> ${node.typeVersion || 'N/A'}</p>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+
+            infoDiv.innerHTML = html;
+            detailsSection.style.display = 'block';
+        }
+
+        function openWorkflow() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const workflowId = document.getElementById('workflowId').value;
+            const url = `${apiUrl}/workflow/${workflowId}`;
+
+            log(`🌐 Opening workflow in new tab: ${url}`, 'info');
+            log('⚠️ Once opened, press F12 and check the Console tab for errors!', 'warning');
+
+            window.open(url, '_blank');
+        }
+
+        // Auto-populate API key from localStorage if available
+        window.addEventListener('load', () => {
+            const savedApiKey = localStorage.getItem('n8n_api_key');
+            if (savedApiKey) {
+                document.getElementById('apiKey').value = savedApiKey;
+            }
+        });
+
+        // Save API key to localStorage when it changes
+        document.getElementById('apiKey').addEventListener('change', (e) => {
+            localStorage.setItem('n8n_api_key', e.target.value);
+        });
+    </script>
+</body>
+</html>

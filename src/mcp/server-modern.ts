@@ -97,7 +97,11 @@ export class UnifiedMCPServer {
     this.setupTools();
     this.setupResources();
     this.setupPrompts();
-    this.startVersionMonitoring();
+
+    // Start version monitoring in background (non-blocking)
+    this.startVersionMonitoring().catch((error) => {
+      logger.warn("Version monitoring failed:", error);
+    });
   }
 
   private findDatabasePath(): string {
