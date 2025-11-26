@@ -41,6 +41,7 @@
     "test:n8n-manager": "node dist/scripts/test-n8n-manager-integration.js",
     "test:n8n-validate-workflow": "node dist/scripts/test-n8n-validate-workflow.js",
     "test:typeversion-validation": "node dist/scripts/test-typeversion-validation.js",
+    "test:parameter-validation": "node dist/scripts/test-parameter-validation.js",
     "test:workflow-diff": "node dist/scripts/test-workflow-diff.js",
     "test:github": "node dist/scripts/test-github-integration.js",
     "test:transactional-diff": "node dist/scripts/test-transactional-diff.js",

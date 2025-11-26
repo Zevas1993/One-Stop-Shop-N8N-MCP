@@ -1,0 +1,250 @@
+{
+  "timestamp": "2025-11-24T05:25:52.919Z",
+  "totalNodes": 21,
+  "issues": [],
+  "nodeTypes": {
+    "n8n-nodes-base.webhook": [
+      "Open WebUI Chat Interface"
+    ],
+    "n8n-nodes-base.set": [
+      "Parse Chat Input",
+      "Extract Email Metadata",
+      "Format Response for WebUI"
+    ],
+    "n8n-nodes-base.manualTrigger": [
+      "Email Processing Trigger"
+    ],
+    "n8n-nodes-base.outlook": [
+      "Get Unprocessed Emails",
+      "Move Spam to Junk",
+      "Update Email Categories"
+    ],
+    "n8n-nodes-base.splitInBatches": [
+      "Process Each Email"
+    ],
+    "@n8n/n8n-nodes-langchain.openAi": [
+      "Clean Email Content"
+    ],
+    "@n8n/n8n-nodes-langchain.textClassifier": [
+      "AI Email Classifier"
+    ],
+    "n8n-nodes-base.switch": [
+      "Email Category Router"
+    ],
+    "@n8n/n8n-nodes-langchain.agent": [
+      "Business Inquiry Agent",
+      "Main Email Assistant"
+    ],
+    "n8n-nodes-base.microsoftOutlookTool": [
+      "Create Draft Tool",
+      "Send Email Tool",
+      "Search Emails Tool"
+    ],
+    "@n8n/n8n-nodes-langchain.vectorStorePGVector": [
+      "Knowledge Search Tool"
+    ],
+    "@n8n/n8n-nodes-langchain.lmChatOpenAi": [
+      "OpenAI Chat Model"
+    ],
+    "@n8n/n8n-nodes-langchain.memoryBufferWindow": [
+      "Memory Buffer"
+    ],
+    "n8n-nodes-base.respondToWebhook": [
+      "Send Response to WebUI"
+    ]
+  },
+  "workflow": {
+    "name": "Ultimate Outlook AI Assistant - Open WebUI (Updated via MCP)",
+    "nodes": [
+      {
+        "id": "webui-webhook",
+        "name": "Open WebUI Chat Interface",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "parse-input",
+        "name": "Parse Chat Input",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "email-trigger",
+        "name": "Email Processing Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "get-emails",
+        "name": "Get Unprocessed Emails",
+        "type": "n8n-nodes-base.outlook",
+        "typeVersion": 2,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "split-emails",
+        "name": "Process Each Email",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "clean-content",
+        "name": "Clean Email Content",
+        "type": "@n8n/n8n-nodes-langchain.openAi",
+        "typeVersion": 1.8,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "extract-metadata",
+        "name": "Extract Email Metadata",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "classify-email",
+        "name": "AI Email Classifier",
+        "type": "@n8n/n8n-nodes-langchain.textClassifier",
+        "typeVersion": 1,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "route-category",
+        "name": "Email Category Router",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "business-agent",
+        "name": "Business Inquiry Agent",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 1.7,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "move-spam",
+        "name": "Move Spam to Junk",
+        "type": "n8n-nodes-base.outlook",
+        "typeVersion": 2,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "main-agent",
+        "name": "Main Email Assistant",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 1.7,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "create-draft-tool",
+        "name": "Create Draft Tool",
+        "type": "n8n-nodes-base.microsoftOutlookTool",
+        "typeVersion": 2,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "send-email-tool",
+        "name": "Send Email Tool",
+        "type": "n8n-nodes-base.microsoftOutlookTool",
+        "typeVersion": 2,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "search-emails-tool",
+        "name": "Search Emails Tool",
+        "type": "n8n-nodes-base.microsoftOutlookTool",
+        "typeVersion": 2,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "knowledge-tool",
+        "name": "Knowledge Search Tool",
+        "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+        "typeVersion": 1,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "openai-model",
+        "name": "OpenAI Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "memory-buffer",
+        "name": "Memory Buffer",
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "format-response",
+        "name": "Format Response for WebUI",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "send-response",
+        "name": "Send Response to WebUI",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      },
+      {
+        "id": "update-categories",
+        "name": "Update Email Categories",
+        "type": "n8n-nodes-base.outlook",
+        "typeVersion": 2,
+        "hasParameters": true,
+        "parametersType": "object",
+        "positionValid": true
+      }
+    ]
+  }
+}

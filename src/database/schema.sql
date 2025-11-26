@@ -71,6 +71,13 @@ CREATE TABLE IF NOT EXISTS github_sync_metadata (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Database metadata table for version tracking
+CREATE TABLE IF NOT EXISTS db_metadata (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Full-text search for templates
 CREATE VIRTUAL TABLE IF NOT EXISTS templates_fts USING fts5(
   name, description, content=templates

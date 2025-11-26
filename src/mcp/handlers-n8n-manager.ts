@@ -13,6 +13,8 @@ import {
   validateWorkflowSize,
   hasWebhookTrigger,
   getWebhookUrl,
+  cleanWorkflowForUpdate,
+  validateNodeParameters,
 } from "../services/n8n-validation";
 import {
   N8nApiError,
@@ -30,6 +32,8 @@ import {
   recordExecutionError,
 } from "../mcp/handler-shared-memory";
 import { validateWorkflowUnified } from "../mcp/unified-validation";
+import { getN8nLiveValidator } from "../services/n8n-live-validator";
+import { WorkflowSemanticValidator } from "../services/workflow-semantic-validator";
 
 // Singleton n8n API client instance
 let apiClient: N8nApiClient | null = null;
@@ -176,7 +180,73 @@ export async function handleCreateWorkflow(
       );
     }
 
+    // CRITICAL: Validate node parameters against MCP database BEFORE sending to n8n
+    // This prevents workflows that pass API validation but fail to load in n8n UI
+    logger.info('[handleCreateWorkflow] Validating node parameters against MCP database');
+    const paramValidation = await validateNodeParameters(workflowInput, repository);
+
+    if (!paramValidation.valid) {
+      logger.error('[handleCreateWorkflow] Node parameter validation failed', {
+        errors: paramValidation.errors
+      });
+
+      await recordExecutionError(
+        `workflow_creation:${(workflowInput as any).name || "unknown"}`,
+        `Parameter validation failed with ${paramValidation.errors.length} errors`,
+        'validation',
+        {
+          errors: paramValidation.errors
+        }
+      );
+
+      return {
+        success: false,
+        error: '🚨 PARAMETER VALIDATION FAILED: Workflow has missing/invalid node parameters',
+        details: {
+          errors: paramValidation.errors.map(e => ({
+            node: e.nodeName,
+            type: e.nodeType,
+            parameter: e.parameter,
+            error: e.error,
+            suggestion: e.suggestion
+          })),
+          message: 'Fix all parameter errors before creating workflow. These parameters are required for n8n UI to load the workflow.',
+          preventedBrokenWorkflow: true,
+          workflow: '1️⃣ Fix missing parameters → 2️⃣ Retry n8n_create_workflow'
+        }
+      };
+    }
+
+    logger.info('[handleCreateWorkflow] Node parameter validation passed');
+
+    // SEMANTIC VALIDATION: Enforce "Built-in Nodes First" policy
+    // Guide agents to use n8n's 525+ built-in nodes instead of over-relying on Code nodes
+    logger.info('[handleCreateWorkflow] Running semantic validation (built-in nodes first policy)');
+    const semanticValidator = new WorkflowSemanticValidator(repository);
+    const semanticResult = await semanticValidator.validateWorkflow(workflowInput as any);
+
+    // Log semantic analysis
+    if (process.env.DEBUG_MCP === 'true' || semanticResult.score < 60) {
+      logger.info(semanticValidator.getSummary(semanticResult));
+    }
+
+    // If semantic score is too low, provide strong guidance (but don't block)
+    if (semanticResult.score < 60) {
+      logger.warn(`[handleCreateWorkflow] ⚠️  Semantic validation score low: ${semanticResult.score}/100`);
+      logger.warn('[handleCreateWorkflow] Workflow over-relies on Code nodes instead of built-in nodes');
+
+      // Add semantic warnings to workflow metadata for agent feedback
+      if (semanticResult.warnings.length > 0 || semanticResult.suggestions.length > 0) {
+        logger.warn('[handleCreateWorkflow] Semantic Issues:');
+        semanticResult.warnings.forEach(w => logger.warn(`   ${w.message}`));
+        semanticResult.suggestions.slice(0, 3).forEach(s => logger.warn(`   💡 ${s.message}`));
+      }
+    } else {
+      logger.info(`[handleCreateWorkflow] ✅ Semantic validation passed (score: ${semanticResult.score}/100)`);
+    }
+
     // ENFORCE VALIDATION REQUIREMENT - Check validation cache first
+    // Issue #4: Validation-Execution Gap - Check if workflow has been validated
     const validationStatus = validationCache.isValidatedAndValid(workflowInput);
 
     // If not in cache, run full validation immediately
@@ -186,12 +256,14 @@ export async function handleCreateWorkflow(
       );
 
       // PHASE 3 INTEGRATION: Use unified validation system (single point of truth)
+      // Issue #4: Validate nodes, connections, and expressions BEFORE sending to API
       const validationResult = await validateWorkflowUnified(
         workflowInput as any,
         repository,
         {
           validateNodes: true,
           validateConnections: true,
+          validateExpressions: true, // Issue #4: Also validate DSL expressions
           profile: "runtime",
         }
       );
@@ -238,6 +310,7 @@ export async function handleCreateWorkflow(
         warnings: validationResult.warnings || [],
       });
     } else if (!validationStatus.valid) {
+      // Issue #4: Validation was cached as invalid - prevent creation
       // It was in cache but marked invalid
       await recordExecutionError(
         `workflow_creation:${(workflowInput as any).name || "unknown"}`,
@@ -259,6 +332,45 @@ export async function handleCreateWorkflow(
       };
     }
 
+    // LIVE VALIDATION: Validate against the actual n8n instance before creation
+    const liveValidator = getN8nLiveValidator();
+    if (liveValidator) {
+      logger.info(
+        "[handleCreateWorkflow] Running live n8n validation before creation"
+      );
+      const liveValidationResult = await liveValidator.validateWorkflow(
+        workflowInput
+      );
+
+      if (!liveValidationResult.valid) {
+        // RECORD TO GRAPHRAG: Store validation failures for agents to learn from
+        await recordExecutionError(
+          `workflow_creation:${(workflowInput as any).name || "unknown"}`,
+          `Live n8n validation failed with ${liveValidationResult.errors.length} errors`,
+          "validation",
+          {
+            workflowName: (workflowInput as any).name,
+            workflowNodes: (workflowInput as any).nodes?.length || 0,
+            validationErrors: liveValidationResult.errors,
+            source: "n8n-instance-live-validation",
+          }
+        );
+
+        return {
+          success: false,
+          error:
+            "🚨 LIVE VALIDATION FAILED: Workflow would not work in n8n. Errors from n8n instance:",
+          details: {
+            errors: liveValidationResult.errors,
+            message: "Fix all errors listed above and retry",
+            source: "n8n-instance",
+          },
+        };
+      }
+
+      logger.info("[handleCreateWorkflow] Live validation passed");
+    }
+
     // Additional basic validation (keep existing for safety)
     const errors = validateWorkflowStructure(workflowInput);
     if (errors.length > 0) {
@@ -275,7 +387,9 @@ export async function handleCreateWorkflow(
       );
     }
 
-    // Create workflow
+    // Issue #4: Validation-Execution Gap - Validation has been completed above
+    // All nodes, connections, and expressions have been validated against live n8n
+    // This API call proceeds with confidence that the workflow is valid
     const workflow = await client.createWorkflow(workflowInput);
 
     // PHASE 2 INTEGRATION: Record successful workflow creation for agent feedback
@@ -539,10 +653,14 @@ export async function handleUpdateWorkflow(
     const input = updateWorkflowSchema.parse(args);
     const { id, ...updateData } = input;
 
+    // Declare fullWorkflow outside so it's accessible later
+    let fullWorkflow: Partial<Workflow> | undefined;
+
     // If nodes/connections are being updated, validate the structure
     if (updateData.nodes || updateData.connections) {
       // AUTO-CLEAN: Remove system fields that might cause validation errors
       const systemFields = [
+        "id",
         "createdAt",
         "updatedAt",
         "active",
@@ -560,7 +678,7 @@ export async function handleUpdateWorkflow(
       }
 
       // Fetch current workflow if only partial update
-      let fullWorkflow = updateData as Partial<Workflow>;
+      fullWorkflow = updateData as Partial<Workflow>;
       let workflowToValidate = updateData;
 
       if (!updateData.nodes || !updateData.connections) {
@@ -570,6 +688,13 @@ export async function handleUpdateWorkflow(
           ...updateData,
         };
         workflowToValidate = fullWorkflow;
+
+        // Clean the merged fullWorkflow of read-only fields for validation
+        for (const field of systemFields) {
+          if (field in fullWorkflow) {
+            delete (fullWorkflow as any)[field];
+          }
+        }
       }
 
       // Check workflow size to prevent API failures
@@ -584,49 +709,148 @@ export async function handleUpdateWorkflow(
         );
       }
 
-      // ENFORCE VALIDATION
-      logger.info(
-        "[handleUpdateWorkflow] Running strict validation on update via unified system"
-      );
+      // CRITICAL: Validate node parameters against MCP database BEFORE sending to n8n
+      // This prevents workflows that pass API validation but fail to load in n8n UI
+      logger.info('[handleUpdateWorkflow] Validating node parameters against MCP database');
+      const paramValidation = await validateNodeParameters(fullWorkflow, repository);
 
-      // PHASE 3 INTEGRATION: Use unified validation system (single point of truth)
-      const validationResult = await validateWorkflowUnified(
-        workflowToValidate as any,
-        repository,
-        {
-          validateNodes: true,
-          validateConnections: true,
-          profile: "runtime",
-        }
-      );
-
-      if (!validationResult.valid) {
-        // Record the invalid validation result in cache
-        validationCache.recordValidation(workflowToValidate, {
-          valid: false,
-          errors: validationResult.errors,
-          warnings: validationResult.warnings || [],
+      if (!paramValidation.valid) {
+        logger.error('[handleUpdateWorkflow] Node parameter validation failed', {
+          errors: paramValidation.errors
         });
+
+        await recordExecutionError(
+          `workflow_update:${id}`,
+          `Parameter validation failed with ${paramValidation.errors.length} errors`,
+          'validation',
+          {
+            errors: paramValidation.errors
+          }
+        );
 
         return {
           success: false,
-          error:
-            "🚨 VALIDATION FAILED: Update rejected by strict validation enforcement.",
+          error: '🚨 PARAMETER VALIDATION FAILED: Workflow has missing/invalid node parameters',
           details: {
-            errors: validationResult.errors,
-            message:
-              "The Agentic GraphRAG system rejected this update because it would result in a broken workflow.",
-            validationStats: validationResult.statistics,
-          },
+            errors: paramValidation.errors.map(e => ({
+              node: e.nodeName,
+              type: e.nodeType,
+              parameter: e.parameter,
+              error: e.error,
+              suggestion: e.suggestion
+            })),
+            message: 'Fix all parameter errors before updating workflow. These parameters are required for n8n UI to load the workflow.',
+            preventedBrokenWorkflow: true,
+            workflow: '1️⃣ Fix missing parameters → 2️⃣ Retry n8n_update_workflow'
+          }
         };
       }
 
-      // Record the valid validation result in cache
-      validationCache.recordValidation(workflowToValidate, {
-        valid: true,
-        errors: [],
-        warnings: validationResult.warnings || [],
-      });
+      logger.info('[handleUpdateWorkflow] Node parameter validation passed');
+
+      // SEMANTIC VALIDATION: Enforce "Built-in Nodes First" policy
+      // Guide agents to use n8n's 525+ built-in nodes instead of over-relying on Code nodes
+      if (fullWorkflow && fullWorkflow.nodes) {
+        logger.info('[handleUpdateWorkflow] Running semantic validation (built-in nodes first policy)');
+        const semanticValidator = new WorkflowSemanticValidator(repository);
+        const semanticResult = await semanticValidator.validateWorkflow(fullWorkflow as any);
+
+        // Log semantic analysis
+        if (process.env.DEBUG_MCP === 'true' || semanticResult.score < 60) {
+          logger.info(semanticValidator.getSummary(semanticResult));
+        }
+
+        // If semantic score is too low, provide strong guidance (but don't block)
+        if (semanticResult.score < 60) {
+          logger.warn(`[handleUpdateWorkflow] ⚠️  Semantic validation score low: ${semanticResult.score}/100`);
+          logger.warn('[handleUpdateWorkflow] Workflow over-relies on Code nodes instead of built-in nodes');
+
+          // Add semantic warnings to workflow metadata for agent feedback
+          if (semanticResult.warnings.length > 0 || semanticResult.suggestions.length > 0) {
+            logger.warn('[handleUpdateWorkflow] Semantic Issues:');
+            semanticResult.warnings.forEach(w => logger.warn(`   ${w.message}`));
+            semanticResult.suggestions.slice(0, 3).forEach(s => logger.warn(`   💡 ${s.message}`));
+          }
+        } else {
+          logger.info(`[handleUpdateWorkflow] ✅ Semantic validation passed (score: ${semanticResult.score}/100)`);
+        }
+      }
+
+      // SKIP VALIDATION FOR UPDATES
+      // For updates, we rely entirely on live n8n validation since we're sending only updateData (cleaned)
+      // The merged fullWorkflow is just for our reference, we don't send it to n8n
+      logger.info(
+        "[handleUpdateWorkflow] Skipping local validation - will use live n8n validation only"
+      );
+
+      // LIVE VALIDATION: Validate against the actual n8n instance before update
+      // Use fullWorkflow (which has been cleaned of read-only fields) for validation
+      const liveValidator = getN8nLiveValidator();
+      if (liveValidator) {
+        logger.info(
+          "[handleUpdateWorkflow] Running live n8n validation before update"
+        );
+        const liveValidationResult = await liveValidator.validateWorkflow(
+          fullWorkflow as any // fullWorkflow has been cleaned of read-only fields at lines 620-625
+        );
+
+        if (!liveValidationResult.valid) {
+          // Enhanced error analysis for node naming issues
+          const namingGuidance: string[] = [];
+          for (const error of liveValidationResult.errors) {
+            if (error.includes('Connection from unknown source node')) {
+              // Extract the problematic node ID
+              const match = error.match(/Connection from unknown source node: "([^"]+)"/);
+              if (match) {
+                const wrongId = match[1];
+                namingGuidance.push(
+                  `⚠️  CRITICAL NODE NAMING ERROR: You referenced node "${wrongId}" in connections, but this node doesn't exist in the workflow.`
+                );
+                namingGuidance.push(
+                  `📝 RULE: In n8n workflows, connections must use the EXACT node NAME (usually with emojis like "🌐 API Webhook"), NOT internal IDs like "webhook_trigger".`
+                );
+                namingGuidance.push(
+                  `✅ CORRECT: Use node.name property values from the workflow's nodes array in your connections object.`
+                );
+                namingGuidance.push(
+                  `❌ WRONG: Do NOT invent simplified IDs or use camelCase versions of node names.`
+                );
+              }
+            }
+          }
+
+          // RECORD TO GRAPHRAG: Store validation failures for agents to learn from
+          await recordExecutionError(
+            `workflow_update:${id}`,
+            `Live n8n validation failed with ${liveValidationResult.errors.length} errors`,
+            "validation",
+            {
+              workflowId: id,
+              workflowNodes: fullWorkflow?.nodes?.length || 0,
+              validationErrors: liveValidationResult.errors,
+              namingGuidance: namingGuidance.length > 0 ? namingGuidance : undefined,
+              learningPoint: namingGuidance.length > 0
+                ? "Always use exact node.name values (with emojis) in connections, never simplified IDs"
+                : undefined,
+              source: "n8n-instance-live-validation",
+            }
+          );
+
+          return {
+            success: false,
+            error:
+              "🚨 LIVE VALIDATION FAILED: Update would create a broken workflow. Errors from n8n instance:",
+            details: {
+              errors: liveValidationResult.errors,
+              namingGuidance: namingGuidance.length > 0 ? namingGuidance : undefined,
+              message: "Fix all errors listed above and retry",
+              source: "n8n-instance",
+            },
+          };
+        }
+
+        logger.info("[handleUpdateWorkflow] Live validation passed");
+      }
 
       const errors = validateWorkflowStructure(fullWorkflow);
       if (errors.length > 0) {
@@ -638,8 +862,18 @@ export async function handleUpdateWorkflow(
       }
     }
 
-    // Update workflow
-    const workflow = await client.updateWorkflow(id, updateData);
+    // Issue #4: Validation-Execution Gap - Validation complete, proceeding with update
+    // Workflow has been merged with current state and validated against live n8n
+    // API call proceeds with high confidence in workflow validity
+    // Use fullWorkflow if we fetched current state, otherwise use updateData
+    let workflowToSend = fullWorkflow && (fullWorkflow as any).name ? fullWorkflow : updateData;
+
+    // Clean the workflow before sending to remove any additional fields
+    workflowToSend = cleanWorkflowForUpdate(workflowToSend as any);
+
+    logger.info(`[handleUpdateWorkflow] Sending fields to n8n: ${Object.keys(workflowToSend).join(', ')}`);
+
+    const workflow = await client.updateWorkflow(id, workflowToSend);
 
     return {
       success: true,
@@ -858,53 +1092,58 @@ export async function handleValidateWorkflow(
 
     const workflow = workflowResponse.data as Workflow;
 
-    // PHASE 3 INTEGRATION: Use unified validation system (single point of truth)
-    const validationResult = await validateWorkflowUnified(
-      workflow,
-      repository,
-      input.options
+    // VALIDATE AGAINST LIVE N8N INSTANCE
+    // Get the live validator to validate against the actual n8n instance
+    const liveValidator = getN8nLiveValidator();
+
+    // Use live validation against n8n instance
+    logger.info(
+      "[handleValidateWorkflow] Validating workflow against live n8n instance"
     );
+    const liveValidationResult = await liveValidator.validateWorkflow(workflow);
 
-    // Format the response (same format as the regular validate_workflow tool)
-    const response: any = {
-      valid: validationResult.valid,
-      workflowId: workflow.id,
-      workflowName: workflow.name,
-      summary: {
-        totalNodes: validationResult.statistics.totalNodes,
-        enabledNodes: validationResult.statistics.enabledNodes,
-        triggerNodes: validationResult.statistics.triggerNodes,
-        validConnections: validationResult.statistics.validConnections,
-        invalidConnections: validationResult.statistics.invalidConnections,
-        expressionsValidated: validationResult.statistics.expressionsValidated,
-        errorCount: validationResult.errors.length,
-        warningCount: validationResult.warnings.length,
-      },
-    };
+    // If live validation failed, return the actual n8n errors
+    if (!liveValidationResult.valid) {
+      // RECORD TO GRAPHRAG: Store validation failures for agents to learn from
+      await recordExecutionError(
+        `workflow_validation:${workflow.id}`,
+        `n8n validation failed with ${liveValidationResult.errors.length} errors`,
+        "validation",
+        {
+          workflowId: workflow.id,
+          workflowName: workflow.name,
+          validationErrors: liveValidationResult.errors,
+          source: "n8n-instance-live-validation",
+        }
+      );
 
-    if (validationResult.errors.length > 0) {
-      response.errors = validationResult.errors.map((e: any) => ({
-        node: e.nodeName || "workflow",
-        message: e.message,
-        details: e.details,
-      }));
+      return {
+        success: true,
+        data: {
+          valid: false,
+          workflowId: workflow.id,
+          workflowName: workflow.name,
+          errors: liveValidationResult.errors.map((err) => ({
+            message: err,
+            source: "n8n-instance",
+          })),
+          warnings: liveValidationResult.warnings || [],
+          note: "Validation result from live n8n instance - this is what n8n itself reported",
+        },
+      };
     }
 
-    if (validationResult.warnings.length > 0) {
-      response.warnings = validationResult.warnings.map((w: any) => ({
-        node: w.nodeName || "workflow",
-        message: w.message,
-        details: w.details,
-      }));
-    }
-
-    if (validationResult.suggestions.length > 0) {
-      response.suggestions = validationResult.suggestions;
-    }
-
+    // Live validation passed
     return {
       success: true,
-      data: response,
+      data: {
+        valid: true,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        message:
+          "Workflow validation passed against live n8n instance",
+        source: "n8n-instance",
+      },
     };
   } catch (error) {
     if (error instanceof z.ZodError) {

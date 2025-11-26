@@ -102,13 +102,13 @@ export class NodeRepository {
     const cacheKey = QueryCache.generateKey('node_info', nodeType);
     const cached = nodeInfoCache.get(cacheKey);
     if (cached) return cached;
-    
+
     const row = this.db.prepare(`
       SELECT * FROM nodes WHERE node_type = ?
     `).get(nodeType) as any;
-    
+
     if (!row) return null;
-    
+
     const result = {
       nodeType: row.node_type,
       displayName: row.display_name,
@@ -127,7 +127,96 @@ export class NodeRepository {
       documentation: row.documentation,
       hasDocumentation: !!row.documentation
     };
-    
+
+    // Cache the result
+    nodeInfoCache.set(cacheKey, result);
+    return result;
+  }
+
+  /**
+   * Get node by type with optional version matching
+   * Used by NodeParameterValidator to validate node parameters
+   */
+  getNodeByType(nodeType: string, typeVersion?: number): any {
+    // Check cache first
+    const cacheKey = QueryCache.generateKey('node_by_type', nodeType, String(typeVersion || ''));
+    const cached = nodeInfoCache.get(cacheKey);
+    if (cached) return cached;
+
+    // Try exact match first
+    let row = this.db.prepare(`
+      SELECT * FROM nodes WHERE node_type = ?
+    `).get(nodeType) as any;
+
+    // If not found, try normalized versions
+    // Workflows use full package names, but database stores shortened names
+    if (!row) {
+      let normalizedType = nodeType;
+
+      // Handle: n8n-nodes-base.httpRequest → nodes-base.httpRequest
+      if (nodeType.startsWith('n8n-nodes-base.')) {
+        normalizedType = nodeType.replace('n8n-nodes-base.', 'nodes-base.');
+        row = this.db.prepare(`
+          SELECT * FROM nodes WHERE node_type = ?
+        `).get(normalizedType) as any;
+      }
+      // Handle: @n8n/n8n-nodes-langchain.agent → nodes-langchain.agent
+      else if (nodeType.startsWith('@n8n/n8n-nodes-langchain.')) {
+        normalizedType = nodeType.replace('@n8n/n8n-nodes-langchain.', 'nodes-langchain.');
+        row = this.db.prepare(`
+          SELECT * FROM nodes WHERE node_type = ?
+        `).get(normalizedType) as any;
+      }
+      // Handle: n8n-nodes-langchain.agent → nodes-langchain.agent
+      else if (nodeType.startsWith('n8n-nodes-langchain.')) {
+        normalizedType = nodeType.replace('n8n-nodes-langchain.', 'nodes-langchain.');
+        row = this.db.prepare(`
+          SELECT * FROM nodes WHERE node_type = ?
+        `).get(normalizedType) as any;
+      }
+      // Handle: @n8n/n8n-nodes-base.httpRequest → nodes-base.httpRequest
+      else if (nodeType.startsWith('@n8n/n8n-nodes-base.')) {
+        normalizedType = nodeType.replace('@n8n/n8n-nodes-base.', 'nodes-base.');
+        row = this.db.prepare(`
+          SELECT * FROM nodes WHERE node_type = ?
+        `).get(normalizedType) as any;
+      }
+      // Generic fallback: Remove any n8n- or @n8n/ prefix
+      else if (nodeType.startsWith('n8n-')) {
+        normalizedType = nodeType.substring(4); // Remove 'n8n-'
+        row = this.db.prepare(`
+          SELECT * FROM nodes WHERE node_type = ?
+        `).get(normalizedType) as any;
+      }
+      else if (nodeType.startsWith('@n8n/')) {
+        normalizedType = nodeType.substring(5); // Remove '@n8n/'
+        row = this.db.prepare(`
+          SELECT * FROM nodes WHERE node_type = ?
+        `).get(normalizedType) as any;
+      }
+    }
+
+    if (!row) return null;
+
+    const result = {
+      nodeType: row.node_type,
+      displayName: row.display_name,
+      description: row.description,
+      category: row.category,
+      developmentStyle: row.development_style,
+      package: row.package_name,
+      isAITool: !!row.is_ai_tool,
+      isTrigger: !!row.is_trigger,
+      isWebhook: !!row.is_webhook,
+      isVersioned: !!row.is_versioned,
+      version: row.version,
+      properties: this.safeJsonParse(row.properties_schema, []),
+      operations: this.safeJsonParse(row.operations, []),
+      credentials: this.safeJsonParse(row.credentials_required, []),
+      documentation: row.documentation,
+      hasDocumentation: !!row.documentation
+    };
+
     // Cache the result
     nodeInfoCache.set(cacheKey, result);
     return result;
@@ -250,7 +339,7 @@ export class NodeRepository {
     const triggers = this.db.prepare('SELECT COUNT(*) as count FROM nodes WHERE is_trigger = 1').get() as any;
     const webhooks = this.db.prepare('SELECT COUNT(*) as count FROM nodes WHERE is_webhook = 1').get() as any;
     const withDocs = this.db.prepare('SELECT COUNT(*) as count FROM nodes WHERE documentation IS NOT NULL').get() as any;
-    
+
     return {
       totalNodes: totalNodes.count,
       aiTools: aiTools.count,
@@ -259,6 +348,61 @@ export class NodeRepository {
       withDocumentation: withDocs.count,
       categories: this.getCategories()
     };
+  }
+
+  /**
+   * Get total count of nodes in database
+   * Used for verification after rebuild
+   */
+  getTotalCount(): number {
+    const result = this.db.prepare('SELECT COUNT(*) as count FROM nodes').get() as any;
+    return result.count;
+  }
+
+  /**
+   * Get current database n8n version
+   * Returns null if version not set (initial state)
+   */
+  getDbVersion(): string | null {
+    try {
+      const row = this.db.prepare(`
+        SELECT value FROM db_metadata WHERE key = 'n8n_version'
+      `).get() as any;
+
+      return row?.value || null;
+    } catch (error) {
+      // Table might not exist yet in older databases
+      return null;
+    }
+  }
+
+  /**
+   * Set database n8n version
+   * Called after successful rebuild for specific version
+   */
+  setDbVersion(version: string): void {
+    this.db.prepare(`
+      INSERT OR REPLACE INTO db_metadata (key, value, updated_at)
+      VALUES ('n8n_version', ?, CURRENT_TIMESTAMP)
+    `).run(version);
+  }
+
+  /**
+   * Initialize db_metadata table if it doesn't exist
+   * Called during database setup
+   */
+  initializeMetadata(): void {
+    try {
+      this.db.prepare(`
+        CREATE TABLE IF NOT EXISTS db_metadata (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+    } catch (error) {
+      // Table already exists, ignore error
+    }
   }
 
   /**

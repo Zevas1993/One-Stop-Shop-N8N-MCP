@@ -61,6 +61,13 @@ export class N8nApiClient {
   private maxRetries: number;
   public readonly baseUrl: string;
 
+  // Issue #2: Retry logic for transient failures
+  private readonly RETRYABLE_STATUS_CODES = [429, 503, 504];
+  private readonly RETRYABLE_ERRORS = ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED'];
+  private readonly INITIAL_BACKOFF_MS = 1000; // 1 second
+  private readonly MAX_BACKOFF_MS = 30000; // 30 seconds
+  private requestRetryCount = new Map<string, number>(); // Track retries per request
+
   constructor(config: N8nApiClientConfig) {
     const { baseUrl, apiKey, timeout = 30000, maxRetries = 3 } = config;
 
@@ -106,16 +113,15 @@ export class N8nApiClient {
       }
     );
 
-    // Response interceptor for logging
+    // Response interceptor with retry logic for transient failures (Issue #2)
     this.client.interceptors.response.use(
       (response: any) => {
         logger.debug(`n8n API Response: ${response.status} ${response.config.url}`);
         return response;
       },
       (error: unknown) => {
-        const n8nError = handleN8nApiError(error);
-        logN8nError(n8nError, 'n8n API Response');
-        return Promise.reject(n8nError);
+        // Handle error with retry logic
+        return this.handleResponseError(error);
       }
     );
   }
@@ -488,6 +494,106 @@ export class N8nApiClient {
     } catch (error) {
       throw handleN8nApiError(error);
     }
+  }
+
+  /**
+   * Issue #2: Retry Logic for Transient Failures
+   * Handles error responses with exponential backoff retry logic.
+   *
+   * Retryable errors:
+   * - HTTP 429 (Too Many Requests) - Rate limited
+   * - HTTP 503 (Service Unavailable) - Temporary server issue
+   * - HTTP 504 (Gateway Timeout) - Temporary network issue
+   * - ECONNRESET, ETIMEDOUT, ECONNREFUSED - Network connection issues
+   */
+  private async handleResponseError(error: unknown): Promise<any> {
+    const isRetryable = this.isRetryableError(error);
+    const config = (error as any)?.config;
+
+    // Only retry if error is retryable and we haven't exceeded max retries
+    if (!isRetryable || !config) {
+      const n8nError = handleN8nApiError(error);
+      logN8nError(n8nError, 'n8n API Response');
+      return Promise.reject(n8nError);
+    }
+
+    // Get or initialize retry count for this request
+    const requestKey = `${config.method}:${config.url}`;
+    const retryCount = (this.requestRetryCount.get(requestKey) || 0) + 1;
+
+    // Check if we've exceeded max retries
+    if (retryCount > this.maxRetries) {
+      logger.error(`Max retries (${this.maxRetries}) exceeded for ${requestKey}`);
+      const n8nError = handleN8nApiError(error);
+      logN8nError(n8nError, 'n8n API Response (after retries exhausted)');
+      this.requestRetryCount.delete(requestKey);
+      return Promise.reject(n8nError);
+    }
+
+    // Calculate exponential backoff with jitter
+    const backoffMs = this.calculateBackoff(retryCount);
+    const jitterMs = Math.random() * 100; // Add up to 100ms jitter
+    const totalWaitMs = backoffMs + jitterMs;
+
+    logger.warn(
+      `Retrying request (${retryCount}/${this.maxRetries}) after ${Math.round(totalWaitMs)}ms: ` +
+      `${config.method?.toUpperCase()} ${config.url}`
+    );
+
+    // Store retry count for next attempt
+    this.requestRetryCount.set(requestKey, retryCount);
+
+    // Wait and retry
+    await this.sleep(totalWaitMs);
+
+    // Retry the request
+    try {
+      const response = await this.client.request(config);
+      this.requestRetryCount.delete(requestKey);
+      return response;
+    } catch (retryError) {
+      // Recursive retry on subsequent failures
+      return this.handleResponseError(retryError);
+    }
+  }
+
+  /**
+   * Determine if an error is retryable (transient vs permanent)
+   */
+  private isRetryableError(error: unknown): boolean {
+    const axiosError = error as any;
+
+    // Check HTTP status codes
+    if (axiosError?.response?.status) {
+      return this.RETRYABLE_STATUS_CODES.includes(axiosError.response.status);
+    }
+
+    // Check for network-level errors
+    if (axiosError?.code) {
+      return this.RETRYABLE_ERRORS.includes(axiosError.code);
+    }
+
+    // Check for timeout errors
+    if (axiosError?.message?.includes('timeout')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Calculate exponential backoff: 1s, 2s, 4s, 8s, 16s (max 30s)
+   */
+  private calculateBackoff(retryCount: number): number {
+    const baseBackoff = Math.pow(2, retryCount - 1) * this.INITIAL_BACKOFF_MS;
+    return Math.min(baseBackoff, this.MAX_BACKOFF_MS);
+  }
+
+  /**
+   * Sleep utility for retry delays
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
 }

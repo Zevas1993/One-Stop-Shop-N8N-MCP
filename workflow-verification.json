@@ -1,0 +1,800 @@
+{
+  "createdAt": "2025-11-24T05:26:12.646Z",
+  "updatedAt": "2025-11-24T05:26:12.646Z",
+  "id": "tbdgq0FZmJKLQlsl",
+  "name": "Ultimate Outlook AI Assistant - Open WebUI (Updated via MCP)",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "webui-webhook",
+      "name": "Open WebUI Chat Interface",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        280,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-assistant",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "parse-input",
+      "name": "Parse Chat Input",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "userMessage",
+              "type": "string",
+              "value": "={{ $json.body.message || $json.body.text || $json.query.message }}"
+            },
+            {
+              "id": "2",
+              "name": "sessionId",
+              "type": "string",
+              "value": "={{ $json.body.sessionId || $json.query.sessionId || 'default' }}"
+            },
+            {
+              "id": "3",
+              "name": "userId",
+              "type": "string",
+              "value": "={{ $json.body.userId || $json.query.userId || 'user' }}"
+            }
+          ]
+        }
+      },
+      "typeVersion": 3.4
+    },
+    {
+      "id": "email-trigger",
+      "name": "Email Processing Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [
+        280,
+        600
+      ],
+      "parameters": {},
+      "typeVersion": 1
+    },
+    {
+      "id": "get-emails",
+      "name": "Get Unprocessed Emails",
+      "type": "n8n-nodes-base.outlook",
+      "position": [
+        500,
+        600
+      ],
+      "parameters": {
+        "limit": 15,
+        "resource": "message",
+        "operation": "getAll",
+        "filtersUI": {
+          "values": {
+            "filters": {
+              "custom": "flag/flagStatus eq 'notFlagged' and not categories/any()"
+            }
+          }
+        }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "split-emails",
+      "name": "Process Each Email",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [
+        720,
+        600
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "typeVersion": 3
+    },
+    {
+      "id": "clean-content",
+      "name": "Clean Email Content",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        940,
+        600
+      ],
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Clean and extract key information from this email, removing HTML while preserving structure:\n\n{{ $json.body.content }}"
+            }
+          ]
+        },
+        "operation": "text"
+      },
+      "typeVersion": 1.8
+    },
+    {
+      "id": "extract-metadata",
+      "name": "Extract Email Metadata",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1160,
+        600
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "emailId",
+              "type": "string",
+              "value": "={{ $('Get Unprocessed Emails').item.json.id }}"
+            },
+            {
+              "id": "2",
+              "name": "subject",
+              "type": "string",
+              "value": "={{ $('Get Unprocessed Emails').item.json.subject }}"
+            },
+            {
+              "id": "3",
+              "name": "sender",
+              "type": "object",
+              "value": "={{ $('Get Unprocessed Emails').item.json.sender.emailAddress }}"
+            },
+            {
+              "id": "4",
+              "name": "cleanBody",
+              "type": "string",
+              "value": "={{ $('Clean Email Content').item.json.message.content }}"
+            },
+            {
+              "id": "5",
+              "name": "hasAttachments",
+              "type": "boolean",
+              "value": "={{ $('Get Unprocessed Emails').item.json.hasAttachments }}"
+            }
+          ]
+        }
+      },
+      "typeVersion": 3.4
+    },
+    {
+      "id": "classify-email",
+      "name": "AI Email Classifier",
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "position": [
+        1380,
+        600
+      ],
+      "parameters": {
+        "inputText": "{{ $json.cleanBody }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "urgent_action",
+              "description": "Emails requiring immediate attention: escalations, critical issues, deadlines, system failures"
+            },
+            {
+              "category": "business_inquiry",
+              "description": "Business opportunities: project inquiries, partnership requests, sales leads"
+            },
+            {
+              "category": "support_request",
+              "description": "Technical support: customer service, troubleshooting, help requests"
+            },
+            {
+              "category": "billing_finance",
+              "description": "Financial matters: invoices, payments, receipts, accounting"
+            },
+            {
+              "category": "meeting_calendar",
+              "description": "Scheduling: meeting requests, calendar invites, appointments"
+            },
+            {
+              "category": "spam_junk",
+              "description": "Unwanted content: spam, phishing, suspicious emails"
+            }
+          ]
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "route-category",
+      "name": "Email Category Router",
+      "type": "n8n-nodes-base.switch",
+      "position": [
+        1600,
+        600
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "urgent",
+              "conditions": {
+                "options": {
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $('AI Email Classifier').item.json.category }}",
+                    "rightValue": "urgent_action"
+                  }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "business",
+              "conditions": {
+                "options": {
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $('AI Email Classifier').item.json.category }}",
+                    "rightValue": "business_inquiry"
+                  }
+                ]
+              },
+              "renameOutput": true
+            },
+            {
+              "outputKey": "spam",
+              "conditions": {
+                "options": {
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $('AI Email Classifier').item.json.category }}",
+                    "rightValue": "spam_junk"
+                  }
+                ]
+              },
+              "renameOutput": true
+            }
+          ]
+        }
+      },
+      "typeVersion": 3.2
+    },
+    {
+      "id": "business-agent",
+      "name": "Business Inquiry Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        1820,
+        500
+      ],
+      "parameters": {
+        "text": "Process this business inquiry:\n\nFrom: {{ $json.sender.name }} ({{ $json.sender.address }})\nSubject: {{ $json.subject }}\nContent: {{ $json.cleanBody }}",
+        "options": {
+          "systemMessage": "You are a professional business development assistant. For business inquiries:\n1. Analyze the opportunity and requirements\n2. Search knowledge base for relevant information\n3. Create professional draft responses\n4. Include relevant company capabilities\n5. Suggest next steps\n\nUse the Create Draft tool to generate responses and Knowledge Search to find relevant context."
+        },
+        "promptType": "define"
+      },
+      "typeVersion": 1.7
+    },
+    {
+      "id": "move-spam",
+      "name": "Move Spam to Junk",
+      "type": "n8n-nodes-base.outlook",
+      "position": [
+        1820,
+        700
+      ],
+      "parameters": {
+        "folderId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "junk"
+        },
+        "messageId": "={{ $json.emailId }}",
+        "operation": "move"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "main-agent",
+      "name": "Main Email Assistant",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "text": "{{ $json.userMessage }}",
+        "options": {
+          "systemMessage": "You are an intelligent email assistant with comprehensive capabilities:\n\n**EMAIL MANAGEMENT:**\n- Search emails by sender, subject, content, or date\n- Create and send professional responses\n- Categorize and organize emails\n- Handle attachments and extract information\n\n**CALENDAR FUNCTIONS:**\n- Check availability and schedule meetings\n- Manage calendar events and appointments\n- Send meeting invitations\n\n**KNOWLEDGE & CONTEXT:**\n- Search email history for past communications\n- Access knowledge base for relevant information\n- Provide context from previous interactions\n\n**COMMON COMMANDS:**\n- 'Check emails from [sender]'\n- 'Send email to [recipient] about [topic]'\n- 'Schedule meeting with [person]'\n- 'Show urgent emails'\n- 'Create draft response'\n- 'What meetings do I have today?'\n- 'Search emails about [topic]'\n\nAlways confirm important actions before executing. Provide clear, actionable responses."
+        },
+        "promptType": "define"
+      },
+      "typeVersion": 1.7
+    },
+    {
+      "id": "create-draft-tool",
+      "name": "Create Draft Tool",
+      "type": "n8n-nodes-base.microsoftOutlookTool",
+      "position": [
+        940,
+        200
+      ],
+      "parameters": {
+        "subject": "={{ $json.draft_subject || '' }}",
+        "resource": "draft",
+        "bodyContent": "={{ $json.draft_body || '' }}",
+        "additionalFields": {
+          "toRecipients": "={{ $json.draft_recipients || '' }}"
+        }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "send-email-tool",
+      "name": "Send Email Tool",
+      "type": "n8n-nodes-base.microsoftOutlookTool",
+      "position": [
+        940,
+        100
+      ],
+      "parameters": {
+        "subject": "={{ $json.email_subject || '' }}",
+        "bodyContent": "={{ $json.email_body || '' }}",
+        "toRecipients": "={{ $json.email_recipients || '' }}"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "search-emails-tool",
+      "name": "Search Emails Tool",
+      "type": "n8n-nodes-base.microsoftOutlookTool",
+      "position": [
+        940,
+        400
+      ],
+      "parameters": {
+        "limit": 10,
+        "operation": "getAll",
+        "filtersUI": {
+          "values": {
+            "filters": {
+              "search": "={{ $json.search_query || '' }}",
+              "sender": "={{ $json.sender_filter || '' }}"
+            }
+          }
+        }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "knowledge-tool",
+      "name": "Knowledge Search Tool",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "position": [
+        1160,
+        400
+      ],
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "knowledge_search",
+        "tableName": "email_knowledge",
+        "toolDescription": "Search email history and knowledge base for relevant context, past communications, and information"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "openai-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [
+        1160,
+        200
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "typeVersion": 1.2
+    },
+    {
+      "id": "memory-buffer",
+      "name": "Memory Buffer",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [
+        1160,
+        100
+      ],
+      "parameters": {
+        "sessionKey": "={{ $json.sessionId }}",
+        "sessionIdType": "customKey"
+      },
+      "typeVersion": 1.3
+    },
+    {
+      "id": "format-response",
+      "name": "Format Response for WebUI",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        940,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "response",
+              "type": "string",
+              "value": "={{ $json.output }}"
+            },
+            {
+              "id": "2",
+              "name": "timestamp",
+              "type": "string",
+              "value": "={{ $now.toISOString() }}"
+            },
+            {
+              "id": "3",
+              "name": "sessionId",
+              "type": "string",
+              "value": "={{ $('Parse Chat Input').item.json.sessionId }}"
+            }
+          ]
+        }
+      },
+      "typeVersion": 3.4
+    },
+    {
+      "id": "send-response",
+      "name": "Send Response to WebUI",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1160,
+        300
+      ],
+      "parameters": {
+        "options": {
+          "responseHeaders": {
+            "Content-Type": "application/json"
+          }
+        }
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "update-categories",
+      "name": "Update Email Categories",
+      "type": "n8n-nodes-base.outlook",
+      "position": [
+        1820,
+        600
+      ],
+      "parameters": {
+        "messageId": "={{ $json.emailId }}",
+        "operation": "update",
+        "updateFields": {
+          "categories": [
+            "{{ $('AI Email Classifier').item.json.category }}"
+          ]
+        }
+      },
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Open WebUI Chat Interface": {
+      "main": [
+        [
+          {
+            "node": "Parse Chat Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Chat Input": {
+      "main": [
+        [
+          {
+            "node": "Main Email Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Processing Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Unprocessed Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unprocessed Emails": {
+      "main": [
+        [
+          {
+            "node": "Process Each Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Each Email": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Clean Email Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Email Content": {
+      "main": [
+        [
+          {
+            "node": "Extract Email Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Email Metadata": {
+      "main": [
+        [
+          {
+            "node": "AI Email Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Email Classifier": {
+      "main": [
+        [
+          {
+            "node": "Email Category Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Category Router": {
+      "main": [
+        [
+          {
+            "node": "Update Email Categories",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Business Inquiry Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Move Spam to Junk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Main Email Assistant": {
+      "main": [
+        [
+          {
+            "node": "Format Response for WebUI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response for WebUI": {
+      "main": [
+        [
+          {
+            "node": "Send Response to WebUI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        {
+          "node": "Business Inquiry Agent"
+        },
+        {
+          "node": "Main Email Assistant"
+        }
+      ]
+    },
+    "Memory Buffer": {
+      "ai_memory": [
+        {
+          "node": "Main Email Assistant"
+        }
+      ]
+    },
+    "Create Draft Tool": {
+      "ai_tool": [
+        {
+          "node": "Main Email Assistant"
+        },
+        {
+          "node": "Business Inquiry Agent"
+        }
+      ]
+    },
+    "Send Email Tool": {
+      "ai_tool": [
+        {
+          "node": "Main Email Assistant"
+        }
+      ]
+    },
+    "Search Emails Tool": {
+      "ai_tool": [
+        {
+          "node": "Main Email Assistant"
+        }
+      ]
+    },
+    "Knowledge Search Tool": {
+      "ai_tool": [
+        {
+          "node": "Main Email Assistant"
+        },
+        {
+          "node": "Business Inquiry Agent"
+        }
+      ]
+    },
+    "Business Inquiry Agent": {
+      "main": [
+        [
+          {
+            "node": "Update Email Categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 3600,
+    "timezone": "UTC"
+  },
+  "staticData": {},
+  "meta": null,
+  "pinData": null,
+  "versionId": "34a8ceb4-0f25-409d-9ccd-59d233f0989e",
+  "triggerCount": 0,
+  "shared": [
+    {
+      "createdAt": "2025-11-24T05:26:12.651Z",
+      "updatedAt": "2025-11-24T05:26:12.651Z",
+      "role": "workflow:owner",
+      "workflowId": "tbdgq0FZmJKLQlsl",
+      "projectId": "KAqEj3HHvji8AcGd",
+      "project": {
+        "createdAt": "2025-06-09T17:28:06.319Z",
+        "updatedAt": "2025-06-09T17:29:23.291Z",
+        "id": "KAqEj3HHvji8AcGd",
+        "name": "Christopher Boyd <chrisboyd1993@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "projectRelations": [
+          {
+            "createdAt": "2025-06-09T17:28:06.319Z",
+            "updatedAt": "2025-06-09T17:28:06.319Z",
+            "role": "project:personalOwner",
+            "userId": "264ff696-8392-4df1-b443-8920770f237d",
+            "projectId": "KAqEj3HHvji8AcGd",
+            "user": {
+              "createdAt": "2025-06-09T17:28:05.803Z",
+              "updatedAt": "2025-11-24T05:08:38.000Z",
+              "id": "264ff696-8392-4df1-b443-8920770f237d",
+              "email": "chrisboyd1993@gmail.com",
+              "firstName": "Christopher",
+              "lastName": "Boyd",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-06-09T17:29:50.900Z",
+                "personalization_survey_n8n_version": "1.94.1",
+                "automationGoalDevops": [
+                  "other"
+                ],
+                "automationGoalDevopsOther": "mcp for n8n",
+                "companySize": "<20",
+                "companyType": "digital-agency",
+                "role": "it",
+                "reportedSource": "youtube"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "ztI8kh0A93SjZyBE",
+                "userActivatedAt": 1749519267551,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1749851231575
+                },
+                "dismissedCallouts": {
+                  "aiAgentStarterCallout": true
+                }
+              },
+              "role": "global:owner",
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2025-11-24",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

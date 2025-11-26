@@ -23,20 +23,25 @@ export interface PatternMatch {
 export class PatternAgent extends BaseAgent {
   private patterns: Map<string, WorkflowPattern>;
   private keywordIndex: Map<string, string[]>;
+  private patternEmbeddings: Map<string, number[]>; // Pre-computed embeddings for semantic matching
 
-  constructor(sharedMemory: SharedMemory) {
+  constructor(
+    sharedMemory: SharedMemory,
+    llmClients?: { embedding?: any; generation?: any }
+  ) {
     const config: AgentConfig = {
       id: "pattern-agent",
       name: "Pattern Discovery Agent",
-      description: "Identifies workflow patterns matching user goals",
+      description: "Identifies workflow patterns matching user goals using semantic similarity",
       role: "pattern-discovery",
       contextBudget: 12000, // 12K tokens for pattern analysis
       timeout: 30000, // 30 seconds max
     };
 
-    super(config, sharedMemory);
+    super(config, sharedMemory, llmClients);
     this.patterns = new Map();
     this.keywordIndex = new Map();
+    this.patternEmbeddings = new Map();
   }
 
   /**
@@ -47,18 +52,40 @@ export class PatternAgent extends BaseAgent {
     this.loadPatterns();
     this.buildKeywordIndex();
 
-    // Log that API schema knowledge is available for pattern matching
-    if (this.apiSchemaKnowledge) {
+    // Pre-compute embeddings for patterns if LLM available
+    if (this.hasLLMSupport().embedding) {
+      await this.precomputePatternEmbeddings();
       this.logger.info(
         "Pattern agent initialized with " +
           this.patterns.size +
-          " patterns and official n8n API schema knowledge"
+          " patterns (semantic matching enabled via nano LLM)"
       );
     } else {
       this.logger.info(
-        "Pattern agent initialized with " + this.patterns.size + " patterns"
+        "Pattern agent initialized with " +
+          this.patterns.size +
+          " patterns (keyword matching only - no LLM)"
       );
     }
+  }
+
+  /**
+   * Pre-compute embeddings for all patterns (for fast semantic matching)
+   */
+  private async precomputePatternEmbeddings(): Promise<void> {
+    this.logger.debug('Pre-computing embeddings for patterns...');
+
+    for (const [patternId, pattern] of this.patterns.entries()) {
+      // Create rich text representation of pattern
+      const patternText = `${pattern.name}: ${pattern.description}. Keywords: ${pattern.keywords.join(', ')}`;
+
+      const embedding = await this.generateEmbedding(patternText);
+      if (embedding) {
+        this.patternEmbeddings.set(patternId, embedding);
+      }
+    }
+
+    this.logger.debug(`Pre-computed ${this.patternEmbeddings.size} pattern embeddings`);
   }
 
   /**

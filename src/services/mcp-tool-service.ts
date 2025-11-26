@@ -533,6 +533,11 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
 
     const validationOptions = { ...options };
 
+    // Pass through skipApiFieldValidation if provided
+    if ('skipApiFieldValidation' in options) {
+      validationOptions.skipApiFieldValidation = options.skipApiFieldValidation;
+    }
+
     switch (mode) {
       case "quick":
         validationOptions.validateNodes = false;

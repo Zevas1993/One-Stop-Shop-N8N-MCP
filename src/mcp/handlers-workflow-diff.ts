@@ -10,6 +10,8 @@ import { WorkflowDiffEngine } from '../services/workflow-diff-engine';
 import { getN8nApiClient } from './handlers-n8n-manager';
 import { N8nApiError, getUserFriendlyErrorMessage } from '../utils/n8n-errors';
 import { logger } from '../utils/logger';
+import { getN8nLiveValidator } from '../services/n8n-live-validator';
+import { recordExecutionError } from './handler-shared-memory';
 
 // Operation-specific Zod schemas with proper validation
 const addNodeSchema = z.object({
@@ -223,11 +225,77 @@ export async function handleUpdatePartialWorkflow(args: unknown): Promise<McpToo
         }
       };
     }
-    
+
+    // LIVE VALIDATION: Validate against the actual n8n instance before update
+    const liveValidator = getN8nLiveValidator();
+    if (liveValidator) {
+      logger.info(
+        "[handleUpdatePartialWorkflow] Running live n8n validation before update"
+      );
+      const liveValidationResult = await liveValidator.validateWorkflow(diffResult.workflow!);
+
+      if (!liveValidationResult.valid) {
+        // Enhanced error analysis for node naming issues
+        const namingGuidance: string[] = [];
+        for (const error of liveValidationResult.errors) {
+          if (error.includes('Connection from unknown source node')) {
+            // Extract the problematic node ID
+            const match = error.match(/Connection from unknown source node: "([^"]+)"/);
+            if (match) {
+              const wrongId = match[1];
+              namingGuidance.push(
+                `⚠️  CRITICAL NODE NAMING ERROR: You referenced node "${wrongId}" in connections, but this node doesn't exist in the workflow.`
+              );
+              namingGuidance.push(
+                `📝 RULE: In n8n workflows, connections must use the EXACT node NAME (usually with emojis like "🌐 API Webhook"), NOT internal IDs like "webhook_trigger".`
+              );
+              namingGuidance.push(
+                `✅ CORRECT: Use node.name property values from the workflow's nodes array in your connections object.`
+              );
+              namingGuidance.push(
+                `❌ WRONG: Do NOT invent simplified IDs or use camelCase versions of node names.`
+              );
+            }
+          }
+        }
+
+        // RECORD TO GRAPHRAG: Store validation failures for agents to learn from
+        await recordExecutionError(
+          `workflow_partial_update:${input.id}`,
+          `Live n8n validation failed with ${liveValidationResult.errors.length} errors`,
+          "validation",
+          {
+            workflowId: input.id,
+            operationsCount: input.operations.length,
+            validationErrors: liveValidationResult.errors,
+            namingGuidance: namingGuidance.length > 0 ? namingGuidance : undefined,
+            learningPoint: namingGuidance.length > 0
+              ? "Always use exact node.name values (with emojis) in connections, never simplified IDs"
+              : undefined,
+            source: "n8n-instance-live-validation",
+          }
+        );
+
+        return {
+          success: false,
+          error:
+            "🚨 LIVE VALIDATION FAILED: Diff operations would create a broken workflow. Errors from n8n instance:",
+          details: {
+            errors: liveValidationResult.errors,
+            namingGuidance: namingGuidance.length > 0 ? namingGuidance : undefined,
+            message: "Fix all errors listed above and retry with corrected diff operations",
+            source: "n8n-instance",
+          },
+        };
+      }
+
+      logger.info("[handleUpdatePartialWorkflow] Live validation passed");
+    }
+
     // Update workflow via API
     try {
       const updatedWorkflow = await client.updateWorkflow(input.id, diffResult.workflow!);
-      
+
       return {
         success: true,
         data: updatedWorkflow,

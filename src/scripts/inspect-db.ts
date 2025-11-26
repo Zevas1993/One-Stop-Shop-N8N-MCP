@@ -18,14 +18,17 @@ async function inspect() {
     );
   });
 
-  // Check for OpenAI
-  console.log("\nSearching for OpenAI:");
-  const openai = nodes.filter(
+  // Check for search term
+  const searchTerm = process.argv[2] || "OpenAI";
+  console.log(`\nSearching for ${searchTerm}:`);
+  const results = nodes.filter(
     (n: any) =>
-      (n.nodeType && n.nodeType.toLowerCase().includes("openai")) ||
-      (n.displayName && n.displayName.toLowerCase().includes("openai"))
+      (n.nodeType &&
+        n.nodeType.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (n.displayName &&
+        n.displayName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
-  openai.forEach((n: any) => {
+  results.forEach((n: any) => {
     console.log(
       `- ID: ${n.id} | Type: ${n.nodeType} | Display: ${n.displayName} | Category: ${n.category}`
     );

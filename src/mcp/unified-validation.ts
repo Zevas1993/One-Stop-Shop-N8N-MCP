@@ -259,6 +259,7 @@ export async function validateWorkflowUnified(
     validateConnections?: boolean;
     validateExpressions?: boolean;
     profile?: "minimal" | "runtime" | "ai-friendly" | "strict";
+    skipApiFieldValidation?: boolean;
   }
 ): Promise<ValidationResult> {
   const system = getUnifiedValidationSystem(repository);

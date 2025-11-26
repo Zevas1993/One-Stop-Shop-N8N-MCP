@@ -215,6 +215,31 @@ export class GraphRAGBridge {
     this.cache.clear();
   }
 
+  /**
+   * Invalidate cache and trigger knowledge graph rebuild
+   * Called when node catalog changes (e.g., after n8n version update)
+   */
+  async invalidateCache(): Promise<void> {
+    // Clear local cache
+    this.cache.clear();
+
+    // Trigger knowledge graph rebuild in Python backend
+    try {
+      await this.rpc("invalidate_cache", {}, 10_000);
+      if (process.env.DEBUG_MCP === "true") {
+        console.error("[graphrag-bridge] Cache invalidated, knowledge graph will rebuild");
+      }
+    } catch (error) {
+      // Gracefully handle if Python backend doesn't support this RPC yet
+      if (process.env.DEBUG_MCP === "true") {
+        console.error(
+          "[graphrag-bridge] Warning: Python backend may not support invalidate_cache RPC:",
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    }
+  }
+
   getMetricsSnapshot(): {
     p50: number;
     p95: number;

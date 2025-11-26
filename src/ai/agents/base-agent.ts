@@ -6,6 +6,7 @@
 import { SharedMemory } from '../shared-memory';
 import { Logger } from '../../utils/logger';
 import { APISchemaLoader } from '../knowledge/api-schema-loader';
+import { VLLMClient } from '../vllm-client';
 
 export interface AgentConfig {
   id: string;
@@ -53,11 +54,34 @@ export abstract class BaseAgent {
   protected apiSchemaLoader: APISchemaLoader;
   protected apiSchemaKnowledge: string = '';
 
-  constructor(config: AgentConfig, sharedMemory: SharedMemory) {
+  // Optional nano LLM clients for AI-enhanced agents
+  protected embeddingClient?: VLLMClient;
+  protected generationClient?: VLLMClient;
+
+  constructor(
+    config: AgentConfig,
+    sharedMemory: SharedMemory,
+    llmClients?: {
+      embedding?: VLLMClient;
+      generation?: VLLMClient;
+    }
+  ) {
     this.config = config;
     this.sharedMemory = sharedMemory;
     this.logger = new Logger({ prefix: `Agent[${config.id}]` });
     this.apiSchemaLoader = APISchemaLoader.getInstance();
+
+    // Store optional LLM clients
+    this.embeddingClient = llmClients?.embedding;
+    this.generationClient = llmClients?.generation;
+
+    // Log LLM availability
+    if (this.embeddingClient || this.generationClient) {
+      this.logger.debug('Agent initialized with nano LLM support', {
+        hasEmbedding: !!this.embeddingClient,
+        hasGeneration: !!this.generationClient,
+      });
+    }
   }
 
   /**
@@ -281,6 +305,83 @@ export abstract class BaseAgent {
    */
   protected getApiSchemaKnowledge(): string {
     return this.apiSchemaKnowledge;
+  }
+
+  /**
+   * Generate embedding for text using nano LLM (if available)
+   * Returns null if embedding client not available
+   */
+  protected async generateEmbedding(text: string): Promise<number[] | null> {
+    if (!this.embeddingClient) {
+      this.logger.debug('Embedding client not available - skipping embedding generation');
+      return null;
+    }
+
+    try {
+      const response = await this.embeddingClient.generateEmbedding(text);
+      return response.embedding;
+    } catch (error) {
+      this.logger.warn('Failed to generate embedding:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate text using nano LLM (if available)
+   * Returns null if generation client not available
+   */
+  protected async generateText(
+    prompt: string,
+    options?: {
+      maxTokens?: number;
+      temperature?: number;
+      topP?: number;
+      stopSequences?: string[];
+    }
+  ): Promise<string | null> {
+    if (!this.generationClient) {
+      this.logger.debug('Generation client not available - skipping text generation');
+      return null;
+    }
+
+    try {
+      const response = await this.generationClient.generateText(prompt, options);
+      return response.text;
+    } catch (error) {
+      this.logger.warn('Failed to generate text:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Compute cosine similarity between two embedding vectors
+   */
+  protected cosineSimilarity(vecA: number[], vecB: number[]): number {
+    if (vecA.length !== vecB.length) {
+      throw new Error('Vectors must have same length for cosine similarity');
+    }
+
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < vecA.length; i++) {
+      dotProduct += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
+    }
+
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  /**
+   * Check if LLM clients are available
+   */
+  protected hasLLMSupport(): { embedding: boolean; generation: boolean } {
+    return {
+      embedding: !!this.embeddingClient,
+      generation: !!this.generationClient,
+    };
   }
 }
 

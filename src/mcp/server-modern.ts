@@ -5,10 +5,11 @@ import {
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { isN8nApiConfigured } from "../config/n8n-api";
+import { isN8nApiConfigured, getN8nApiConfig } from "../config/n8n-api";
 import * as n8nHandlers from "./handlers-n8n-manager";
 import { handleUpdatePartialWorkflow } from "./handlers-workflow-diff";
 import { N8nVersionMonitor } from "../services/n8n-version-monitor";
+import { N8nNodeSync } from "../services/n8n-node-sync";
 import { logger } from "../utils/logger";
 import { MCPToolService } from "../services/mcp-tool-service";
 import { LazyInitializationManager } from "./lazy-initialization-manager";
@@ -57,6 +58,11 @@ export class UnifiedMCPServer {
   private toolHandlers = new Map<string, (args: any) => Promise<any>>();
   private toolDefinitions: any[] = [];
 
+  // n8n Configuration validation (Issue #1: Early configuration detection)
+  private n8nConfigured: boolean = false;
+  private n8nConfigCheckTime: number = 0;
+  private readonly N8N_CONFIG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   constructor() {
     this.server = new McpServer({
       name: "n8n-mcp-unified",
@@ -79,6 +85,9 @@ export class UnifiedMCPServer {
       });
       return originalTool(name, description, schema, handler);
     };
+
+    // Initialize n8n configuration early (Issue #1: Fail fast on misconfiguration)
+    this.initializeN8nConfiguration();
 
     // Initialize lazy manager
     this.initManager = new LazyInitializationManager();
@@ -316,6 +325,7 @@ export class UnifiedMCPServer {
           "list",
           "search",
           "validate",
+          "clean",
         ]),
         workflow: z.any().optional(),
         id: z.string().optional(),
@@ -369,6 +379,7 @@ export class UnifiedMCPServer {
           switch (action) {
             case "create":
               if (!workflow) throw new Error("workflow required");
+              await this.ensureInitialized();
               return this.formatResponse(
                 await n8nHandlers.handleCreateWorkflow(
                   workflow,
@@ -382,6 +393,7 @@ export class UnifiedMCPServer {
               );
             case "update":
               if (!id || !changes) throw new Error("id and changes required");
+              await this.ensureInitialized();
               return this.formatResponse(
                 await n8nHandlers.handleUpdateWorkflow(
                   { id, ...changes },
@@ -405,6 +417,15 @@ export class UnifiedMCPServer {
                 success: true,
                 data: { workflows: filtered, total: filtered.length },
               });
+            case "clean":
+              if (!id) throw new Error("id required");
+              await this.ensureInitialized();
+              return this.formatResponse(
+                await n8nHandlers.handleCleanWorkflow(
+                  { id },
+                  this.initManager.getRepository()
+                )
+              );
             default:
               throw new Error(`Unknown action: ${action}`);
           }
@@ -666,6 +687,7 @@ export class UnifiedMCPServer {
       },
       async (args) => {
         this.ensureN8nConfigured();
+        await this.ensureInitialized();
         const { operation, verbose } = args as any;
         try {
           return this.formatResponse(
@@ -826,13 +848,24 @@ export class UnifiedMCPServer {
         pattern: z
           .string()
           .optional()
-          .describe('Search pattern (e.g., "validation", "pattern", "workflow"). Supports glob patterns.'),
+          .describe(
+            'Search pattern (e.g., "validation", "pattern", "workflow"). Supports glob patterns.'
+          ),
         agentId: z
           .string()
           .optional()
-          .describe('Filter by agent ID (e.g., "validator-agent", "workflow-agent")'),
+          .describe(
+            'Filter by agent ID (e.g., "validator-agent", "workflow-agent")'
+          ),
         keywordType: z
-          .enum(["validation", "pattern", "workflow", "insight", "error", "all"])
+          .enum([
+            "validation",
+            "pattern",
+            "workflow",
+            "insight",
+            "error",
+            "all",
+          ])
           .optional()
           .describe("Filter by entry type"),
         limit: z
@@ -908,10 +941,7 @@ export class UnifiedMCPServer {
       "get_pattern_recommendations",
       "Get workflow pattern recommendations from agent analysis",
       {
-        goal: z
-          .string()
-          .optional()
-          .describe("Filter by goal/context"),
+        goal: z.string().optional().describe("Filter by goal/context"),
         limit: z
           .number()
           .optional()
@@ -949,7 +979,10 @@ export class UnifiedMCPServer {
           const result = await handleGetWorkflowExecutionHistory(args);
           return this.formatResponse(result);
         } catch (error) {
-          return this.formatErrorResponse(error, "get_workflow_execution_history");
+          return this.formatErrorResponse(
+            error,
+            "get_workflow_execution_history"
+          );
         }
       }
     );
@@ -1035,7 +1068,11 @@ export class UnifiedMCPServer {
           });
           return this.formatResponse({
             ...result,
-            explanation: `Selected ${result.selectedPath} pipeline (${(result.confidence * 100).toFixed(1)}% confidence, ${(result.successRate * 100).toFixed(1)}% success rate)`,
+            explanation: `Selected ${result.selectedPath} pipeline (${(
+              result.confidence * 100
+            ).toFixed(1)}% confidence, ${(result.successRate * 100).toFixed(
+              1
+            )}% success rate)`,
           });
         } catch (error) {
           return this.formatErrorResponse(error, "get_routing_recommendation");
@@ -1053,7 +1090,11 @@ export class UnifiedMCPServer {
           const result = await getRoutingStats();
           return this.formatResponse({
             ...result,
-            summary: `Agent success: ${(result.agentSuccessRate * 100).toFixed(1)}%, Handler success: ${(result.handlerSuccessRate * 100).toFixed(1)}%, Current preference: ${result.currentPreference}`,
+            summary: `Agent success: ${(result.agentSuccessRate * 100).toFixed(
+              1
+            )}%, Handler success: ${(result.handlerSuccessRate * 100).toFixed(
+              1
+            )}%, Current preference: ${result.currentPreference}`,
           });
         } catch (error) {
           return this.formatErrorResponse(error, "get_routing_statistics");
@@ -1165,11 +1206,53 @@ export class UnifiedMCPServer {
     );
   }
 
-  private ensureN8nConfigured(): void {
-    if (!isN8nApiConfigured()) {
-      throw new Error(
-        "n8n API not configured. Set N8N_API_URL and N8N_API_KEY environment variables."
+  /**
+   * Issue #1: Configuration Validation
+   * Initialize and cache n8n configuration at server startup (early validation)
+   * This prevents agents from wasting tokens on misconfigured servers.
+   */
+  private initializeN8nConfiguration(): void {
+    try {
+      const config = getN8nApiConfig();
+      if (!config) {
+        logger.warn(
+          "⚠️  n8n API not configured. Workflow tools will be unavailable. " +
+          "Required env vars: N8N_API_URL, N8N_API_KEY"
+        );
+        this.n8nConfigured = false;
+        return;
+      }
+      this.n8nConfigured = true;
+      this.n8nConfigCheckTime = Date.now();
+      logger.info("✓ n8n API configured and available");
+    } catch (error) {
+      logger.warn(
+        "Error checking n8n configuration:",
+        error instanceof Error ? error.message : error
       );
+      this.n8nConfigured = false;
+    }
+  }
+
+  /**
+   * Issue #1: Configuration Validation
+   * Ensure n8n is configured before executing workflow tools.
+   * Called at the START of tool handlers (before input validation).
+   * Fails fast if misconfigured instead of wasting tokens.
+   */
+  private ensureN8nConfigured(toolName?: string): void {
+    // Check cache TTL - revalidate every 5 minutes
+    const now = Date.now();
+    if (now - this.n8nConfigCheckTime > this.N8N_CONFIG_CACHE_TTL) {
+      this.initializeN8nConfiguration();
+    }
+
+    if (!this.n8nConfigured) {
+      const message =
+        `n8n API not configured. ${toolName ? `Tool '${toolName}' requires ` : ""}` +
+        "environment variables: N8N_API_URL, N8N_API_KEY";
+      logger.error(message);
+      throw new Error(message);
     }
   }
 
@@ -1206,6 +1289,32 @@ export class UnifiedMCPServer {
   }
 
   async run(): Promise<void> {
+    // Initialize n8n node synchronization in background (non-blocking)
+    // This ensures the node database is up-to-date with the connected n8n instance
+    if (process.env.N8N_AUTO_SYNC !== 'false' && isN8nApiConfigured()) {
+      this.syncN8nNodes()
+        .then((syncResult) => {
+          if (syncResult) {
+            if (syncResult.synced) {
+              logger.info(`[Server] ✅ Node database synchronized with n8n ${syncResult.version}`);
+              if (syncResult.nodesCount) {
+                logger.info(`[Server]    Loaded ${syncResult.nodesCount} nodes via ${syncResult.method}`);
+              }
+            } else {
+              logger.info(`[Server] ✅ Node database already up-to-date (${syncResult.version})`);
+            }
+          }
+        })
+        .catch((error) => {
+          logger.warn(
+            "[Server] Node sync failed (continuing with existing database):",
+            error instanceof Error ? error.message : String(error)
+          );
+        });
+    } else {
+      logger.info("[Server] Node auto-sync disabled (set N8N_API_URL and N8N_API_KEY to enable)");
+    }
+
     // Initialize nano agent orchestrator in background (non-blocking)
     // This prevents the server from hanging during startup
     this.initializeNanoAgentOrchestrator()
@@ -1225,6 +1334,43 @@ export class UnifiedMCPServer {
   }
 
   /**
+   * Synchronize node database with connected n8n instance
+   * Detects version changes and triggers rebuild if needed
+   */
+  private async syncN8nNodes(): Promise<any> {
+    try {
+      // Wait for repository to be ready
+      await this.ensureInitialized();
+
+      const config = getN8nApiConfig();
+      if (!config) {
+        throw new Error('n8n API configuration not available');
+      }
+
+      const { N8nApiClient } = await import('../services/n8n-api-client');
+      const n8nClient = new N8nApiClient(config);
+
+      const nodeSync = new N8nNodeSync(
+        n8nClient,
+        this.initManager.getRepository()
+      );
+
+      // Perform sync check and rebuild if needed
+      const syncResult = await nodeSync.syncToInstance();
+
+      // If nodes were updated, notify GraphRAG
+      if (syncResult.synced) {
+        await nodeSync.notifyGraphRAG();
+      }
+
+      return syncResult;
+    } catch (error) {
+      logger.error('[Server] Failed to sync nodes:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Initialize nano agent orchestrator if not already done
    * Uses timeout to prevent hanging during startup
    */
@@ -1234,7 +1380,10 @@ export class UnifiedMCPServer {
 
       // Wrap with timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Orchestrator initialization timeout (30s)")), 30000)
+        setTimeout(
+          () => reject(new Error("Orchestrator initialization timeout (30s)")),
+          30000
+        )
       );
 
       await Promise.race([ensureOrchestratorReady(), timeoutPromise]);

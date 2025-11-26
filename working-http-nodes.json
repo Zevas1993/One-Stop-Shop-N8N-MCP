@@ -1,0 +1,15 @@
+[
+  {
+    "parameters": {
+      "options": {}
+    },
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+      1488,
+      224
+    ],
+    "id": "a8bc35cf-135a-4981-bb18-2672c8b70e90",
+    "name": "HTTP Request"
+  }
+]

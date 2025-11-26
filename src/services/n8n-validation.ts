@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { WorkflowNode, WorkflowConnection, Workflow } from '../types/n8n-api';
 import { APISchemaLoader } from '../ai/knowledge/api-schema-loader';
 import { logger } from '../utils/logger';
+import { NodeParameterValidator, ParameterValidationResult } from './node-parameter-validator';
+import { NodeRepository } from '../database/node-repository';
 
 // Zod schemas for n8n API validation
 
@@ -12,7 +14,8 @@ export const workflowNodeSchema = z.object({
   typeVersion: z.number(),
   position: z.tuple([z.number(), z.number()]),
   parameters: z.record(z.unknown()),
-  credentials: z.record(z.string()).optional(),
+  // ❌ REMOVED credentials field - n8n UI breaks when this exists!
+  // The API docs claim it's required, but working workflows have NO credentials field
   disabled: z.boolean().optional(),
   notes: z.string().optional(),
   notesInFlow: z.boolean().optional(),
@@ -87,6 +90,68 @@ export function cleanWorkflowForCreate(workflow: Partial<Workflow>): Partial<Wor
     ...cleanedWorkflow
   } = workflow;
 
+  // CRITICAL FIX: Clean nodes to match n8n UI requirements
+  if (cleanedWorkflow.nodes) {
+    cleanedWorkflow.nodes = cleanedWorkflow.nodes.map((node: any) => {
+      const fixedNode: any = { ...node };
+
+      // ❌ CRITICAL: REMOVE credentials field - n8n UI breaks when this exists!
+      // The API docs are WRONG - working workflows have NO credentials field
+      if (fixedNode.credentials !== undefined) {
+        delete fixedNode.credentials;
+      }
+
+      // ✅ NEVER include webhookId (n8n server generates this)
+      if (fixedNode.webhookId) {
+        delete fixedNode.webhookId;
+      }
+
+      // ✅ Enforce correct typeVersions for nodes that commonly break
+      if (node.type === 'n8n-nodes-base.httpRequest') {
+        // HTTP Request MUST be v4.2 (not v5!) with minimal parameters
+        fixedNode.typeVersion = 4.2;
+        fixedNode.parameters = { options: {} };
+      }
+
+      if (node.type === 'n8n-nodes-base.switch') {
+        // Switch MUST be v3.2 (not v1!) with correct parameter structure
+        if (fixedNode.typeVersion < 3) {
+          fixedNode.typeVersion = 3.2;
+          // Convert old v1 parameter structure to v3.2 if needed
+          if (fixedNode.parameters?.rules?.values) {
+            fixedNode.parameters = {
+              rules: {
+                values: fixedNode.parameters.rules.values.map((rule: any, idx: number) => ({
+                  conditions: {
+                    options: {
+                      caseSensitive: true,
+                      leftValue: "",
+                      typeValidation: "strict",
+                      version: 2
+                    },
+                    conditions: rule.conditions?.string?.map((cond: any, condIdx: number) => ({
+                      leftValue: cond.value1 || "",
+                      rightValue: cond.value2 || "",
+                      operator: {
+                        type: "string",
+                        operation: cond.operation || "equals"
+                      },
+                      id: `cond_${idx}_${condIdx}`
+                    })) || [],
+                    combinator: "and"
+                  }
+                }))
+              },
+              options: {}
+            };
+          }
+        }
+      }
+
+      return fixedNode;
+    });
+  }
+
   // Ensure settings are present with defaults
   if (!cleanedWorkflow.settings) {
     cleanedWorkflow.settings = defaultWorkflowSettings;
@@ -110,13 +175,75 @@ export function cleanWorkflowForUpdate(workflow: Workflow): Partial<Workflow> {
     sharedWithProjects,
     triggerCount,
     shared,
+    active,  // Active is managed via separate activation endpoint, not update endpoint
     // NOTE: Allow these fields for updates
-    // - active: Can be updated (used by activation endpoint)
     // - staticData: User-settable node state
     // - pinData: User-settable pinned execution data
     // Keep everything else
     ...cleanedWorkflow
   } = workflow as any;
+
+  // CRITICAL FIX: Clean nodes to match n8n UI requirements
+  if (cleanedWorkflow.nodes) {
+    cleanedWorkflow.nodes = cleanedWorkflow.nodes.map((node: any) => {
+      const fixedNode: any = { ...node };
+
+      // ❌ CRITICAL: REMOVE credentials field - n8n UI breaks when this exists!
+      // The API docs are WRONG - working workflows have NO credentials field
+      if (fixedNode.credentials !== undefined) {
+        delete fixedNode.credentials;
+      }
+
+      // ✅ NEVER include webhookId (n8n server generates this)
+      if (fixedNode.webhookId) {
+        delete fixedNode.webhookId;
+      }
+
+      // ✅ Enforce correct typeVersions for nodes that commonly break
+      if (node.type === 'n8n-nodes-base.httpRequest') {
+        // HTTP Request MUST be v4.2 (not v5!) with minimal parameters
+        fixedNode.typeVersion = 4.2;
+        fixedNode.parameters = { options: {} };
+      }
+
+      if (node.type === 'n8n-nodes-base.switch') {
+        // Switch MUST be v3.2 (not v1!) with correct parameter structure
+        if (fixedNode.typeVersion < 3) {
+          fixedNode.typeVersion = 3.2;
+          // Convert old v1 parameter structure to v3.2 if needed
+          if (fixedNode.parameters?.rules?.values) {
+            fixedNode.parameters = {
+              rules: {
+                values: fixedNode.parameters.rules.values.map((rule: any, idx: number) => ({
+                  conditions: {
+                    options: {
+                      caseSensitive: true,
+                      leftValue: "",
+                      typeValidation: "strict",
+                      version: 2
+                    },
+                    conditions: rule.conditions?.string?.map((cond: any, condIdx: number) => ({
+                      leftValue: cond.value1 || "",
+                      rightValue: cond.value2 || "",
+                      operator: {
+                        type: "string",
+                        operation: cond.operation || "equals"
+                      },
+                      id: `cond_${idx}_${condIdx}`
+                    })) || [],
+                    combinator: "and"
+                  }
+                }))
+              },
+              options: {}
+            };
+          }
+        }
+      }
+
+      return fixedNode;
+    });
+  }
 
   // Ensure settings are present
   if (!cleanedWorkflow.settings) {
@@ -373,6 +500,9 @@ export function cleanAndFixWorkflowForCreate(workflow: any): { cleaned: Partial<
     cleaned.nodes = cleaned.nodes.map((node: any) => {
       const fixedNode = { ...node };
 
+      // ❌ REMOVED: credentials check - cleanWorkflowForCreate already removes this field
+      // The n8n UI BREAKS when credentials field exists!
+
       // Add missing typeVersion
       if (!fixedNode.typeVersion && fixedNode.typeVersion !== 0) {
         fixedNode.typeVersion = 1;
@@ -415,6 +545,9 @@ export function cleanAndFixWorkflowForUpdate(workflow: any): { cleaned: Partial<
     cleaned.nodes = cleaned.nodes.map((node: any) => {
       const fixedNode = { ...node };
 
+      // ❌ REMOVED: credentials check - cleanWorkflowForUpdate already removes this field
+      // The n8n UI BREAKS when credentials field exists!
+
       // Add missing typeVersion
       if (!fixedNode.typeVersion && fixedNode.typeVersion !== 0) {
         fixedNode.typeVersion = 1;
@@ -443,4 +576,49 @@ export function cleanAndFixWorkflowForUpdate(workflow: any): { cleaned: Partial<
   }
 
   return { cleaned, fixed: fixes };
+}
+
+/**
+ * CRITICAL: Validate node parameters against MCP database schemas
+ *
+ * This function prevents the fatal flaw where workflows pass API validation
+ * but fail to load in n8n UI due to missing required parameters.
+ *
+ * MUST be called BEFORE sending workflows to n8n API.
+ */
+export async function validateNodeParameters(
+  workflow: Partial<Workflow>,
+  repository: NodeRepository
+): Promise<ParameterValidationResult> {
+  const validator = new NodeParameterValidator(repository);
+
+  if (!workflow.nodes || workflow.nodes.length === 0) {
+    return {
+      valid: false,
+      errors: [{
+        nodeName: 'workflow',
+        nodeType: 'workflow',
+        parameter: 'nodes',
+        error: 'Workflow has no nodes',
+        suggestion: 'Add at least one node to the workflow'
+      }]
+    };
+  }
+
+  logger.info('[validateNodeParameters] Validating workflow node parameters', {
+    nodeCount: workflow.nodes.length
+  });
+
+  const result = await validator.validateWorkflow(workflow.nodes);
+
+  if (!result.valid) {
+    logger.error('[validateNodeParameters] Parameter validation failed', {
+      errorCount: result.errors.length,
+      errors: result.errors
+    });
+  } else {
+    logger.info('[validateNodeParameters] All node parameters valid');
+  }
+
+  return result;
 }

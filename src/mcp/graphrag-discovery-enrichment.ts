@@ -127,19 +127,23 @@ export class GraphRAGDiscoveryEnrichment {
       const memory = await getHandlerSharedMemory();
       const graphInsights = await memory.get("graphrag-insights");
 
+      // PHASE 4: Calculate base success rate then apply confidence boost/penalty
+      const baseSuccessRate = await this.calculateNodeSuccessRate(nodeType);
+      const adjustedSuccessRate = this.adjustConfidenceForNodeType(nodeType, baseSuccessRate);
+
       const enriched: EnrichedNodeInfo = {
         nodeType,
         nodeName: baseInfo.displayName || nodeType,
         description: baseInfo.description || "",
 
-        // Fetch related nodes from GraphRAG
+        // Fetch related nodes from GraphRAG (already boosted/penalized in getRelatedNodes)
         relatedNodes: await this.getRelatedNodes(nodeType, graphInsights),
 
         // Fetch patterns from GraphRAG
         commonPatterns: await this.getCommonPatterns(nodeType, graphInsights),
 
-        // Calculate success rate from execution history
-        successRate: await this.calculateNodeSuccessRate(nodeType),
+        // PHASE 4: Use adjusted success rate (built-in nodes boosted, Code nodes penalized)
+        successRate: adjustedSuccessRate,
 
         // Determine complexity
         complexity: this.calculateNodeComplexity(baseInfo),
@@ -258,6 +262,7 @@ export class GraphRAGDiscoveryEnrichment {
 
   /**
    * Get related nodes from GraphRAG
+   * ENHANCED (Phase 4): Boost built-in nodes, penalize Code nodes
    */
   private async getRelatedNodes(
     nodeType: string,
@@ -270,20 +275,62 @@ export class GraphRAGDiscoveryEnrichment {
 
       const related = graphInsights.relationships
         .filter((rel: any) => rel.sourceNode === nodeType)
-        .slice(0, 10)
-        .map((rel: any) => ({
-          nodeType: rel.targetNode,
-          nodeName: rel.targetName || rel.targetNode,
-          relationship: rel.type,
-          confidence: rel.confidence || 0.7,
-          frequency: rel.frequency || 0,
-        }));
+        .map((rel: any) => {
+          const baseConfidence = rel.confidence || 0.7;
+
+          // PHASE 4: Apply confidence adjustments based on node type
+          const adjustedConfidence = this.adjustConfidenceForNodeType(
+            rel.targetNode,
+            baseConfidence
+          );
+
+          return {
+            nodeType: rel.targetNode,
+            nodeName: rel.targetName || rel.targetNode,
+            relationship: rel.type,
+            confidence: adjustedConfidence,
+            frequency: rel.frequency || 0,
+          };
+        })
+        // Sort by confidence (built-in nodes will now rank higher)
+        .sort((a: RelatedNode, b: RelatedNode) => b.confidence - a.confidence)
+        .slice(0, 10);
 
       return related;
     } catch (error) {
       logger.debug("[GraphRAGEnrichment] Failed to get related nodes", error as Error);
       return [];
     }
+  }
+
+  /**
+   * Adjust confidence score based on node type
+   * PHASE 4: Boost built-in nodes (1.5x), penalize Code nodes (0.5x)
+   */
+  private adjustConfidenceForNodeType(nodeType: string, baseConfidence: number): number {
+    const isCodeNode = nodeType === 'n8n-nodes-base.code' ||
+                       nodeType === 'code' ||
+                       nodeType.includes('.code');
+
+    const isBuiltinNode = !isCodeNode && (
+      nodeType.startsWith('n8n-nodes-base.') ||
+      nodeType.startsWith('@n8n/')
+    );
+
+    if (isCodeNode) {
+      // Penalize Code nodes: reduce confidence by 50%
+      logger.debug(`[GraphRAGEnrichment] Penalizing Code node: ${nodeType} (${baseConfidence} → ${baseConfidence * 0.5})`);
+      return Math.max(baseConfidence * 0.5, 0.1); // Floor at 0.1
+    }
+
+    if (isBuiltinNode) {
+      // Boost built-in nodes: increase confidence by 50%
+      logger.debug(`[GraphRAGEnrichment] Boosting built-in node: ${nodeType} (${baseConfidence} → ${baseConfidence * 1.5})`);
+      return Math.min(baseConfidence * 1.5, 1.0); // Cap at 1.0
+    }
+
+    // No adjustment for other nodes
+    return baseConfidence;
   }
 
   /**

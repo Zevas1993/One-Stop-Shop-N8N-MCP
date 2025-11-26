@@ -148,11 +148,15 @@ const workflowDSL = {
 async function updateWorkflowViaMCP() {
   console.log("🚀 Starting Workflow Update via MCP...");
 
-  // 1. Expand DSL to full JSON
-  const nodeParser = new NodeParser();
-  const simplifier = new WorkflowSimplifierService(nodeParser);
-  const fullWorkflow = await simplifier.expandWorkflow(workflowDSL as any);
-  console.log("✅ Generated full workflow JSON from verified DSL");
+  // 1. Read payload.json
+  const fs = require("fs");
+  const payloadPath = path.join(process.cwd(), "payload.json");
+  if (!fs.existsSync(payloadPath)) {
+    console.error("❌ payload.json not found!");
+    process.exit(1);
+  }
+  const payload = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
+  console.log("✅ Loaded payload.json");
 
   // 2. Spawn MCP Server
   const serverPath = path.join(process.cwd(), "src/mcp/index.ts");
@@ -168,8 +172,7 @@ async function updateWorkflowViaMCP() {
   });
 
   let isStarted = false;
-  let searchRequestId = 2;
-  let updateRequestId = 3;
+  let updateRequestId = 2;
 
   // Helper to send JSON-RPC request
   const sendRequest = (method: string, params: any, id: number) => {
@@ -186,41 +189,6 @@ async function updateWorkflowViaMCP() {
         isStarted = true;
         console.log("✅ Server Initialized");
 
-        // Search for the target workflow
-        console.log(`🔍 Searching for '${workflowDSL.name}'...`);
-        sendRequest(
-          "tools/call",
-          {
-            name: "workflow_manager",
-            arguments: {
-              action: "search",
-              query: workflowDSL.name,
-            },
-          },
-          searchRequestId
-        );
-      }
-
-      // Handle Search Response
-      if (msg.id === searchRequestId) {
-        if (msg.error) {
-          console.error("❌ Search Error:", msg.error);
-          process.exit(1);
-        }
-
-        const content = JSON.parse(msg.result.content[0].text);
-        const workflows = content.data?.workflows || [];
-
-        if (workflows.length === 0) {
-          console.error("❌ Workflow not found! Cannot update.");
-          process.exit(1);
-        }
-
-        const targetId = workflows[0].id;
-        console.log(
-          `✅ Found target workflow: ${workflows[0].name} (ID: ${targetId})`
-        );
-
         // Send Update Request
         console.log("🛠️  Sending update request...");
         sendRequest(
@@ -229,12 +197,8 @@ async function updateWorkflowViaMCP() {
             name: "workflow_manager",
             arguments: {
               action: "update",
-              id: targetId,
-              changes: {
-                name: fullWorkflow.name,
-                nodes: fullWorkflow.nodes,
-                connections: fullWorkflow.connections,
-              },
+              id: "A9h8Zsm6kYpsmilu",
+              changes: payload,
             },
           },
           updateRequestId
@@ -244,7 +208,7 @@ async function updateWorkflowViaMCP() {
       // Handle Update Response
       if (msg.id === updateRequestId) {
         if (msg.error) {
-          console.error("❌ Update Error:", msg.error);
+          console.error("❌ Update Error:", JSON.stringify(msg.error, null, 2));
         } else {
           const content = JSON.parse(msg.result.content[0].text);
           console.log("✅ Workflow Updated Successfully!");

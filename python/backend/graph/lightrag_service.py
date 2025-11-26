@@ -215,6 +215,19 @@ def main():
                     params.get("modified", []),
                     params.get("removed", []),
                 )
+
+            elif method == "invalidate_cache":
+                # Node catalog has changed - clear caches and trigger rebuild
+                log("Cache invalidation requested - node catalog changed")
+
+                # Clear any cached embeddings or search results in the engine
+                if hasattr(sync_engine, 'clear_cache'):
+                    sync_engine.clear_cache()
+
+                # Trigger knowledge graph rebuild on next query
+                # (Actual rebuild will happen lazily - more efficient than immediate rebuild)
+                result = {"ok": True, "message": "Cache invalidated, graph will rebuild on next query"}
+
             else:
                 raise ValueError(f"Unknown method: {method}")
 

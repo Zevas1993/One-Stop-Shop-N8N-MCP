@@ -65,7 +65,21 @@
       "Bash(python:*)",
       "Bash(docker logs:*)",
       "Bash(docker ps:*)",
-      "Bash(timeout 5 node:*)"
+      "Bash(timeout 5 node:*)",
+      "Bash(dir:*)",
+      "Bash(timeout 120 npx ts-node:*)",
+      "Bash(timeout 90 node:*)",
+      "Bash(timeout 180 node:*)",
+      "Bash(/tmp/workflow.json)",
+      "Bash(timeout 45 npx tsx:*)",
+      "Bash(timeout 60 npx tsx:*)",
+      "Bash(timeout 120 npx tsx:*)",
+      "Bash(tee:*)",
+      "Bash(npm run test:parameter-validation:*)",
+      "Bash(find:*)",
+      "Bash(echo:*)",
+      "Bash(export N8N_AUTO_SYNC=true)",
+      "Bash(npx tsx:*)"
     ],
     "deny": [],
     "ask": []

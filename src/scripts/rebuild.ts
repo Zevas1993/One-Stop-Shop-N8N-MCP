@@ -14,17 +14,20 @@ import * as path from 'path';
 
 async function rebuild() {
   console.log('🔄 Rebuilding n8n node database...\n');
-  
+
   const db = await createDatabaseAdapter('./data/nodes.db');
   const parser = new NodeParser();
   const mapper = new DocsMapper();
   const repository = new NodeRepository(db);
   const extractor = new NodeSourceExtractor();
-  
+
   // Initialize database
   const schema = fs.readFileSync(path.join(__dirname, '../../src/database/schema.sql'), 'utf8');
   db.exec(schema);
-  
+
+  // Initialize metadata table
+  repository.initializeMetadata();
+
   // Clear existing data
   db.exec('DELETE FROM nodes');
   console.log('🗑️  Cleared existing data\n');
@@ -108,10 +111,22 @@ async function rebuild() {
     }
   }
   
+  // Detect and save n8n version
+  const n8nVersion = detectN8nVersion();
+  if (n8nVersion) {
+    repository.setDbVersion(n8nVersion);
+    console.log(`\n📌 Database version set to: ${n8nVersion}`);
+  } else if (process.env.N8N_VERSION_OVERRIDE) {
+    repository.setDbVersion(process.env.N8N_VERSION_OVERRIDE);
+    console.log(`\n📌 Database version set to (override): ${process.env.N8N_VERSION_OVERRIDE}`);
+  } else {
+    console.log('\n⚠️  Could not detect n8n version - version tracking unavailable');
+  }
+
   // Validation check
   console.log('\n🔍 Running validation checks...');
   const validationResults = validateDatabase(repository);
-  
+
   // Summary
   console.log('\n📊 Summary:');
   console.log(`   Total nodes: ${nodes.length}`);
@@ -123,15 +138,65 @@ async function rebuild() {
   console.log(`   With Properties: ${stats.withProperties}`);
   console.log(`   With Operations: ${stats.withOperations}`);
   console.log(`   With Documentation: ${stats.withDocs}`);
-  
+
   if (!validationResults.passed) {
     console.log('\n⚠️  Validation Issues:');
     validationResults.issues.forEach(issue => console.log(`   - ${issue}`));
   }
-  
+
   console.log('\n✨ Rebuild complete!');
-  
+
   db.close();
+}
+
+/**
+ * Detect n8n version from local installation
+ * Tries multiple sources in order of reliability
+ */
+function detectN8nVersion(): string | null {
+  // Method 1: Try to read from local n8n package.json
+  try {
+    const n8nPackagePath = path.join(process.cwd(), 'node_modules', 'n8n', 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(n8nPackagePath, 'utf-8'));
+    if (packageJson.version) {
+      console.log(`✅ Detected n8n version from local npm: ${packageJson.version}`);
+      return packageJson.version;
+    }
+  } catch (error) {
+    // Not available, try next method
+  }
+
+  // Method 2: Try to detect from Docker container if volumes are mounted
+  const dockerVolumePaths = [
+    process.env.N8N_MODULES_PATH || '/n8n-modules',
+    process.env.N8N_CUSTOM_PATH || '/n8n-custom',
+  ];
+
+  for (const volumePath of dockerVolumePaths) {
+    try {
+      const n8nPackagePath = path.join(volumePath, 'n8n', 'package.json');
+      const packageJson = JSON.parse(fs.readFileSync(n8nPackagePath, 'utf-8'));
+      if (packageJson.version) {
+        console.log(`✅ Detected n8n version from Docker: ${packageJson.version}`);
+        return packageJson.version;
+      }
+    } catch (error) {
+      // Try next volume
+    }
+  }
+
+  // Method 3: Try npx n8n --version (if available)
+  try {
+    const version = execSync('npx n8n --version', { encoding: 'utf-8', timeout: 5000 }).trim();
+    if (version) {
+      console.log(`✅ Detected n8n version from npx: ${version}`);
+      return version;
+    }
+  } catch (error) {
+    // Not available
+  }
+
+  return null;
 }
 
 async function extractNodesFromDocker(extractor: NodeSourceExtractor, dockerVolumePaths: string[]): Promise<Array<{packageName: string, nodeName: string, NodeClass: any}>> {

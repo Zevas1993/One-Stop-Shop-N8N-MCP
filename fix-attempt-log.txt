@@ -1,0 +1,90 @@
+🔧 FIXING WORKFLOW VIA MCP (Updated Server)
+Connecting to MCP server...
+[DEBUG] Starting Unified MCP Server.
+✅ Connected to MCP server
+
+⏳ Waiting 10 seconds for MCP server initialization...
+📤 Updating workflow via MCP workflow_manager...
+Replacing entire connections object with correct node names
+
+MCP Response:
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\n  \"success\": false,\n  \"error\": \"🚨 VALIDATION FAILED: Update rejected by strict validation enforcement.\",\n  \"details\": {\n    \"errors\": [\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'active' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'tags' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'createdAt' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'updatedAt' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'id' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'createdAt' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'updatedAt' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'id' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'active' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'isArchived' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'versionId' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'triggerCount' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'shared' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      },\n      {\n        \"type\": \"error\",\n        \"message\": \"Property 'tags' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta\"\n      }\n    ],\n    \"message\": \"The Agentic GraphRAG system rejected this update because it would result in a broken workflow.\",\n    \"validationStats\": {\n      \"totalNodes\": 8,\n      \"enabledNodes\": 8,\n      \"triggerNodes\": 0,\n      \"validConnections\": 0,\n      \"invalidConnections\": 0,\n      \"expressionsValidated\": 0,\n      \"validationTime\": 1\n    }\n  }\n}"
+    }
+  ]
+}
+
+❌ Update failed: 🚨 VALIDATION FAILED: Update rejected by strict validation enforcement.
+Details: {
+  "errors": [
+    {
+      "type": "error",
+      "message": "Property 'active' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'tags' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'createdAt' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'updatedAt' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'id' is not allowed by n8n API. This will cause a 400 error. Remove this property before deploying. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'createdAt' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'updatedAt' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'id' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'active' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'isArchived' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'versionId' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'triggerCount' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'shared' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    },
+    {
+      "type": "error",
+      "message": "Property 'tags' is not allowed by n8n API. Allowed properties are: name, nodes, connections, settings, staticData, pinData, meta"
+    }
+  ],
+  "message": "The Agentic GraphRAG system rejected this update because it would result in a broken workflow.",
+  "validationStats": {
+    "totalNodes": 8,
+    "enabledNodes": 8,
+    "triggerNodes": 0,
+    "validConnections": 0,
+    "invalidConnections": 0,
+    "expressionsValidated": 0,
+    "validationTime": 1
+  }
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "config": "Config 1: Triggers only",
+    "nodeCount": 2,
+    "status": "SUCCESS"
+  },
+  {
+    "config": "Config 2: + Set nodes",
+    "nodeCount": 5,
+    "status": "SUCCESS"
+  },
+  {
+    "config": "Config 3: + Outlook operations",
+    "nodeCount": 8,
+    "status": "SUCCESS"
+  },
+  {
+    "config": "Config 4: + LangChain nodes (no connections)",
+    "nodeCount": 12,
+    "status": "SUCCESS"
+  },
+  {
+    "config": "Config 5: + AI Tools",
+    "nodeCount": 15,
+    "status": "SUCCESS"
+  },
+  {
+    "config": "Config 6: + Vector Store",
+    "nodeCount": 16,
+    "status": "SUCCESS"
+  },
+  {
+    "config": "Config 7: + Memory & LM nodes",
+    "nodeCount": 18,
+    "status": "SUCCESS"
+  },
+  {
+    "config": "Config 8: Full workflow (21 nodes)",
+    "nodeCount": 21,
+    "status": "SUCCESS"
+  }
+]

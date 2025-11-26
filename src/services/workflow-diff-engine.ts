@@ -35,12 +35,25 @@ const logger = new Logger({ prefix: '[WorkflowDiffEngine]' });
 export class WorkflowDiffEngine {
   /**
    * Apply diff operations to a workflow
+   * Issue #7: Enhanced with comprehensive semantic validation
    */
   async applyDiff(
-    workflow: Workflow, 
+    workflow: Workflow,
     request: WorkflowDiffRequest
   ): Promise<WorkflowDiffResult> {
     try {
+      // Issue #7: Validate diff request structure first
+      const structureError = this.validateDiffRequest(request);
+      if (structureError) {
+        return {
+          success: false,
+          errors: [{
+            operation: -1,
+            message: structureError
+          }]
+        };
+      }
+
       // Limit operations to keep complexity manageable
       if (request.operations.length > 5) {
         return {
@@ -54,12 +67,12 @@ export class WorkflowDiffEngine {
 
       // Clone workflow to avoid modifying original
       const workflowCopy = JSON.parse(JSON.stringify(workflow));
-      
+
       // Group operations by type for two-pass processing
       const nodeOperationTypes = ['addNode', 'removeNode', 'updateNode', 'moveNode', 'enableNode', 'disableNode'];
       const nodeOperations: Array<{ operation: WorkflowDiffOperation; index: number }> = [];
       const otherOperations: Array<{ operation: WorkflowDiffOperation; index: number }> = [];
-      
+
       request.operations.forEach((operation, index) => {
         if (nodeOperationTypes.includes(operation.type)) {
           nodeOperations.push({ operation, index });
@@ -70,6 +83,7 @@ export class WorkflowDiffEngine {
 
       // Pass 1: Validate and apply node operations first
       for (const { operation, index } of nodeOperations) {
+        // Issue #7: Use comprehensive validation
         const error = this.validateOperation(workflowCopy, operation);
         if (error) {
           return {
@@ -81,7 +95,7 @@ export class WorkflowDiffEngine {
             }]
           };
         }
-        
+
         // Always apply to working copy for proper validation of subsequent operations
         try {
           this.applyOperation(workflowCopy, operation);
@@ -99,6 +113,7 @@ export class WorkflowDiffEngine {
 
       // Pass 2: Validate and apply other operations (connections, metadata)
       for (const { operation, index } of otherOperations) {
+        // Issue #7: Use comprehensive validation
         const error = this.validateOperation(workflowCopy, operation);
         if (error) {
           return {
@@ -110,7 +125,7 @@ export class WorkflowDiffEngine {
             }]
           };
         }
-        
+
         // Always apply to working copy for proper validation of subsequent operations
         try {
           this.applyOperation(workflowCopy, operation);
@@ -124,6 +139,18 @@ export class WorkflowDiffEngine {
             }]
           };
         }
+      }
+
+      // Issue #7: Final workflow validation - ensure result is semantically valid
+      const finalValidationError = this.validateFinalWorkflow(workflowCopy);
+      if (finalValidationError) {
+        return {
+          success: false,
+          errors: [{
+            operation: -1,
+            message: `Final workflow validation failed: ${finalValidationError}`
+          }]
+        };
       }
 
       // If validateOnly flag is set, return success without applying
@@ -608,31 +635,135 @@ export class WorkflowDiffEngine {
     }
   }
 
+  /**
+   * Issue #7: Validate diff request structure
+   * Ensures the request itself is well-formed before processing
+   */
+  private validateDiffRequest(request: WorkflowDiffRequest): string | null {
+    if (!request) {
+      return 'Diff request is null or undefined';
+    }
+
+    if (!request.id || typeof request.id !== 'string') {
+      return 'Workflow ID is required and must be a string';
+    }
+
+    if (!Array.isArray(request.operations)) {
+      return 'Operations must be an array';
+    }
+
+    if (request.operations.length === 0) {
+      return 'At least one operation is required';
+    }
+
+    // Validate each operation has a type
+    for (let i = 0; i < request.operations.length; i++) {
+      const op = request.operations[i];
+      if (!op.type) {
+        return `Operation ${i} is missing required "type" field`;
+      }
+
+      // Validate operation type is recognized
+      const validTypes = [
+        'addNode', 'removeNode', 'updateNode', 'moveNode', 'enableNode', 'disableNode',
+        'addConnection', 'removeConnection', 'updateConnection',
+        'updateSettings', 'updateName', 'addTag', 'removeTag'
+      ];
+      if (!validTypes.includes(op.type)) {
+        return `Operation ${i} has unrecognized type: "${op.type}"`;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Issue #7: Validate final workflow semantic integrity
+   * Ensures the result is a valid, executable workflow
+   */
+  private validateFinalWorkflow(workflow: Workflow): string | null {
+    // Check that workflow has at least one node
+    if (!workflow.nodes || workflow.nodes.length === 0) {
+      return 'Workflow must contain at least one node';
+    }
+
+    // Check that all nodes have required fields
+    for (const node of workflow.nodes) {
+      if (!node.name) {
+        return 'All nodes must have a name';
+      }
+      if (!node.type) {
+        return `Node "${node.name}" is missing required "type" field`;
+      }
+      if (node.typeVersion === undefined || node.typeVersion === null) {
+        return `Node "${node.name}" is missing required "typeVersion" field`;
+      }
+      if (!Array.isArray(node.position) || node.position.length !== 2) {
+        return `Node "${node.name}" has invalid position (must be [x, y])`;
+      }
+    }
+
+    // Check that all connection references point to existing nodes
+    if (workflow.connections) {
+      for (const [sourceName, outputs] of Object.entries(workflow.connections)) {
+        const sourceNode = workflow.nodes.find(n => n.name === sourceName);
+        if (!sourceNode) {
+          return `Connection from unknown source node: "${sourceName}"`;
+        }
+
+        for (const [outputName, outputArray] of Object.entries(outputs)) {
+          if (!Array.isArray(outputArray)) {
+            return `Invalid connection structure for "${sourceName}/${outputName}"`;
+          }
+
+          for (let i = 0; i < outputArray.length; i++) {
+            const connections = outputArray[i];
+            if (!Array.isArray(connections)) {
+              return `Invalid connection array at "${sourceName}/${outputName}[${i}]"`;
+            }
+
+            for (const conn of connections) {
+              const targetNode = workflow.nodes.find(n => n.name === conn.node);
+              if (!targetNode) {
+                return `Connection from "${sourceName}" to unknown target node: "${conn.node}"`;
+              }
+              if (!conn.type) {
+                return `Connection from "${sourceName}" to "${conn.node}" is missing target type`;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
   // Helper methods
   private findNode(workflow: Workflow, nodeId?: string, nodeName?: string): WorkflowNode | null {
     if (nodeId) {
       const nodeById = workflow.nodes.find(n => n.id === nodeId);
       if (nodeById) return nodeById;
     }
-    
+
     if (nodeName) {
       const nodeByName = workflow.nodes.find(n => n.name === nodeName);
       if (nodeByName) return nodeByName;
     }
-    
+
     // If nodeId is provided but not found, try treating it as a name
     if (nodeId && !nodeName) {
       const nodeByName = workflow.nodes.find(n => n.name === nodeId);
       if (nodeByName) return nodeByName;
     }
-    
+
     return null;
   }
 
   private setNestedProperty(obj: any, path: string, value: any): void {
     const keys = path.split('.');
     let current = obj;
-    
+
     for (let i = 0; i < keys.length - 1; i++) {
       const key = keys[i];
       if (!(key in current) || typeof current[key] !== 'object') {
@@ -640,7 +771,7 @@ export class WorkflowDiffEngine {
       }
       current = current[key];
     }
-    
+
     current[keys[keys.length - 1]] = value;
   }
 }

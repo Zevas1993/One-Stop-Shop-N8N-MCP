@@ -6,6 +6,7 @@
 import { NodeRepository } from "../database/node-repository";
 import { EnhancedConfigValidator } from "./enhanced-config-validator";
 import { ExpressionValidator } from "./expression-validator";
+import { CredentialValidator } from "./credential-validator";
 import { Logger } from "../utils/logger";
 
 const logger = new Logger({ prefix: "[WorkflowValidator]" });
@@ -64,10 +65,14 @@ interface WorkflowValidationResult {
 }
 
 export class WorkflowValidator {
+  private credentialValidator: CredentialValidator;
+
   constructor(
     private nodeRepository: NodeRepository,
     private nodeValidator: typeof EnhancedConfigValidator = EnhancedConfigValidator
-  ) {}
+  ) {
+    this.credentialValidator = new CredentialValidator();
+  }
 
   /**
    * Validate workflow schema/structure for n8n API compatibility (Issue #1)
@@ -79,7 +84,7 @@ export class WorkflowValidator {
     result: WorkflowValidationResult
   ): void {
     // REQUIRED properties that n8n API expects
-    const REQUIRED_PROPERTIES = ["nodes", "connections"];
+    const REQUIRED_PROPERTIES = ["nodes", "connections", "settings", "name"];
 
     // ALLOWED properties for n8n API (anything else will be rejected)
     const ALLOWED_PROPERTIES = new Set([
@@ -90,13 +95,14 @@ export class WorkflowValidator {
       "staticData",
       "pinData",
       "meta",
+      "tags",
     ]);
 
+    // FORBIDDEN properties that will cause API 400 error
     // FORBIDDEN properties that will cause API 400 error
     const FORBIDDEN_PROPERTIES = [
       "active",
       "description",
-      "tags",
       "createdAt",
       "updatedAt",
       "id",
@@ -184,6 +190,7 @@ export class WorkflowValidator {
       validateConnections?: boolean;
       validateExpressions?: boolean;
       profile?: "minimal" | "runtime" | "ai-friendly" | "strict";
+      skipApiFieldValidation?: boolean;
     } = {}
   ): Promise<WorkflowValidationResult> {
     const {
@@ -191,6 +198,7 @@ export class WorkflowValidator {
       validateConnections = true,
       validateExpressions = true,
       profile = "runtime",
+      skipApiFieldValidation = false,
     } = options;
 
     const result: WorkflowValidationResult = {
@@ -198,8 +206,10 @@ export class WorkflowValidator {
       errors: [],
       warnings: [],
       statistics: {
-        totalNodes: workflow.nodes.length,
-        enabledNodes: workflow.nodes.filter((n) => !n.disabled).length,
+        totalNodes: workflow.nodes ? workflow.nodes.length : 0,
+        enabledNodes: workflow.nodes
+          ? workflow.nodes.filter((n) => !n.disabled).length
+          : 0,
         triggerNodes: 0,
         validConnections: 0,
         invalidConnections: 0,
@@ -211,25 +221,34 @@ export class WorkflowValidator {
     try {
       // FIRST: Validate schema/properties for n8n API compatibility (Issue #1)
       // This must run BEFORE other validations to catch API-level errors early
-      this.validateWorkflowSchema(workflow, result);
+      // SKIP for workflow updates since updateData is already cleaned of read-only fields
+      if (!skipApiFieldValidation) {
+        this.validateWorkflowSchema(workflow, result);
 
-      // Stop early if schema validation failed - no point in continuing
-      if (
-        result.errors.some(
-          (e) =>
-            typeof e.message === "string" &&
-            (e.message.includes("property") || e.message.includes("schema"))
-        )
-      ) {
-        logger.warn(
-          "[WorkflowValidator] Schema validation failed, stopping further validation"
+        // Stop early if schema validation failed - no point in continuing
+        if (
+          result.errors.some(
+            (e) =>
+              typeof e.message === "string" &&
+              (e.message.includes("property") || e.message.includes("schema"))
+          )
+        ) {
+          logger.warn(
+            "[WorkflowValidator] Schema validation failed, stopping further validation"
+          );
+          result.valid = false;
+          return result;
+        }
+      } else {
+        logger.debug(
+          "[WorkflowValidator] Skipping API field validation as requested (workflow update mode)"
         );
-        result.valid = false;
-        return result;
       }
 
-      // Basic workflow structure validation
-      this.validateWorkflowStructure(workflow, result);
+      // Basic workflow structure validation (skip if nodes not present in partial update)
+      if (workflow.nodes) {
+        this.validateWorkflowStructure(workflow, result);
+      }
 
       // Validate each node if requested
       if (validateNodes) {
@@ -564,6 +583,23 @@ export class WorkflowValidator {
               nodeName: node.name,
               message: `typeVersion ${node.typeVersion} exceeds maximum supported version ${nodeInfo.version}`,
             });
+          }
+        }
+
+        // Validate credentials if present (Issue #2 - Credential Validation)
+        if (node.credentials && typeof node.credentials === "object") {
+          for (const [credType, credConfig] of Object.entries(node.credentials)) {
+            const credValidation = this.credentialValidator.validateCredential(credConfig);
+            if (!credValidation.valid) {
+              credValidation.errors.forEach((error) => {
+                result.errors.push({
+                  type: "error",
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  message: `Credential '${credType}': ${error}`,
+                });
+              });
+            }
           }
         }
 
@@ -937,34 +973,33 @@ export class WorkflowValidator {
     workflow: WorkflowJson,
     result?: WorkflowValidationResult
   ): WorkflowValidationResult {
-    if (!result) {
-      result = {
-        valid: true,
-        errors: [],
-        warnings: [],
-        statistics: {
-          totalNodes: workflow.nodes.length,
-          enabledNodes: workflow.nodes.filter((n) => !n.disabled).length,
-          triggerNodes: 0,
-          validConnections: 0,
-          invalidConnections: 0,
-          expressionsValidated: 0,
-        },
-        suggestions: [],
-      };
-    }
-    const nodeNames = workflow.nodes.map((n) => n.name);
+    const validationResult = result || {
+      valid: true,
+      errors: [],
+      warnings: [],
+      statistics: {
+        totalNodes: workflow.nodes.length,
+        enabledNodes: workflow.nodes.filter((n) => !n.disabled).length,
+        triggerNodes: 0,
+        validConnections: 0,
+        invalidConnections: 0,
+        expressionsValidated: 0,
+      },
+      suggestions: [],
+    };
+
+    const context = {
+      workflow,
+      nodeNames: new Set(workflow.nodes.map((n) => n.name)),
+      availableNodes: workflow.nodes.map((n) => n.name),
+    };
 
     for (const node of workflow.nodes) {
       if (node.disabled) continue;
 
-      // Create expression context
-      const context = {
-        availableNodes: nodeNames.filter((n) => n !== node.name),
-        currentNodeName: node.name,
-        hasInputData: this.nodeHasInput(node.name, workflow),
-        isInLoop: false, // Could be enhanced to detect loop nodes
-      };
+      if (!node.parameters) {
+        continue;
+      }
 
       // Validate expressions in parameters
       const exprValidation = ExpressionValidator.validateNodeExpressions(
@@ -972,12 +1007,12 @@ export class WorkflowValidator {
         context
       );
 
-      result.statistics.expressionsValidated +=
+      validationResult.statistics.expressionsValidated +=
         exprValidation.usedVariables.size;
 
       // Add expression errors and warnings
       exprValidation.errors.forEach((error) => {
-        result.errors.push({
+        validationResult.errors.push({
           type: "error",
           nodeId: node.id,
           nodeName: node.name,
@@ -986,7 +1021,7 @@ export class WorkflowValidator {
       });
 
       exprValidation.warnings.forEach((warning) => {
-        result.warnings.push({
+        validationResult.warnings.push({
           type: "warning",
           nodeId: node.id,
           nodeName: node.name,
@@ -995,7 +1030,7 @@ export class WorkflowValidator {
       });
     }
 
-    return result;
+    return validationResult;
   }
 
   /**
