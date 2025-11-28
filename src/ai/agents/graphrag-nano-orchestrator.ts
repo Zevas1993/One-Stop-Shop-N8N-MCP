@@ -15,6 +15,7 @@ import { WorkflowAgent } from "./workflow-agent";
 import { ValidatorAgent } from "./validator-agent";
 import { SharedMemory } from "../shared-memory";
 import { GraphRAGBridge, QueryGraphResult } from "../graphrag-bridge";
+import { VLLMClient } from "../vllm-client";
 import { logger } from "../../utils/logger";
 
 export interface NanoAgentPipelineConfig {
@@ -53,14 +54,20 @@ export class GraphRAGNanoOrchestrator {
   private graphRag: GraphRAGBridge;
   private config: NanoAgentPipelineConfig;
 
-  constructor(config?: Partial<NanoAgentPipelineConfig>) {
+  constructor(
+    config?: Partial<NanoAgentPipelineConfig>,
+    llmClients?: {
+      embedding?: VLLMClient;
+      generation?: VLLMClient;
+    }
+  ) {
     // Initialize shared memory for agent coordination
     this.sharedMemory = new SharedMemory();
 
-    // Initialize agents
-    this.patternAgent = new PatternAgent(this.sharedMemory);
-    this.workflowAgent = new WorkflowAgent(this.sharedMemory);
-    this.validatorAgent = new ValidatorAgent(this.sharedMemory);
+    // Initialize agents with optional LLM clients
+    this.patternAgent = new PatternAgent(this.sharedMemory, llmClients);
+    this.workflowAgent = new WorkflowAgent(this.sharedMemory, llmClients);
+    this.validatorAgent = new ValidatorAgent(this.sharedMemory, llmClients);
 
     // Initialize GraphRAG bridge
     this.graphRag = GraphRAGBridge.get();
@@ -73,8 +80,23 @@ export class GraphRAGNanoOrchestrator {
       shareGraphInsights: config?.shareGraphInsights ?? true,
     };
 
+    // Log LLM availability
+    if (llmClients?.embedding || llmClients?.generation) {
+      logger.info(
+        "[GraphRAG Orchestrator] Initialized with nano LLM support",
+        {
+          hasEmbedding: !!llmClients.embedding,
+          hasGeneration: !!llmClients.generation,
+        }
+      );
+    } else {
+      logger.info(
+        "[GraphRAG Orchestrator] Initialized without LLM clients (rule-based fallback)"
+      );
+    }
+
     logger.info(
-      "[GraphRAG Orchestrator] Initialized with config:",
+      "[GraphRAG Orchestrator] Configuration:",
       this.config
     );
   }

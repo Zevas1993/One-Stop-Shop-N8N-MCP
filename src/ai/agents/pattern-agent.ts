@@ -101,8 +101,8 @@ export class PatternAgent extends BaseAgent {
       const keywords = this.extractKeywords(input.goal);
       this.logger.debug(`Extracted keywords: ${keywords.join(", ")}`);
 
-      // Find matching patterns
-      const matches = this.findMatchingPatterns(keywords);
+      // Find matching patterns (now async for semantic matching)
+      const matches = await this.findMatchingPatterns(keywords);
       this.logger.info(`Found ${matches.length} matching patterns`);
       if (matches.length > 0) {
         this.logger.info(
@@ -243,7 +243,19 @@ export class PatternAgent extends BaseAgent {
   /**
    * Find patterns matching keywords
    */
-  private findMatchingPatterns(keywords: string[]): PatternMatch[] {
+  private async findMatchingPatterns(keywords: string[]): Promise<PatternMatch[]> {
+    // If LLM available and we have keywords, use semantic matching
+    if (this.hasLLMSupport().embedding && keywords.length > 0) {
+      const semanticMatches = await this.findMatchingPatternsSemantically(keywords.join(' '));
+      if (semanticMatches.length > 0) {
+        this.logger.debug(`Semantic matching found ${semanticMatches.length} patterns`);
+        return semanticMatches;
+      }
+      // If semantic matching fails, fall through to keyword matching
+      this.logger.debug('Semantic matching returned no results, falling back to keyword matching');
+    }
+
+    // Keyword-based matching (fallback or when no LLM)
     const matches: Map<string, PatternMatch> = new Map();
 
     // Find patterns matching keywords
@@ -274,6 +286,57 @@ export class PatternAgent extends BaseAgent {
 
     // Only return matches with minimum confidence (lowered threshold to catch single-keyword matches)
     return Array.from(matches.values()).filter((m) => m.confidence >= 0.2);
+  }
+
+  /**
+   * Find matching patterns using semantic similarity
+   */
+  private async findMatchingPatternsSemantically(query: string): Promise<PatternMatch[]> {
+    try {
+      // Generate embedding for the query
+      const queryEmbedding = await this.generateEmbedding(query);
+      if (!queryEmbedding) {
+        this.logger.debug('Failed to generate query embedding, falling back to keyword matching');
+        return [];
+      }
+
+      const matches: PatternMatch[] = [];
+
+      // Compare query embedding with pre-computed pattern embeddings
+      for (const [patternId, pattern] of this.patterns.entries()) {
+        const patternEmbedding = this.patternEmbeddings.get(patternId);
+        if (!patternEmbedding) {
+          this.logger.debug(`No embedding for pattern ${patternId}, skipping`);
+          continue;
+        }
+
+        // Calculate cosine similarity
+        const similarity = this.cosineSimilarity(queryEmbedding, patternEmbedding);
+
+        // Use semantic threshold (0.3 = 30% similarity)
+        if (similarity > 0.3) {
+          matches.push({
+            patternId,
+            patternName: pattern.name,
+            description: pattern.description,
+            confidence: similarity, // Use similarity as confidence score
+            matchedKeywords: [], // Not applicable for semantic matching
+            suggestedNodes: pattern.nodes,
+            complexity: pattern.complexity,
+          });
+        }
+      }
+
+      // Sort by confidence (similarity) descending
+      matches.sort((a, b) => b.confidence - a.confidence);
+
+      this.logger.debug(`Semantic matching found ${matches.length} patterns with >30% similarity`);
+      return matches;
+
+    } catch (error) {
+      this.logger.warn('Semantic pattern matching failed:', error);
+      return [];
+    }
   }
 
   /**

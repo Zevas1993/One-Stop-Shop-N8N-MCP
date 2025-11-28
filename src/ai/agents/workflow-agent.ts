@@ -34,7 +34,10 @@ export interface ConnectionData {
 export class WorkflowAgent extends BaseAgent {
   private nodeRegistry: Map<string, NodeTemplate>;
 
-  constructor(sharedMemory: SharedMemory) {
+  constructor(
+    sharedMemory: SharedMemory,
+    llmClients?: { embedding?: any; generation?: any }
+  ) {
     const config: AgentConfig = {
       id: 'workflow-agent',
       name: 'Workflow Generation Agent',
@@ -44,7 +47,7 @@ export class WorkflowAgent extends BaseAgent {
       timeout: 45000, // 45 seconds max
     };
 
-    super(config, sharedMemory);
+    super(config, sharedMemory, llmClients);
     this.nodeRegistry = new Map();
   }
 
@@ -132,7 +135,7 @@ export class WorkflowAgent extends BaseAgent {
   }
 
   /**
-   * Generate workflow from pattern
+   * Generate workflow from pattern using AI (if available)
    */
   private async generateWorkflowFromPattern(
     goal: string,
@@ -141,7 +144,19 @@ export class WorkflowAgent extends BaseAgent {
     try {
       const patternId = selectedPattern.patternId;
 
-      // Map patterns to workflow templates
+      // Try AI-enhanced generation first
+      if (this.hasLLMSupport().generation) {
+        this.logger.debug('Attempting AI-enhanced workflow generation');
+        const aiWorkflow = await this.generateWorkflowWithAI(goal, patternId);
+        if (aiWorkflow) {
+          this.logger.info('✅ Generated workflow using AI enhancement');
+          return aiWorkflow;
+        }
+        this.logger.debug('AI enhancement failed or unavailable, falling back to template');
+      }
+
+      // Fallback to template-based generation
+      this.logger.info('Generating workflow from static template (no AI available)');
       const workflow = this.createWorkflowTemplate(patternId, goal);
 
       if (!workflow) {
@@ -158,6 +173,106 @@ export class WorkflowAgent extends BaseAgent {
     } catch (error) {
       this.logger.error('Failed to generate workflow from pattern', error as Error);
       return null;
+    }
+  }
+
+  /**
+   * Generate workflow using AI to suggest optimal parameters
+   */
+  private async generateWorkflowWithAI(goal: string, patternId: string): Promise<GeneratedWorkflow | null> {
+    try {
+      // Get template as starting point
+      const template = this.createWorkflowTemplate(patternId, goal);
+      if (!template) {
+        this.logger.warn(`No template found for pattern: ${patternId}`);
+        return null;
+      }
+
+      // Use generation LLM to enhance parameters
+      const nodeNames = template.nodes.map(n => n.name).join(', ');
+      const prompt = `Given this n8n workflow goal: "${goal}"
+And this workflow pattern: "${patternId}"
+With these nodes: ${nodeNames}
+
+Suggest optimal parameter values for the nodes. Return ONLY a JSON object with node names as keys and parameter objects as values.
+
+Example format:
+{
+  "HTTP Request": {
+    "method": "GET",
+    "url": "https://api.example.com/endpoint"
+  },
+  "Slack Send Message": {
+    "channel": "#notifications",
+    "text": "Workflow completed successfully"
+  }
+}`;
+
+      const aiResponse = await this.generateText(prompt, {
+        maxTokens: 512,
+        temperature: 0.3, // Low temperature for structured output
+      });
+
+      if (aiResponse) {
+        // Parse AI suggestions
+        const suggestions = this.parseAISuggestions(aiResponse);
+
+        if (Object.keys(suggestions).length > 0) {
+          // Apply suggestions to template
+          this.applyAISuggestions(template, suggestions);
+          this.logger.debug(`Applied AI parameter suggestions for ${Object.keys(suggestions).length} nodes`);
+        } else {
+          this.logger.debug('No AI suggestions parsed from response');
+        }
+      } else {
+        this.logger.debug('No AI response received');
+      }
+
+      this.enhanceWorkflowWithGoal(template, goal);
+      this.ensureApiCompliance(template);
+
+      return template;
+
+    } catch (error) {
+      this.logger.warn('AI enhancement failed, falling back to template:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Parse AI suggestions from response
+   */
+  private parseAISuggestions(response: string): Record<string, Record<string, any>> {
+    try {
+      // Extract JSON from response (might have markdown code blocks)
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        this.logger.warn('No JSON found in AI response');
+        return {};
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      this.logger.debug(`Parsed AI suggestions for ${Object.keys(parsed).length} nodes`);
+      return parsed;
+    } catch (error) {
+      this.logger.warn('Failed to parse AI suggestions:', error);
+      return {};
+    }
+  }
+
+  /**
+   * Apply AI suggestions to workflow template
+   */
+  private applyAISuggestions(workflow: GeneratedWorkflow, suggestions: Record<string, Record<string, any>>): void {
+    for (const node of workflow.nodes) {
+      if (suggestions[node.name]) {
+        // Merge AI suggestions with existing parameters
+        node.parameters = {
+          ...node.parameters,
+          ...suggestions[node.name],
+        };
+        this.logger.debug(`Applied AI suggestions to node: ${node.name}`);
+      }
     }
   }
 

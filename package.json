@@ -1,32 +1,48 @@
 {
   "name": "n8n-mcp",
-  "version": "2.7.1",
-  "description": "Integration between n8n workflow automation and Model Context Protocol (MCP)",
-  "main": "dist/index.js",
+  "version": "3.0.0",
+  "description": "n8n Co-Pilot - Stateless MCP server with live node sync, bulletproof validation, and embedded LLM",
+  "main": "dist/main.js",
+  "bin": {
+    "n8n-mcp": "./dist/main.js"
+  },
   "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "start:http": "MCP_MODE=http node dist/main.js",
+    "start:mcp": "node dist/main.js",
+    "dev": "npm run build && npm run start",
+    "dev:http": "npm run build && npm run start:http",
+    "dev:watch": "nodemon --watch src --ext ts --exec 'npm run build && npm run start:http'",
+    
+    "docker:build": "docker build -t n8n-mcp:latest .",
+    "docker:run": "docker run -it --rm -e N8N_API_URL -e N8N_API_KEY n8n-mcp:latest",
+    "docker:compose": "docker compose up -d",
+    "docker:compose:down": "docker compose down",
+    
     "setup": "node setup.js",
     "setup:claude-desktop": "node setup.js --mode=claude-desktop",
     "setup:http": "node setup.js --mode=http",
     "setup:docker": "node setup.js --mode=docker",
-    "build": "tsc",
+    
     "rebuild": "node dist/scripts/rebuild-github.js",
     "rebuild:local": "node dist/scripts/rebuild.js",
     "rebuild:optimized": "node dist/scripts/rebuild-optimized.js",
     "rebuild:github": "node dist/scripts/rebuild-github.js",
     "validate": "node dist/scripts/validate.js",
-    "test-nodes": "node dist/scripts/test-nodes.js",
-    "start": "node dist/mcp/index.js",
-    "start:legacy": "MCP_MODE=stdio node dist/mcp/index.js",
-    "start:consolidated": "node dist/consolidated-server.js",
-    "start:http": "MCP_MODE=http node dist/mcp/index.js",
-    "start:http:fixed": "MCP_MODE=http USE_FIXED_HTTP=true node dist/mcp/index.js",
-    "http": "npm run build && npm run start:http:fixed",
-    "dev": "npm run build && npm run rebuild && npm run validate",
-    "dev:http": "MCP_MODE=http nodemon --watch src --ext ts --exec 'npm run build && npm run start:http'",
-    "test:single-session": "./scripts/test-single-session.sh",
+    
     "test": "jest",
+    "test:core": "jest --testPathPattern=core",
+    "test:coverage": "jest --coverage --passWithNoTests",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
+    
+    "legacy:start": "node dist/mcp/index.js",
+    "legacy:http": "MCP_MODE=http node dist/mcp/index.js",
+    "legacy:consolidated": "node dist/consolidated-server.js",
+    
+    "test-nodes": "node dist/scripts/test-nodes.js",
+    "test:single-session": "./scripts/test-single-session.sh",
     "update:n8n": "node scripts/update-n8n-deps.js",
     "update:n8n:check": "node scripts/update-n8n-deps.js --dry-run",
     "fetch:templates": "node dist/scripts/fetch-templates.js",
@@ -38,6 +54,7 @@
     "test:enhanced-validation": "node dist/scripts/test-enhanced-validation.js",
     "test:ai-workflow-validation": "node dist/scripts/test-ai-workflow-validation.js",
     "test:mcp-tools": "node dist/scripts/test-mcp-tools.js",
+    "test:nano-llm": "npx tsx scripts/test-nano-llm-integration.ts",
     "test:n8n-manager": "node dist/scripts/test-n8n-manager-integration.js",
     "test:n8n-validate-workflow": "node dist/scripts/test-n8n-validate-workflow.js",
     "test:typeversion-validation": "node dist/scripts/test-typeversion-validation.js",
@@ -60,8 +77,7 @@
     "test:graphrag": "ts-node src/scripts/test-graphrag.ts",
     "test:http-client": "ts-node src/scripts/test-http-mcp-client.ts",
     "seed:catalog": "ts-node src/scripts/seed-graph-catalog.ts",
-    "metrics:snapshot": "ts-node src/scripts/metrics-snapshot.ts",
-    "test:coverage": "jest --coverage --passWithNoTests"
+    "metrics:snapshot": "ts-node src/scripts/metrics-snapshot.ts"
   },
   "repository": {
     "type": "git",
@@ -73,7 +89,9 @@
     "model-context-protocol",
     "ai",
     "workflow",
-    "automation"
+    "automation",
+    "copilot",
+    "llm"
   ],
   "author": "Romuald Czlonkowski @ www.aiadvisors.pl/en",
   "license": "MIT",
@@ -81,6 +99,9 @@
     "url": "https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP/issues"
   },
   "homepage": "https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "devDependencies": {
     "@n8n/n8n-nodes-langchain": "^1.113.0",
     "@octokit/rest": "^22.0.0",

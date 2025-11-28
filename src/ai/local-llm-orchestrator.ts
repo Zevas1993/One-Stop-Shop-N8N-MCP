@@ -183,17 +183,30 @@ export class LocalLLMOrchestrator {
       this.generationClient = undefined;
     }
 
-    // Initialize nano agent orchestrator
+    // Initialize nano agent orchestrator with LLM clients
     try {
       // Dynamically import to avoid circular dependency
       const {
         GraphRAGNanoOrchestrator: GRAO,
-      } = require("./graphrag-nano-orchestrator");
-      this.nanoAgentOrchestrator = new GRAO({
-        enableGraphRAG: true,
-        maxAgentRetries: 2,
-        agentTimeoutMs: 30000,
-        shareGraphInsights: true,
+      } = require("./agents/graphrag-nano-orchestrator");
+
+      // Pass LLM clients to orchestrator (if available)
+      this.nanoAgentOrchestrator = new GRAO(
+        {
+          enableGraphRAG: true,
+          maxAgentRetries: 2,
+          agentTimeoutMs: 30000,
+          shareGraphInsights: true,
+        },
+        {
+          embedding: this.embeddingClient,
+          generation: this.generationClient,
+        }
+      );
+
+      logger.info("[LocalLLM] Nano agent orchestrator created with LLM clients", {
+        hasEmbedding: !!this.embeddingClient,
+        hasGeneration: !!this.generationClient,
       });
     } catch (error) {
       logger.warn(

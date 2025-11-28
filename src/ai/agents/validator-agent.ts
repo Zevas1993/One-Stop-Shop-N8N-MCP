@@ -48,7 +48,10 @@ export class ValidatorAgent extends BaseAgent {
   private triggerNodeTypes: Set<string>;
   private actionNodeTypes: Set<string>;
 
-  constructor(sharedMemory: SharedMemory) {
+  constructor(
+    sharedMemory: SharedMemory,
+    llmClients?: { embedding?: any; generation?: any }
+  ) {
     const config: AgentConfig = {
       id: 'validator-agent',
       name: 'Workflow Validation Agent',
@@ -58,7 +61,7 @@ export class ValidatorAgent extends BaseAgent {
       timeout: 30000, // 30 seconds max
     };
 
-    super(config, sharedMemory);
+    super(config, sharedMemory, llmClients);
     this.validNodeTypes = new Set();
     this.triggerNodeTypes = new Set();
     this.actionNodeTypes = new Set();
@@ -288,6 +291,11 @@ export class ValidatorAgent extends BaseAgent {
       stats.complexity = 'complex';
     }
 
+    // Perform semantic validation if LLM available
+    this.performSemanticValidation(workflow, warnings).catch((error) => {
+      this.logger.debug('Semantic validation skipped or failed:', error);
+    });
+
     // Final validation: valid if no critical errors
     const hasCriticalErrors = errors.some((e) => e.severity === 'critical');
 
@@ -299,6 +307,84 @@ export class ValidatorAgent extends BaseAgent {
       warnings,
       stats,
     };
+  }
+
+  /**
+   * Perform semantic validation using AI (if available)
+   */
+  private async performSemanticValidation(
+    workflow: any,
+    warnings: ValidationWarning[]
+  ): Promise<void> {
+    if (!this.hasLLMSupport().generation) {
+      return; // Skip if no LLM available
+    }
+
+    try {
+      const nodeList = workflow.nodes
+        .map((n: any) => `${n.name} (${n.type})`)
+        .join(', ');
+
+      const prompt = `Review this n8n workflow for potential issues:
+
+Workflow: ${workflow.name}
+Description: ${workflow.description || 'N/A'}
+Node Count: ${workflow.nodes.length}
+Nodes: ${nodeList}
+
+Check for:
+1. Logical flow issues
+2. Missing error handling
+3. Performance concerns
+4. Security vulnerabilities
+
+Return ONLY a JSON array of warnings in this format:
+[{"type": "SEMANTIC_WARNING", "message": "description", "suggestion": "how to fix"}]
+
+If no issues found, return: []`;
+
+      const aiResponse = await this.generateText(prompt, {
+        maxTokens: 512,
+        temperature: 0.2,
+      });
+
+      if (aiResponse) {
+        const aiWarnings = this.parseAIWarnings(aiResponse);
+        if (aiWarnings.length > 0) {
+          warnings.push(...aiWarnings);
+          this.logger.info(`AI validation found ${aiWarnings.length} semantic warnings`);
+        } else {
+          this.logger.debug('AI validation found no semantic issues');
+        }
+      }
+    } catch (error) {
+      this.logger.warn('Semantic validation failed:', error);
+    }
+  }
+
+  /**
+   * Parse AI validation warnings
+   */
+  private parseAIWarnings(response: string): ValidationWarning[] {
+    try {
+      // Extract JSON from response (might have markdown code blocks)
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        this.logger.debug('No JSON array found in AI validation response');
+        return [];
+      }
+
+      const warnings = JSON.parse(jsonMatch[0]);
+
+      return warnings.map((w: any) => ({
+        type: w.type || 'SEMANTIC_WARNING',
+        message: w.message || w.description || 'Unknown semantic issue',
+        suggestion: w.suggestion || w.fix,
+      }));
+    } catch (error) {
+      this.logger.warn('Failed to parse AI warnings:', error);
+      return [];
+    }
   }
 
   /**
