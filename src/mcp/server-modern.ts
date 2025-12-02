@@ -163,6 +163,12 @@ export class UnifiedMCPServer {
       }
 
       if (process.env.N8N_AUTO_SYNC === "true") {
+        if (hasUpdates) {
+          logger.info(
+            "🔄 Auto-rebuild enabled: Triggering rebuild due to detected updates..."
+          );
+          await this.versionMonitor.triggerRebuild();
+        }
         this.versionMonitor.startMonitoring(true);
       }
     } catch (error) {
@@ -1217,7 +1223,7 @@ export class UnifiedMCPServer {
       if (!config) {
         logger.warn(
           "⚠️  n8n API not configured. Workflow tools will be unavailable. " +
-          "Required env vars: N8N_API_URL, N8N_API_KEY"
+            "Required env vars: N8N_API_URL, N8N_API_KEY"
         );
         this.n8nConfigured = false;
         return;
@@ -1249,8 +1255,9 @@ export class UnifiedMCPServer {
 
     if (!this.n8nConfigured) {
       const message =
-        `n8n API not configured. ${toolName ? `Tool '${toolName}' requires ` : ""}` +
-        "environment variables: N8N_API_URL, N8N_API_KEY";
+        `n8n API not configured. ${
+          toolName ? `Tool '${toolName}' requires ` : ""
+        }` + "environment variables: N8N_API_URL, N8N_API_KEY";
       logger.error(message);
       throw new Error(message);
     }
@@ -1291,17 +1298,23 @@ export class UnifiedMCPServer {
   async run(): Promise<void> {
     // Initialize n8n node synchronization in background (non-blocking)
     // This ensures the node database is up-to-date with the connected n8n instance
-    if (process.env.N8N_AUTO_SYNC !== 'false' && isN8nApiConfigured()) {
+    if (process.env.N8N_AUTO_SYNC !== "false" && isN8nApiConfigured()) {
       this.syncN8nNodes()
         .then((syncResult) => {
           if (syncResult) {
             if (syncResult.synced) {
-              logger.info(`[Server] ✅ Node database synchronized with n8n ${syncResult.version}`);
+              logger.info(
+                `[Server] ✅ Node database synchronized with n8n ${syncResult.version}`
+              );
               if (syncResult.nodesCount) {
-                logger.info(`[Server]    Loaded ${syncResult.nodesCount} nodes via ${syncResult.method}`);
+                logger.info(
+                  `[Server]    Loaded ${syncResult.nodesCount} nodes via ${syncResult.method}`
+                );
               }
             } else {
-              logger.info(`[Server] ✅ Node database already up-to-date (${syncResult.version})`);
+              logger.info(
+                `[Server] ✅ Node database already up-to-date (${syncResult.version})`
+              );
             }
           }
         })
@@ -1312,7 +1325,9 @@ export class UnifiedMCPServer {
           );
         });
     } else {
-      logger.info("[Server] Node auto-sync disabled (set N8N_API_URL and N8N_API_KEY to enable)");
+      logger.info(
+        "[Server] Node auto-sync disabled (set N8N_API_URL and N8N_API_KEY to enable)"
+      );
     }
 
     // Initialize nano agent orchestrator in background (non-blocking)
@@ -1344,10 +1359,10 @@ export class UnifiedMCPServer {
 
       const config = getN8nApiConfig();
       if (!config) {
-        throw new Error('n8n API configuration not available');
+        throw new Error("n8n API configuration not available");
       }
 
-      const { N8nApiClient } = await import('../services/n8n-api-client');
+      const { N8nApiClient } = await import("../services/n8n-api-client");
       const n8nClient = new N8nApiClient(config);
 
       const nodeSync = new N8nNodeSync(
@@ -1365,7 +1380,7 @@ export class UnifiedMCPServer {
 
       return syncResult;
     } catch (error) {
-      logger.error('[Server] Failed to sync nodes:', error);
+      logger.error("[Server] Failed to sync nodes:", error);
       throw error;
     }
   }

@@ -1,0 +1,26 @@
+--- NODE LIST ---
+Name: "Outlook Email Trigger", Type: n8n-nodes-base.microsoftOutlookTrigger, ID: 1713fd7c-2fa4-4a6a-8733-cbf83e1c39a3
+Name: "Teams Message Trigger", Type: n8n-nodes-base.microsoftTeamsTrigger, ID: b6425482-7863-4b4d-b391-f2c97d86e45f
+Name: "Process Email for RAG", Type: n8n-nodes-base.code, ID: cfdc20af-d384-4454-82b9-b180a4ec075d
+Name: "Process Teams Input", Type: n8n-nodes-base.code, ID: 5b6c5872-937a-41dc-b2f7-d1bfe6097669
+Name: "OpenAI Chat Model", Type: @n8n/n8n-nodes-langchain.lmChatOpenAi, ID: 84abdd8e-5c77-4f91-b702-f4aac51c8f91
+Name: "Window Buffer Memory", Type: @n8n/n8n-nodes-langchain.memoryBufferWindow, ID: 9de80912-38b5-484a-a407-a86bd2d010d7
+Name: "Fraud Classifier", Type: @n8n/n8n-nodes-langchain.agent, ID: 10e8e1a6-0d30-4b45-9eba-b7d713c997a3
+Name: "Billing RAG Agent", Type: @n8n/n8n-nodes-langchain.agent, ID: afc65031-5425-4d8a-9e18-e44395e2923c
+Name: "High Priority RAG Agent", Type: @n8n/n8n-nodes-langchain.agent, ID: 9446d865-86c1-4bc5-b97e-7876a6289990
+Name: "AI Agent (Central)", Type: @n8n/n8n-nodes-langchain.agent, ID: 5cd15849-02c3-4414-a844-21e79b198800
+Name: "Postgres Memory", Type: n8n-nodes-base.postgres, ID: 586f2696-b783-4bf9-8828-2ff40d3f41cd
+Name: "Search Emails", Type: n8n-nodes-base.microsoftOutlook, ID: ee1c0c1f-fc00-48c5-9771-3ca6c6251f51
+Name: "Get Calendar Events", Type: n8n-nodes-base.microsoftOutlook, ID: fd2c3f9f-b982-4c82-93a2-bd0f40e9666d
+Name: "Create Calendar Event", Type: n8n-nodes-base.microsoftOutlook, ID: 009f73ae-9538-4115-8cc7-82eb610a8d5d
+Name: "Create Draft", Type: n8n-nodes-base.microsoftOutlook, ID: 3073c33f-b828-4d3a-8e12-4808ede6d0b1
+Name: "Send Email", Type: n8n-nodes-base.microsoftOutlook, ID: e76d9496-4e79-4d48-9c1a-29ca47fedf31
+Name: "Send Teams Response", Type: n8n-nodes-base.microsoftTeams, ID: ae4df26a-ce39-4e34-8dec-6b5b6bdd5e30
+Name: "Note: Inputs", Type: n8n-nodes-base.stickyNote, ID: 91002a0e-d811-42b3-b6c2-a6604b2442d5
+Name: "Note: AI Config", Type: n8n-nodes-base.stickyNote, ID: 89a0d7d0-5764-4d00-9806-4e740cf1ba43
+Name: "Note: Specialized Agents", Type: n8n-nodes-base.stickyNote, ID: 07471ed4-5e37-4774-8a43-4a3d5e8e1fc5
+Name: "Note: Central Orchestrator", Type: n8n-nodes-base.stickyNote, ID: b73839df-4807-47a3-97e4-593b8d52e2c2
+Name: "Note: Tools", Type: n8n-nodes-base.stickyNote, ID: 967f2c1d-6337-4f08-8bbc-517d03e24615
+Name: "HTTP Request", Type: n8n-nodes-base.httpRequest, ID: a8bc35cf-135a-4981-bb18-2672c8b70e90
+Name: "Switch", Type: n8n-nodes-base.switch, ID: f56c294e-e599-4915-9a6b-1ffd76378a19
+-----------------

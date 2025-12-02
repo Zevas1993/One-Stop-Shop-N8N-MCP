@@ -1,0 +1,45 @@
+≡ƒÜÇ Starting Complex Workflow Agent Simulation...
+[Mock n8n] Server running on port 5678
+   Server Path: C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\src\mcp\index.ts
+
+--- Step 1: Initialization ---
+[DEBUG] Starting Unified MCP Server.
+Failed to start MCP server: src/services/n8n-live-validator.ts(50,21): error TS1442: Expected '=' for property initializer.
+src/services/n8n-live-validator.ts(51,24): error TS1442: Expected '=' for property initializer.
+src/services/n8n-live-validator.ts(53,5): error TS1128: Declaration or statement expected.
+src/services/n8n-live-validator.ts(54,3): error TS1128: Declaration or statement expected.
+src/services/n8n-live-validator.ts(60,3): error TS1434: Unexpected keyword or identifier.
+src/services/n8n-live-validator.ts(61,13): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(62,4): error TS1005: ';' expected.
+src/services/n8n-live-validator.ts(63,9): error TS1005: ':' expected.
+src/services/n8n-live-validator.ts(64,13): error TS1005: ':' expected.
+src/services/n8n-live-validator.ts(64,19): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(64,27): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(64,28): error TS1109: Expression expected.
+src/services/n8n-live-validator.ts(64,30): error TS1005: ':' expected.
+src/services/n8n-live-validator.ts(64,34): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(67,11): error TS1003: Identifier expected.
+src/services/n8n-live-validator.ts(67,20): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(67,60): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(67,62): error TS1136: Property assignment expected.
+src/services/n8n-live-validator.ts(134,5): error TS1128: Declaration or statement expected.
+src/services/n8n-live-validator.ts(134,7): error TS1005: 'try' expected.
+src/services/n8n-live-validator.ts(143,3): error TS1128: Declaration or statement expected.
+src/services/n8n-live-validator.ts(148,3): error TS1434: Unexpected keyword or identifier.
+src/services/n8n-live-validator.ts(148,22): error TS1005: ';' expected.
+src/services/n8n-live-validator.ts(149,9): error TS1005: ':' expected.
+src/services/n8n-live-validator.ts(150,13): error TS1005: ':' expected.
+src/services/n8n-live-validator.ts(152,9): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(153,14): error TS1005: ':' expected.
+src/services/n8n-live-validator.ts(153,37): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(154,7): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(165,3): error TS1128: Declaration or statement expected.
+src/services/n8n-live-validator.ts(165,35): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(165,41): error TS1005: ';' expected.
+src/services/n8n-live-validator.ts(165,43): error TS1434: Unexpected keyword or identifier.
+src/services/n8n-live-validator.ts(196,3): error TS1128: Declaration or statement expected.
+src/services/n8n-live-validator.ts(196,36): error TS1005: ',' expected.
+src/services/n8n-live-validator.ts(196,42): error TS1005: ';' expected.
+src/services/n8n-live-validator.ts(196,44): error TS1434: Unexpected keyword or identifier.
+src/services/n8n-live-validator.ts(219,1): error TS1128: Declaration or statement expected.
+

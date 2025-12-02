@@ -14,33 +14,27 @@
     "dev": "npm run build && npm run start",
     "dev:http": "npm run build && npm run start:http",
     "dev:watch": "nodemon --watch src --ext ts --exec 'npm run build && npm run start:http'",
-    
     "docker:build": "docker build -t n8n-mcp:latest .",
     "docker:run": "docker run -it --rm -e N8N_API_URL -e N8N_API_KEY n8n-mcp:latest",
     "docker:compose": "docker compose up -d",
     "docker:compose:down": "docker compose down",
-    
     "setup": "node setup.js",
     "setup:claude-desktop": "node setup.js --mode=claude-desktop",
     "setup:http": "node setup.js --mode=http",
     "setup:docker": "node setup.js --mode=docker",
-    
     "rebuild": "node dist/scripts/rebuild-github.js",
     "rebuild:local": "node dist/scripts/rebuild.js",
     "rebuild:optimized": "node dist/scripts/rebuild-optimized.js",
     "rebuild:github": "node dist/scripts/rebuild-github.js",
     "validate": "node dist/scripts/validate.js",
-    
     "test": "jest",
     "test:core": "jest --testPathPattern=core",
     "test:coverage": "jest --coverage --passWithNoTests",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    
     "legacy:start": "node dist/mcp/index.js",
     "legacy:http": "MCP_MODE=http node dist/mcp/index.js",
     "legacy:consolidated": "node dist/consolidated-server.js",
-    
     "test-nodes": "node dist/scripts/test-nodes.js",
     "test:single-session": "./scripts/test-single-session.sh",
     "update:n8n": "node scripts/update-n8n-deps.js",
@@ -103,7 +97,7 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "@n8n/n8n-nodes-langchain": "^1.113.0",
+    "@n8n/n8n-nodes-langchain": "1.120.2",
     "@octokit/rest": "^22.0.0",
     "@playwright/test": "^1.53.2",
     "@types/better-sqlite3": "^7.6.13",
@@ -116,9 +110,9 @@
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
     "jest": "^29.7.0",
-    "n8n": "^1.113.3",
-    "n8n-core": "^1.113.0",
-    "n8n-workflow": "^1.111.0",
+    "n8n": "1.121.3",
+    "n8n-core": "1.120.2",
+    "n8n-workflow": "1.118.2",
     "node-cron": "^4.2.0",
     "nodemon": "^3.1.10",
     "supertest": "^7.0.0",

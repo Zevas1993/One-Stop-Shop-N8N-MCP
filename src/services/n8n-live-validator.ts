@@ -6,8 +6,8 @@
  * actually work in n8n, catching errors that local validation misses.
  */
 
-import axios, { AxiosInstance } from 'axios';
-import { logger } from '../utils/logger';
+import axios, { AxiosInstance } from "axios";
+import { logger } from "../utils/logger";
 
 export interface Workflow {
   name: string;
@@ -34,15 +34,15 @@ export class N8nLiveValidator {
     this.apiKey = apiKey;
 
     // Normalize URL
-    const baseUrl = n8nUrl.endsWith('/') ? n8nUrl.slice(0, -1) : n8nUrl;
-    const apiUrl = baseUrl.endsWith('/api/v1') ? baseUrl : `${baseUrl}/api/v1`;
+    const baseUrl = n8nUrl.endsWith("/") ? n8nUrl.slice(0, -1) : n8nUrl;
+    const apiUrl = baseUrl.endsWith("/api/v1") ? baseUrl : `${baseUrl}/api/v1`;
 
     this.client = axios.create({
       baseURL: apiUrl,
       timeout: 30000,
       headers: {
-        'X-N8N-API-KEY': apiKey,
-        'Content-Type': 'application/json',
+        "X-N8N-API-KEY": apiKey,
+        "Content-Type": "application/json",
       },
     });
   }
@@ -53,7 +53,9 @@ export class N8nLiveValidator {
    */
   async validateWorkflow(workflow: Workflow): Promise<ValidationResult> {
     try {
-      logger.debug(`Validating workflow against live n8n instance: ${this.n8nUrl}`);
+      logger.debug(
+        `Validating workflow against live n8n instance: ${this.n8nUrl}`
+      );
 
       // Prepare the workflow for validation
       // Only include fields that are allowed by n8n API
@@ -78,7 +80,7 @@ export class N8nLiveValidator {
 
       // Try to validate by creating a temporary workflow
       // n8n's validation happens during the create/update process
-      const response = await this.client.post('/workflows', workflowPayload, {
+      const response = await this.client.post("/workflows", workflowPayload, {
         validateStatus: () => true, // Don't throw on any status
       });
 
@@ -87,7 +89,9 @@ export class N8nLiveValidator {
         try {
           await this.client.delete(`/workflows/${response.data.id}`);
         } catch (err) {
-          logger.warn(`Failed to delete temporary validation workflow ${response.data.id}`);
+          logger.warn(
+            `Failed to delete temporary validation workflow ${response.data.id}`
+          );
         }
         return { valid: true, errors: [], warnings: [] };
       }
@@ -121,7 +125,9 @@ export class N8nLiveValidator {
    * Validate workflow structure and nodes exist in n8n
    * This is a lighter check that doesn't create workflows
    */
-  async validateWorkflowStructure(workflow: Workflow): Promise<ValidationResult> {
+  async validateWorkflowStructure(
+    workflow: Workflow
+  ): Promise<ValidationResult> {
     try {
       const errors: string[] = [];
 
@@ -129,7 +135,7 @@ export class N8nLiveValidator {
       if (!workflow.nodes || !Array.isArray(workflow.nodes)) {
         return {
           valid: false,
-          errors: ['Workflow must have a nodes array'],
+          errors: ["Workflow must have a nodes array"],
           warnings: [],
         };
       }
@@ -137,7 +143,7 @@ export class N8nLiveValidator {
       if (workflow.nodes.length === 0) {
         return {
           valid: false,
-          errors: ['Workflow must have at least one node'],
+          errors: ["Workflow must have at least one node"],
           warnings: [],
         };
       }
@@ -149,28 +155,36 @@ export class N8nLiveValidator {
           continue;
         }
 
-        if (!node.typeVersion && node.type !== 'n8n-nodes-base.start') {
-          errors.push(`Node "${node.name}" (${node.type}) is missing typeVersion`);
+        if (!node.typeVersion && node.type !== "n8n-nodes-base.start") {
+          errors.push(
+            `Node "${node.name}" (${node.type}) is missing typeVersion`
+          );
         }
       }
 
       // Validate connections
-      if (workflow.connections && typeof workflow.connections === 'object') {
+      if (workflow.connections && typeof workflow.connections === "object") {
         const nodeNames = new Set(workflow.nodes.map((n: any) => n.name));
 
-        for (const [fromNode, connections] of Object.entries(workflow.connections)) {
+        for (const [fromNode, connections] of Object.entries(
+          workflow.connections
+        )) {
           if (!nodeNames.has(fromNode)) {
-            errors.push(`Connection references non-existent node: "${fromNode}"`);
+            errors.push(
+              `Connection references non-existent node: "${fromNode}"`
+            );
           }
 
-          if (connections && typeof connections === 'object') {
+          if (connections && typeof connections === "object") {
             const connObj = connections as any;
             if (connObj.main && Array.isArray(connObj.main)) {
               for (const outputs of connObj.main) {
                 if (Array.isArray(outputs)) {
                   for (const output of outputs) {
                     if (output.node && !nodeNames.has(output.node)) {
-                      errors.push(`Connection targets non-existent node: "${output.node}"`);
+                      errors.push(
+                        `Connection targets non-existent node: "${output.node}"`
+                      );
                     }
                   }
                 }
@@ -201,12 +215,14 @@ export class N8nLiveValidator {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await this.client.get('/health', {
+      const response = await this.client.get("/health", {
         validateStatus: () => true,
       });
       return response.status === 200;
     } catch (error) {
-      logger.warn(`n8n health check failed: ${this.extractErrorMessage(error)}`);
+      logger.warn(
+        `n8n health check failed: ${this.extractErrorMessage(error)}`
+      );
       return false;
     }
   }
@@ -216,7 +232,7 @@ export class N8nLiveValidator {
    */
   private extractN8nError(response: any): string {
     if (!response) {
-      return 'Unknown error from n8n';
+      return "Unknown error from n8n";
     }
 
     // n8n returns detailed error messages in various formats
@@ -225,7 +241,7 @@ export class N8nLiveValidator {
     }
 
     if (response.error) {
-      if (typeof response.error === 'string') {
+      if (typeof response.error === "string") {
         return response.error;
       }
       if (response.error.message) {
@@ -234,9 +250,9 @@ export class N8nLiveValidator {
     }
 
     if (response.errors && Array.isArray(response.errors)) {
-      return response.errors.map((e: any) =>
-        typeof e === 'string' ? e : e.message || String(e)
-      ).join('; ');
+      return response.errors
+        .map((e: any) => (typeof e === "string" ? e : e.message || String(e)))
+        .join("; ");
     }
 
     return JSON.stringify(response).substring(0, 200);
@@ -247,10 +263,10 @@ export class N8nLiveValidator {
    */
   private extractErrorMessage(error: any): string {
     if (!error) {
-      return 'Unknown error';
+      return "Unknown error";
     }
 
-    if (typeof error === 'string') {
+    if (typeof error === "string") {
       return error;
     }
 
@@ -263,7 +279,7 @@ export class N8nLiveValidator {
     }
 
     if (error.code) {
-      return `Error ${error.code}: ${error.message || 'Unknown'}`;
+      return `Error ${error.code}: ${error.message || "Unknown"}`;
     }
 
     return String(error);
@@ -275,18 +291,21 @@ export class N8nLiveValidator {
  */
 let validatorInstance: N8nLiveValidator | null = null;
 
-export function initN8nLiveValidator(n8nUrl: string, apiKey: string): N8nLiveValidator {
+export function initN8nLiveValidator(
+  n8nUrl: string,
+  apiKey: string
+): N8nLiveValidator {
   validatorInstance = new N8nLiveValidator(n8nUrl, apiKey);
   return validatorInstance;
 }
 
 export function getN8nLiveValidator(): N8nLiveValidator {
   if (!validatorInstance) {
-    const n8nUrl = process.env.N8N_API_URL || 'http://localhost:5678';
-    const apiKey = process.env.N8N_API_KEY || '';
+    const n8nUrl = process.env.N8N_API_URL || "http://localhost:5678";
+    const apiKey = process.env.N8N_API_KEY || "";
 
     if (!apiKey) {
-      logger.warn('N8N_API_KEY not set - live validation will not work');
+      logger.warn("N8N_API_KEY not set - live validation will not work");
     }
 
     validatorInstance = new N8nLiveValidator(n8nUrl, apiKey);

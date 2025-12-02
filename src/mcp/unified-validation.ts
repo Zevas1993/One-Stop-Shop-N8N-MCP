@@ -68,7 +68,10 @@ export class UnifiedValidationSystem {
     const startTime = Date.now();
 
     // Generate cache key based on workflow content
-    const cacheKey = this.generateCacheKey(workflow, options?.profile || "runtime");
+    const cacheKey = this.generateCacheKey(
+      workflow,
+      options?.profile || "runtime"
+    );
 
     // Check SharedMemory cache first
     try {
@@ -82,11 +85,18 @@ export class UnifiedValidationSystem {
         };
       }
     } catch (error) {
-      logger.warn("[UnifiedValidation] Failed to check cache, proceeding with validation", error as Error);
+      logger.warn(
+        "[UnifiedValidation] Failed to check cache, proceeding with validation",
+        error as Error
+      );
     }
 
     // Run validation
-    logger.info(`[UnifiedValidation] Running validation for workflow (profile: ${options?.profile || "runtime"})`);
+    logger.info(
+      `[UnifiedValidation] Running validation for workflow (profile: ${
+        options?.profile || "runtime"
+      })`
+    );
 
     const result = await this.validator.validateWorkflow(workflow, {
       validateNodes: options?.validateNodes ?? true,
@@ -110,7 +120,10 @@ export class UnifiedValidationSystem {
         },
       });
     } catch (error) {
-      logger.warn("[UnifiedValidation] Failed to cache validation result", error as Error);
+      logger.warn(
+        "[UnifiedValidation] Failed to cache validation result",
+        error as Error
+      );
     }
 
     return {
@@ -147,7 +160,10 @@ export class UnifiedValidationSystem {
       }
       return null;
     } catch (error) {
-      logger.warn("[UnifiedValidation] Error retrieving cached validation", error as Error);
+      logger.warn(
+        "[UnifiedValidation] Error retrieving cached validation",
+        error as Error
+      );
       return null;
     }
   }
@@ -169,7 +185,10 @@ export class UnifiedValidationSystem {
         this.cacheTTL
       );
     } catch (error) {
-      logger.warn("[UnifiedValidation] Failed to cache validation result", error as Error);
+      logger.warn(
+        "[UnifiedValidation] Failed to cache validation result",
+        error as Error
+      );
     }
   }
 
@@ -185,7 +204,14 @@ export class UnifiedValidationSystem {
       .map((n: any) => `${n.type}`)
       .join("|");
 
-    const key = `${profile}:nodes${nodeCount}:conn${connectionCount}:${nodeSummary}`.substring(0, 100);
+    // Include top-level keys to catch schema changes (e.g. removing 'id' or 'description')
+    const topLevelKeys = Object.keys(workflow).sort().join(",");
+
+    const key =
+      `${profile}:nodes${nodeCount}:conn${connectionCount}:keys${topLevelKeys.length}:${nodeSummary}`.substring(
+        0,
+        150
+      );
     return key;
   }
 
@@ -198,7 +224,9 @@ export class UnifiedValidationSystem {
       logger.info("[UnifiedValidation] Clearing validation cache");
 
       // Note: SharedMemory doesn't have bulk delete, so we log that cache will be cleared by TTL
-      logger.info("[UnifiedValidation] Cache will be cleared automatically by TTL (24 hours)");
+      logger.info(
+        "[UnifiedValidation] Cache will be cleared automatically by TTL (24 hours)"
+      );
     } catch (error) {
       logger.warn("[UnifiedValidation] Failed to clear cache", error as Error);
     }
@@ -223,7 +251,10 @@ export class UnifiedValidationSystem {
         cacheSize: `${(all.length * 1024).toLocaleString()} bytes (estimated)`,
       };
     } catch (error) {
-      logger.warn("[UnifiedValidation] Failed to get cache stats", error as Error);
+      logger.warn(
+        "[UnifiedValidation] Failed to get cache stats",
+        error as Error
+      );
       return {
         totalCached: 0,
         cacheSize: "unknown",
@@ -240,7 +271,9 @@ let validationSystem: UnifiedValidationSystem | null = null;
 /**
  * Get or create the unified validation system
  */
-export function getUnifiedValidationSystem(repository: NodeRepository): UnifiedValidationSystem {
+export function getUnifiedValidationSystem(
+  repository: NodeRepository
+): UnifiedValidationSystem {
   if (!validationSystem) {
     validationSystem = new UnifiedValidationSystem(repository);
     logger.info("[UnifiedValidation] Initialized unified validation system");

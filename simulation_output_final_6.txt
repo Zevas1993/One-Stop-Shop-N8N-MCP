@@ -1,0 +1,84 @@
+≡ƒÜÇ Starting Complex Workflow Agent Simulation...
+[Mock n8n] Server running on port 5679
+   Server Path: C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\src\mcp\index.ts
+
+--- Step 1: Initialization ---
+[DEBUG] Starting Unified MCP Server.
+Γ£à Server Initialized
+
+--- Step 2: Agent Discovery Phase ---
+Agent: 'I need to build an Employee Onboarding workflow. Let me find the right nodes.'
+Agent: Searching for 'webhook'...
+   Γ£à Found: AWS SNS Trigger (nodes-base.awsSnsTrigger)
+Agent: Searching for 'if'...
+   Γ£à Found: AI Transform (nodes-base.aiTransform)
+Agent: Searching for 'set'...
+   Γ£à Found: Compare Datasets (nodes-base.compareDatasets)
+Agent: Searching for 'slack'...
+   Γ£à Found: Slack (nodes-base.slack)
+Agent: Searching for 'gmail'...
+   Γ£à Found: Gmail (nodes-base.gmail)
+
+--- Step 3: Constructing Complex Workflow ---
+Agent: 'Building workflow structure: Webhook -> Set Data -> IF (Dept) -> Slack -> Email'
+
+--- Step 4: Validating Workflow ---
+Agent: 'Verifying workflow integrity before upload...'
+RAW VALIDATE RES: {
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"valid\": true,\n  \"validationCached\": true,\n  \"cacheHash\": \"9dy6vq\",\n  \"summary\": {\n    \"totalNodes\": 6,\n    \"enabledNodes\": 6,\n    \"triggerNodes\": 1,\n    \"validConnections\": 6,\n    \"invalidConnections\": 0,\n    \"expressionsValidated\": 5,\n    \"errorCount\": 0,\n    \"warningCount\": 20\n  },\n  \"warnings\": [\n    {\n      \"node\": \"Webhook\",\n      \"message\": \"Outdated typeVersion: 2. Latest is 2.1\"\n    },\n    {\n      \"node\": \"Set Employee Data\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"values\",\n        \"message\": \"Property 'values' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Slack (Eng)\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"channel\",\n        \"message\": \"Property 'channel' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Slack (Eng)\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"text\",\n        \"message\": \"Property 'text' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Slack (Eng)\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"otherOptions\",\n        \"message\": \"Property 'otherOptions' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Slack (General)\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"channel\",\n        \"message\": \"Property 'channel' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Slack (General)\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"text\",\n        \"message\": \"Property 'text' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Slack (General)\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"otherOptions\",\n        \"message\": \"Property 'otherOptions' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Send Welcome Email\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"sendTo\",\n        \"message\": \"Property 'sendTo' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Send Welcome Email\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"subject\",\n        \"message\": \"Property 'subject' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Send Welcome Email\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"message\",\n        \"message\": \"Property 'message' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Send Welcome Email\",\n      \"message\": {\n        \"type\": \"inefficient\",\n        \"property\": \"options\",\n        \"message\": \"Property 'options' is configured but won't be used due to current settings\",\n        \"suggestion\": \"Remove this property or adjust other settings to make it visible\"\n      }\n    },\n    {\n      \"node\": \"Set Employee Data\",\n      \"message\": \"Expression warning: values.string[0].value: Using $json but node might not have input data\"\n    },\n    {\n      \"node\": \"Set Employee Data\",\n      \"message\": \"Expression warning: values.string[1].value: Using $json but node might not have input data\"\n    },\n    {\n      \"node\": \"Set Employee Data\",\n      \"message\": \"Expression warning: values.string[2].value: Using $json but node might not have input data\"\n    },\n    {\n      \"node\": \"Is Engineering?\",\n      \"message\": \"Expression warning: conditions.string[0].value1: Using $json but node might not have input data\"\n    },\n    {\n      \"node\": \"Slack (Eng)\",\n      \"message\": \"Expression warning: text: Using $json but node might not have input data\"\n    },\n    {\n      \"node\": \"Slack (General)\",\n      \"message\": \"Expression warning: text: Using $json but node might not have input data\"\n    },\n    {\n      \"node\": \"Send Welcome Email\",\n      \"message\": \"Expression warning: sendTo: Using $json but node might not have input data\"\n    },\n    {\n      \"node\": \"workflow\",\n      \"message\": \"Consider adding error handling to your workflow\"\n    }\n  ],\n  \"suggestions\": [\n    \"Add error handling using the error output of nodes or an Error Trigger node\"\n  ],\n  \"mode\": \"full\",\n  \"validationOptions\": {\n    \"validateNodes\": true,\n    \"validateConnections\": true,\n    \"validateExpressions\": true\n  },\n  \"modeDescription\": \"Complete validation including nodes, connections, and expressions\"\n}"
+      }
+    ]
+  },
+  "jsonrpc": "2.0",
+  "id": 6
+}
+Γ£à Validation Result: PASSED
+
+--- Step 5: Uploading to n8n ---
+Agent: 'Uploading workflow to n8n instance...'
+[DEBUG] validateWorkflow exception: TypeError: Invalid URL
+    at new URL (node:internal/url:818:25)
+    at dispatchHttpRequest (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\axios\lib\adapters\http.js:408:20)
+    at C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\axios\lib\adapters\http.js:249:5
+    at new Promise (<anonymous>)
+    at wrapAsync (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\axios\lib\adapters\http.js:229:10)
+    at http (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\axios\lib\adapters\http.js:314:10)
+    at Axios.dispatchRequest (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\axios\lib\core\dispatchRequest.js:51:10)
+    at Axios._request (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\axios\lib\core\Axios.js:185:33)
+    at Axios.request (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\axios\lib\core\Axios.js:40:25)
+    at Axios.httpMethod [as post] (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\axios\lib\core\Axios.js:224:19)
+    at Axios.request (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\axios\lib\core\Axios.js:45:41)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async N8nLiveValidator.validateWorkflow (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\src\services\n8n-live-validator.ts:83:24)
+    at async Object.handleCreateWorkflow (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\src\mcp\handlers-n8n-manager.ts:341:36)
+    at async C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\src\mcp\server-modern.ts:384:17
+    at async C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\@modelcontextprotocol\sdk\src\server\mcp.ts:181:30 {
+  code: 'ERR_INVALID_URL',
+  input: 'http://127.0.0.1:5679 /api/v1/workflows'
+}
+RAW CREATE RES: {
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"success\": false,\n  \"error\": \"≡ƒÜ¿ LIVE VALIDATION FAILED: Workflow would not work in n8n. Errors from n8n instance:\",\n  \"details\": {\n    \"errors\": [\n      \"Invalid URL\"\n    ],\n    \"message\": \"Fix all errors listed above and retry\",\n    \"source\": \"n8n-instance\"\n  }\n}"
+      }
+    ]
+  },
+  "jsonrpc": "2.0",
+  "id": 7
+}
+Γ¥î Workflow Creation Failed: ≡ƒÜ¿ LIVE VALIDATION FAILED: Workflow would not work in n8n. Errors from n8n instance:
+   Details: {
+  "errors": [
+    "Invalid URL"
+  ],
+  "message": "Fix all errors listed above and retry",
+  "source": "n8n-instance"
+}
+
+≡ƒ¢æ Ending Simulation...

@@ -79,7 +79,14 @@
       "Bash(find:*)",
       "Bash(echo:*)",
       "Bash(export N8N_AUTO_SYNC=true)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(npm run test:nano-llm:*)",
+      "Bash(ollama list:*)",
+      "Bash(git push:*)",
+      "Bash(npx n8n)",
+      "Bash(timeout 5 echo:*)",
+      "Bash(timeout:*)",
+      "Bash(tasklist)"
     ],
     "deny": [],
     "ask": []

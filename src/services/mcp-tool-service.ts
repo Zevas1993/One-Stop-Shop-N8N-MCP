@@ -15,6 +15,7 @@ import * as n8nHandlers from "../mcp/handlers-n8n-manager";
 import { logger } from "../utils/logger";
 import { WorkflowSimplifierService } from "./workflow-simplifier";
 import { NodeParser } from "./node-parser";
+import { NodeFilter } from "../core/node-filter";
 
 export class MCPToolService {
   private cache = new SimpleCache({ enabled: false, ttl: 300, maxSize: 10 });
@@ -94,10 +95,18 @@ export class MCPToolService {
     }
 
     this.performanceMetrics.cacheMisses++;
-    const nodes = this.repository.listNodes(optimizedFilters);
+    const rawNodes = this.repository.listNodes(optimizedFilters);
+
+    // Filter by node policy
+    const nodeFilter = NodeFilter.getInstance();
+    const filteredNodes = rawNodes.filter((node) =>
+      nodeFilter.isNodeAllowed(node.type || node.name)
+    );
+
     const result = {
-      nodes,
-      totalCount: nodes.length,
+      nodes: filteredNodes.slice(0, optimizedFilters.limit),
+      totalCount: filteredNodes.length,
+      policyActive: !nodeFilter.isCommunityNodesAllowed(),
     };
 
     this.nodeListCache.set(cacheKey, result);
@@ -107,7 +116,22 @@ export class MCPToolService {
   }
 
   async searchNodes(query: string, limit: number = 20): Promise<any> {
-    const nodes = this.repository.searchNodes(query, { limit });
+    const nodeFilter = NodeFilter.getInstance();
+
+    // Get raw results (fetch more than limit to account for filtering)
+    const rawNodes = this.repository.searchNodes(query, { limit: limit * 2 });
+
+    // Filter by node policy
+    const filteredNodes = rawNodes.filter((node) =>
+      nodeFilter.isNodeAllowed(node.nodeType || node.name)
+    );
+
+    // Apply limit after filtering
+    const nodes = filteredNodes.slice(0, limit);
+
+    // Calculate how many were filtered out
+    const filteredCount = rawNodes.length - filteredNodes.length;
+
     return {
       query,
       results: nodes.map((node) => ({
@@ -119,6 +143,11 @@ export class MCPToolService {
         package: node.package,
       })),
       totalCount: nodes.length,
+      filteredByPolicy: filteredCount,
+      policyMessage:
+        filteredCount > 0
+          ? `${filteredCount} community node(s) hidden by policy. Set ALLOW_COMMUNITY_NODES=true to see all.`
+          : undefined,
     };
   }
 
@@ -140,6 +169,19 @@ export class MCPToolService {
 
   async getNodeInfoUnified(args: any): Promise<any> {
     const { nodeType, detail = "essentials" } = args;
+
+    // Check policy FIRST before any fetching
+    const nodeFilter = NodeFilter.getInstance();
+    if (!nodeFilter.isNodeAllowed(nodeType)) {
+      const reason = nodeFilter.getRejectionReason(nodeType);
+      return {
+        success: false,
+        error: reason,
+        blockedByPolicy: true,
+        suggestion:
+          "Use only official n8n nodes (n8n-nodes-base.*, @n8n/n8n-nodes-langchain.*)",
+      };
+    }
 
     const cacheKey = `${nodeType}:${detail}`;
     if (
@@ -534,7 +576,7 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
     const validationOptions = { ...options };
 
     // Pass through skipApiFieldValidation if provided
-    if ('skipApiFieldValidation' in options) {
+    if ("skipApiFieldValidation" in options) {
       validationOptions.skipApiFieldValidation = options.skipApiFieldValidation;
     }
 

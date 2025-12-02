@@ -1,0 +1,1676 @@
+≡ƒÜÇ Starting Workflow Fix & Copy for ID: A9h8Zsm6kYpsmilu (AI Connections)...
+Γ£à Server Initialized
+≡ƒôñ Fetching original workflow...
+Γ£à Workflow fetched
+≡ƒ¢á∩╕Å Applying fixes...
+   [DEBUG] Existing Central Agent Connections: {
+  "main": [
+    [
+      {
+        "node": "Send Teams Response",
+        "type": "main",
+        "index": 0
+      },
+      {
+        "node": "Postgres Memory",
+        "type": "main",
+        "index": 0
+      },
+      {
+        "node": "Search Emails",
+        "type": "main",
+        "index": 0
+      },
+      {
+        "node": "Get Calendar Events",
+        "type": "main",
+        "index": 0
+      },
+      {
+        "node": "Create Calendar Event",
+        "type": "main",
+        "index": 0
+      },
+      {
+        "node": "Create Draft",
+        "type": "main",
+        "index": 0
+      },
+      {
+        "node": "Send Email",
+        "type": "main",
+        "index": 0
+      }
+    ]
+  ]
+}
+   [DEBUG] FINAL CONNECTIONS: {
+  "Outlook Email Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Email for RAG",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Email for RAG": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Teams Message Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Teams Input",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Teams Input": {
+    "main": [
+      [
+        {
+          "node": "AI Agent (Central)",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "AI Agent (Central)": {
+    "main": [
+      []
+    ]
+  },
+  "OpenAI Chat Model": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Window Buffer Memory": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  }
+}
+   - Connected 'OpenAI Chat Model' to 'Fraud Classifier' (Output: ai_languageModel -> Input: ai_languageModel)
+   [DEBUG] Existing Central Agent Connections: {
+  "main": [
+    []
+  ]
+}
+   [DEBUG] FINAL CONNECTIONS: {
+  "Outlook Email Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Email for RAG",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Email for RAG": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Teams Message Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Teams Input",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Teams Input": {
+    "main": [
+      [
+        {
+          "node": "AI Agent (Central)",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "AI Agent (Central)": {
+    "main": [
+      []
+    ]
+  },
+  "OpenAI Chat Model": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_languageModel": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_languageModel",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Window Buffer Memory": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  }
+}
+   - Connected 'OpenAI Chat Model' to 'Billing RAG Agent' (Output: ai_languageModel -> Input: ai_languageModel)
+   [DEBUG] Existing Central Agent Connections: {
+  "main": [
+    []
+  ]
+}
+   [DEBUG] FINAL CONNECTIONS: {
+  "Outlook Email Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Email for RAG",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Email for RAG": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Teams Message Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Teams Input",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Teams Input": {
+    "main": [
+      [
+        {
+          "node": "AI Agent (Central)",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "AI Agent (Central)": {
+    "main": [
+      []
+    ]
+  },
+  "OpenAI Chat Model": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_languageModel": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Window Buffer Memory": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  }
+}
+   - Connected 'OpenAI Chat Model' to 'High Priority RAG Agent' (Output: ai_languageModel -> Input: ai_languageModel)
+   [DEBUG] Existing Central Agent Connections: {
+  "main": [
+    []
+  ]
+}
+   [DEBUG] FINAL CONNECTIONS: {
+  "Outlook Email Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Email for RAG",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Email for RAG": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Teams Message Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Teams Input",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Teams Input": {
+    "main": [
+      [
+        {
+          "node": "AI Agent (Central)",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "AI Agent (Central)": {
+    "main": [
+      []
+    ]
+  },
+  "OpenAI Chat Model": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_languageModel": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Window Buffer Memory": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  }
+}
+   - Connected 'OpenAI Chat Model' to 'AI Agent (Central)' (Output: ai_languageModel -> Input: ai_languageModel)
+   [DEBUG] Existing Central Agent Connections: {
+  "main": [
+    []
+  ]
+}
+   [DEBUG] FINAL CONNECTIONS: {
+  "Outlook Email Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Email for RAG",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Email for RAG": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Teams Message Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Teams Input",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Teams Input": {
+    "main": [
+      [
+        {
+          "node": "AI Agent (Central)",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "AI Agent (Central)": {
+    "main": [
+      []
+    ]
+  },
+  "OpenAI Chat Model": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_languageModel": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "AI Agent (Central)",
+          "type": "ai_languageModel",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Window Buffer Memory": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  }
+}
+   - Connected 'Window Buffer Memory' to 'Fraud Classifier' (Output: ai_memory -> Input: ai_memory)
+   [DEBUG] Existing Central Agent Connections: {
+  "main": [
+    []
+  ]
+}
+   [DEBUG] FINAL CONNECTIONS: {
+  "Outlook Email Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Email for RAG",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Email for RAG": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Teams Message Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Teams Input",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Teams Input": {
+    "main": [
+      [
+        {
+          "node": "AI Agent (Central)",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "AI Agent (Central)": {
+    "main": [
+      []
+    ]
+  },
+  "OpenAI Chat Model": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_languageModel": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "AI Agent (Central)",
+          "type": "ai_languageModel",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Window Buffer Memory": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_memory": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_memory",
+          "index": 0
+        }
+      ]
+    ]
+  }
+}
+   - Connected 'Window Buffer Memory' to 'Billing RAG Agent' (Output: ai_memory -> Input: ai_memory)
+   [DEBUG] Existing Central Agent Connections: {
+  "main": [
+    []
+  ]
+}
+   [DEBUG] FINAL CONNECTIONS: {
+  "Outlook Email Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Email for RAG",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Email for RAG": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Teams Message Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Teams Input",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Teams Input": {
+    "main": [
+      [
+        {
+          "node": "AI Agent (Central)",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "AI Agent (Central)": {
+    "main": [
+      []
+    ]
+  },
+  "OpenAI Chat Model": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_languageModel": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "AI Agent (Central)",
+          "type": "ai_languageModel",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Window Buffer Memory": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_memory": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_memory",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_memory",
+          "index": 0
+        }
+      ]
+    ]
+  }
+}
+   - Connected 'Window Buffer Memory' to 'High Priority RAG Agent' (Output: ai_memory -> Input: ai_memory)
+   [DEBUG] Existing Central Agent Connections: {
+  "main": [
+    []
+  ]
+}
+   [DEBUG] FINAL CONNECTIONS: {
+  "Outlook Email Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Email for RAG",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Email for RAG": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Teams Message Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Teams Input",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Teams Input": {
+    "main": [
+      [
+        {
+          "node": "AI Agent (Central)",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "AI Agent (Central)": {
+    "main": [
+      []
+    ]
+  },
+  "OpenAI Chat Model": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_languageModel": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "AI Agent (Central)",
+          "type": "ai_languageModel",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Window Buffer Memory": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_memory": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_memory",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_memory",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "ai_memory",
+          "index": 0
+        }
+      ]
+    ]
+  }
+}
+   - Connected 'Window Buffer Memory' to 'AI Agent (Central)' (Output: ai_memory -> Input: ai_memory)
+   [DEBUG] Existing Central Agent Connections: {
+  "main": [
+    []
+  ]
+}
+   [DEBUG] FINAL CONNECTIONS: {
+  "Outlook Email Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Email for RAG",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Email for RAG": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Teams Message Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Teams Input",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Teams Input": {
+    "main": [
+      [
+        {
+          "node": "AI Agent (Central)",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "AI Agent (Central)": {
+    "main": [
+      []
+    ]
+  },
+  "OpenAI Chat Model": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_languageModel": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "AI Agent (Central)",
+          "type": "ai_languageModel",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Window Buffer Memory": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_memory": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_memory",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_memory",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "ai_memory",
+          "index": 0
+        },
+        {
+          "node": "AI Agent (Central)",
+          "type": "ai_memory",
+          "index": 0
+        }
+      ]
+    ]
+  }
+}
+   - Connected 'Send Email' to 'AI Agent (Central)' (Output: main -> Input: ai_tool)
+   [DEBUG] Existing Central Agent Connections: {
+  "main": [
+    []
+  ]
+}
+   [DEBUG] FINAL CONNECTIONS: {
+  "Outlook Email Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Email for RAG",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Email for RAG": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Teams Message Trigger": {
+    "main": [
+      [
+        {
+          "node": "Process Teams Input",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Process Teams Input": {
+    "main": [
+      [
+        {
+          "node": "AI Agent (Central)",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "AI Agent (Central)": {
+    "main": [
+      []
+    ]
+  },
+  "OpenAI Chat Model": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_languageModel": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "ai_languageModel",
+          "index": 0
+        },
+        {
+          "node": "AI Agent (Central)",
+          "type": "ai_languageModel",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Window Buffer Memory": {
+    "main": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "main",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    ],
+    "ai_memory": [
+      [
+        {
+          "node": "Fraud Classifier",
+          "type": "ai_memory",
+          "index": 0
+        },
+        {
+          "node": "Billing RAG Agent",
+          "type": "ai_memory",
+          "index": 0
+        },
+        {
+          "node": "High Priority RAG Agent",
+          "type": "ai_memory",
+          "index": 0
+        },
+        {
+          "node": "AI Agent (Central)",
+          "type": "ai_memory",
+          "index": 0
+        }
+      ]
+    ]
+  },
+  "Send Email": {
+    "main": [
+      []
+    ]
+  }
+}
+   - Connected 'Send Teams Response' to 'AI Agent (Central)' (Output: main -> Input: ai_tool)
+≡ƒöì Validating refined workflow...
+≡ƒôÑ Received validation response
+Validation Result: {
+  "valid": false,
+  "validationCached": true,
+  "cacheHash": "s5y6bu",
+  "summary": {
+    "totalNodes": 22,
+    "enabledNodes": 22,
+    "triggerNodes": 2,
+    "validConnections": 13,
+    "invalidConnections": 0,
+    "expressionsValidated": 0,
+    "errorCount": 5,
+    "warningCount": 34
+  },
+  "errors": [
+    {
+      "node": "Postgres Memory",
+      "message": "Node \"Postgres Memory\" is not connected to any other nodes. In multi-node workflows, all nodes must be connected. Use connections to link this node to other nodes in the workflow."
+    },
+    {
+      "node": "Search Emails",
+      "message": "Node \"Search Emails\" is not connected to any other nodes. In multi-node workflows, all nodes must be connected. Use connections to link this node to other nodes in the workflow."
+    },
+    {
+      "node": "Get Calendar Events",
+      "message": "Node \"Get Calendar Events\" is not connected to any other nodes. In multi-node workflows, all nodes must be connected. Use connections to link this node to other nodes in the workflow."
+    },
+    {
+      "node": "Create Calendar Event",
+      "message": "Node \"Create Calendar Event\" is not connected to any other nodes. In multi-node workflows, all nodes must be connected. Use connections to link this node to other nodes in the workflow."
+    },
+    {
+      "node": "Create Draft",
+      "message": "Node \"Create Draft\" is not connected to any other nodes. In multi-node workflows, all nodes must be connected. Use connections to link this node to other nodes in the workflow."
+    }
+  ],
+  "warnings": [
+    {
+      "node": "Outlook Email Trigger",
+      "message": {
+        "type": "inefficient",
+        "property": "pollTimes",
+        "message": "Property 'pollTimes' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "Process Email for RAG",
+      "message": "Outdated typeVersion: 1. Latest is 2"
+    },
+    {
+      "node": "Process Email for RAG",
+      "message": {
+        "type": "inefficient",
+        "property": "jsCode",
+        "message": "Property 'jsCode' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "Process Teams Input",
+      "message": "Outdated typeVersion: 1. Latest is 2"
+    },
+    {
+      "node": "Process Teams Input",
+      "message": {
+        "type": "inefficient",
+        "property": "jsCode",
+        "message": "Property 'jsCode' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "OpenAI Chat Model",
+      "message": "Outdated typeVersion: 1. Latest is 1.3"
+    },
+    {
+      "node": "Window Buffer Memory",
+      "message": "Outdated typeVersion: 1. Latest is 1.3"
+    },
+    {
+      "node": "Fraud Classifier",
+      "message": "Outdated typeVersion: 1. Latest is 3"
+    },
+    {
+      "node": "Fraud Classifier",
+      "message": {
+        "type": "inefficient",
+        "property": "text",
+        "message": "Property 'text' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "Billing RAG Agent",
+      "message": "Outdated typeVersion: 1. Latest is 3"
+    },
+    {
+      "node": "Billing RAG Agent",
+      "message": {
+        "type": "inefficient",
+        "property": "text",
+        "message": "Property 'text' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "High Priority RAG Agent",
+      "message": "Outdated typeVersion: 1. Latest is 3"
+    },
+    {
+      "node": "High Priority RAG Agent",
+      "message": {
+        "type": "inefficient",
+        "property": "text",
+        "message": "Property 'text' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "AI Agent (Central)",
+      "message": "Outdated typeVersion: 1. Latest is 3"
+    },
+    {
+      "node": "AI Agent (Central)",
+      "message": {
+        "type": "inefficient",
+        "property": "text",
+        "message": "Property 'text' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "Postgres Memory",
+      "message": "Outdated typeVersion: 1. Latest is 2.6"
+    },
+    {
+      "node": "Postgres Memory",
+      "message": {
+        "type": "inefficient",
+        "property": "operation",
+        "message": "Property 'operation' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "Postgres Memory",
+      "message": {
+        "type": "inefficient",
+        "property": "additionalFields",
+        "message": "Property 'additionalFields' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "Search Emails",
+      "message": "Outdated typeVersion: 1. Latest is 2"
+    },
+    {
+      "node": "Search Emails",
+      "message": {
+        "type": "inefficient",
+        "property": "operation",
+        "message": "Property 'operation' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "Search Emails",
+      "message": {
+        "type": "inefficient",
+        "property": "additionalFields",
+        "message": "Property 'additionalFields' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "Get Calendar Events",
+      "message": "Outdated typeVersion: 1. Latest is 2"
+    },
+    {
+      "node": "Create Calendar Event",
+      "message": "Outdated typeVersion: 1. Latest is 2"
+    },
+    {
+      "node": "Create Draft",
+      "message": "Outdated typeVersion: 1. Latest is 2"
+    },
+    {
+      "node": "Create Draft",
+      "message": {
+        "type": "inefficient",
+        "property": "operation",
+        "message": "Property 'operation' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "Send Email",
+      "message": "Outdated typeVersion: 1. Latest is 2"
+    },
+    {
+      "node": "Send Email",
+      "message": {
+        "type": "inefficient",
+        "property": "additionalFields",
+        "message": "Property 'additionalFields' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "Send Teams Response",
+      "message": "Outdated typeVersion: 1. Latest is 2"
+    },
+    {
+      "node": "Send Teams Response",
+      "message": {
+        "type": "inefficient",
+        "property": "operation",
+        "message": "Property 'operation' is configured but won't be used due to current settings",
+        "suggestion": "Remove this property or adjust other settings to make it visible"
+      }
+    },
+    {
+      "node": "workflow",
+      "message": "Consider adding error handling to your workflow"
+    },
+    {
+      "node": "Fraud Classifier",
+      "message": "AI Agent has no tools connected. Consider adding tools to enhance agent capabilities."
+    },
+    {
+      "node": "Billing RAG Agent",
+      "message": "AI Agent has no tools connected. Consider adding tools to enhance agent capabilities."
+    },
+    {
+      "node": "High Priority RAG Agent",
+      "message": "AI Agent has no tools connected. Consider adding tools to enhance agent capabilities."
+    },
+    {
+      "node": "AI Agent (Central)",
+      "message": "AI Agent has no tools connected. Consider adding tools to enhance agent capabilities."
+    }
+  ],
+  "suggestions": [
+    "Add error handling using the error output of nodes or an Error Trigger node",
+    "Consider breaking this workflow into smaller sub-workflows for better maintainability"
+  ],
+  "mode": "full",
+  "validationOptions": {
+    "validateNodes": true,
+    "validateConnections": true,
+    "validateExpressions": true
+  },
+  "modeDescription": "Complete validation including nodes, connections, and expressions"
+}
+Γ¥î Validation failed.
+ΓÜá∩╕Å Proceeding to creation anyway to test connections...
+≡ƒôñ Creating new workflow: "Copy of Teams-Outlook RAG Assistant - Natural Language Ready (AI Fixed)"...
+≡ƒôÑ Received creation response
+Γ¥î Failed to create workflow: undefined
+≡ƒÜ¿ VALIDATION FAILED: Workflow has known validation errors and cannot be created!

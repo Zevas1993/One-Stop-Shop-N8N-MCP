@@ -3,9 +3,10 @@
  * Generates n8n workflow JSON from selected patterns and user goals
  */
 
-import { BaseAgent, AgentConfig, AgentInput, AgentOutput } from './base-agent';
-import { SharedMemory } from '../shared-memory';
-import { Logger } from '../../utils/logger';
+import { BaseAgent, AgentConfig, AgentInput, AgentOutput } from "./base-agent";
+import { SharedMemory } from "../shared-memory";
+import { Logger } from "../../utils/logger";
+import { LLMAdapterInterface } from "../llm-adapter";
 
 export interface GeneratedWorkflow {
   name: string;
@@ -34,20 +35,18 @@ export interface ConnectionData {
 export class WorkflowAgent extends BaseAgent {
   private nodeRegistry: Map<string, NodeTemplate>;
 
-  constructor(
-    sharedMemory: SharedMemory,
-    llmClients?: { embedding?: any; generation?: any }
-  ) {
+  constructor(sharedMemory: SharedMemory, llmAdapter?: LLMAdapterInterface) {
     const config: AgentConfig = {
-      id: 'workflow-agent',
-      name: 'Workflow Generation Agent',
-      description: 'Generates n8n workflow JSON from selected patterns and goals',
-      role: 'workflow-generation',
+      id: "workflow-agent",
+      name: "Workflow Generation Agent",
+      description:
+        "Generates n8n workflow JSON from selected patterns and goals",
+      role: "workflow-generation",
       contextBudget: 15000, // 15K tokens for workflow generation
       timeout: 45000, // 45 seconds max
     };
 
-    super(config, sharedMemory, llmClients);
+    super(config, sharedMemory, llmAdapter);
     this.nodeRegistry = new Map();
   }
 
@@ -57,7 +56,11 @@ export class WorkflowAgent extends BaseAgent {
   async initialize(): Promise<void> {
     await super.initialize();
     this.loadNodeRegistry();
-    this.logger.info('Workflow agent initialized with ' + this.nodeRegistry.size + ' node templates');
+    this.logger.info(
+      "Workflow agent initialized with " +
+        this.nodeRegistry.size +
+        " node templates"
+    );
   }
 
   /**
@@ -70,13 +73,14 @@ export class WorkflowAgent extends BaseAgent {
       this.logger.debug(`Workflow generation for goal: ${input.goal}`);
 
       // Get selected pattern from shared memory
-      const selectedPattern = await this.sharedMemory.get('selected-pattern');
+      const selectedPattern = await this.sharedMemory.get("selected-pattern");
 
       if (!selectedPattern) {
         return {
           success: false,
           result: null,
-          error: 'No selected pattern found in shared memory. Pattern Agent must run first.',
+          error:
+            "No selected pattern found in shared memory. Pattern Agent must run first.",
           executionTime: Date.now() - startTime,
         };
       }
@@ -84,20 +88,23 @@ export class WorkflowAgent extends BaseAgent {
       this.logger.debug(`Using pattern: ${selectedPattern.patternName}`);
 
       // Generate workflow from pattern
-      const workflow = await this.generateWorkflowFromPattern(input.goal, selectedPattern);
+      const workflow = await this.generateWorkflowFromPattern(
+        input.goal,
+        selectedPattern
+      );
 
       if (!workflow) {
         return {
           success: false,
           result: null,
-          error: 'Failed to generate workflow from pattern',
+          error: "Failed to generate workflow from pattern",
           executionTime: Date.now() - startTime,
         };
       }
 
       // Store generated workflow in shared memory
       await this.sharedMemory.set(
-        'generated-workflow',
+        "generated-workflow",
         {
           workflow,
           patternId: selectedPattern.patternId,
@@ -119,16 +126,17 @@ export class WorkflowAgent extends BaseAgent {
         },
         executionTime: Date.now() - startTime,
         tokensUsed: Math.min(
-          workflow.nodes.length * 200 + Object.keys(workflow.connections).length * 150,
+          workflow.nodes.length * 200 +
+            Object.keys(workflow.connections).length * 150,
           this.config.contextBudget
         ),
       };
     } catch (error) {
-      this.logger.error('Workflow generation failed', error as Error);
+      this.logger.error("Workflow generation failed", error as Error);
       return {
         success: false,
         result: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
         executionTime: Date.now() - startTime,
       };
     }
@@ -146,17 +154,21 @@ export class WorkflowAgent extends BaseAgent {
 
       // Try AI-enhanced generation first
       if (this.hasLLMSupport().generation) {
-        this.logger.debug('Attempting AI-enhanced workflow generation');
+        this.logger.debug("Attempting AI-enhanced workflow generation");
         const aiWorkflow = await this.generateWorkflowWithAI(goal, patternId);
         if (aiWorkflow) {
-          this.logger.info('✅ Generated workflow using AI enhancement');
+          this.logger.info("✅ Generated workflow using AI enhancement");
           return aiWorkflow;
         }
-        this.logger.debug('AI enhancement failed or unavailable, falling back to template');
+        this.logger.debug(
+          "AI enhancement failed or unavailable, falling back to template"
+        );
       }
 
       // Fallback to template-based generation
-      this.logger.info('Generating workflow from static template (no AI available)');
+      this.logger.info(
+        "Generating workflow from static template (no AI available)"
+      );
       const workflow = this.createWorkflowTemplate(patternId, goal);
 
       if (!workflow) {
@@ -171,7 +183,10 @@ export class WorkflowAgent extends BaseAgent {
 
       return workflow;
     } catch (error) {
-      this.logger.error('Failed to generate workflow from pattern', error as Error);
+      this.logger.error(
+        "Failed to generate workflow from pattern",
+        error as Error
+      );
       return null;
     }
   }
@@ -179,7 +194,10 @@ export class WorkflowAgent extends BaseAgent {
   /**
    * Generate workflow using AI to suggest optimal parameters
    */
-  private async generateWorkflowWithAI(goal: string, patternId: string): Promise<GeneratedWorkflow | null> {
+  private async generateWorkflowWithAI(
+    goal: string,
+    patternId: string
+  ): Promise<GeneratedWorkflow | null> {
     try {
       // Get template as starting point
       const template = this.createWorkflowTemplate(patternId, goal);
@@ -189,7 +207,7 @@ export class WorkflowAgent extends BaseAgent {
       }
 
       // Use generation LLM to enhance parameters
-      const nodeNames = template.nodes.map(n => n.name).join(', ');
+      const nodeNames = template.nodes.map((n) => n.name).join(", ");
       const prompt = `Given this n8n workflow goal: "${goal}"
 And this workflow pattern: "${patternId}"
 With these nodes: ${nodeNames}
@@ -220,21 +238,27 @@ Example format:
         if (Object.keys(suggestions).length > 0) {
           // Apply suggestions to template
           this.applyAISuggestions(template, suggestions);
-          this.logger.debug(`Applied AI parameter suggestions for ${Object.keys(suggestions).length} nodes`);
+          this.logger.debug(
+            `Applied AI parameter suggestions for ${
+              Object.keys(suggestions).length
+            } nodes`
+          );
         } else {
-          this.logger.debug('No AI suggestions parsed from response');
+          this.logger.debug("No AI suggestions parsed from response");
         }
       } else {
-        this.logger.debug('No AI response received');
+        this.logger.debug("No AI response received");
       }
 
       this.enhanceWorkflowWithGoal(template, goal);
       this.ensureApiCompliance(template);
 
       return template;
-
     } catch (error) {
-      this.logger.warn('AI enhancement failed, falling back to template:', error);
+      this.logger.warn(
+        "AI enhancement failed, falling back to template:",
+        error
+      );
       return null;
     }
   }
@@ -242,20 +266,24 @@ Example format:
   /**
    * Parse AI suggestions from response
    */
-  private parseAISuggestions(response: string): Record<string, Record<string, any>> {
+  private parseAISuggestions(
+    response: string
+  ): Record<string, Record<string, any>> {
     try {
       // Extract JSON from response (might have markdown code blocks)
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        this.logger.warn('No JSON found in AI response');
+        this.logger.warn("No JSON found in AI response");
         return {};
       }
 
       const parsed = JSON.parse(jsonMatch[0]);
-      this.logger.debug(`Parsed AI suggestions for ${Object.keys(parsed).length} nodes`);
+      this.logger.debug(
+        `Parsed AI suggestions for ${Object.keys(parsed).length} nodes`
+      );
       return parsed;
     } catch (error) {
-      this.logger.warn('Failed to parse AI suggestions:', error);
+      this.logger.warn("Failed to parse AI suggestions:", error);
       return {};
     }
   }
@@ -263,7 +291,10 @@ Example format:
   /**
    * Apply AI suggestions to workflow template
    */
-  private applyAISuggestions(workflow: GeneratedWorkflow, suggestions: Record<string, Record<string, any>>): void {
+  private applyAISuggestions(
+    workflow: GeneratedWorkflow,
+    suggestions: Record<string, Record<string, any>>
+  ): void {
     for (const node of workflow.nodes) {
       if (suggestions[node.name]) {
         // Merge AI suggestions with existing parameters
@@ -279,38 +310,41 @@ Example format:
   /**
    * Create workflow template from pattern
    */
-  private createWorkflowTemplate(patternId: string, goal: string): GeneratedWorkflow | null {
-    const timestamp = new Date().toISOString().split('T')[0];
+  private createWorkflowTemplate(
+    patternId: string,
+    goal: string
+  ): GeneratedWorkflow | null {
+    const timestamp = new Date().toISOString().split("T")[0];
 
     switch (patternId) {
-      case 'slack-notification':
+      case "slack-notification":
         return this.createSlackNotificationWorkflow(goal, timestamp);
 
-      case 'email-workflow':
+      case "email-workflow":
         return this.createEmailWorkflow(goal, timestamp);
 
-      case 'data-transformation':
+      case "data-transformation":
         return this.createDataTransformationWorkflow(goal, timestamp);
 
-      case 'api-integration':
+      case "api-integration":
         return this.createApiIntegrationWorkflow(goal, timestamp);
 
-      case 'database-crud':
+      case "database-crud":
         return this.createDatabaseCrudWorkflow(goal, timestamp);
 
-      case 'conditional-flow':
+      case "conditional-flow":
         return this.createConditionalFlowWorkflow(goal, timestamp);
 
-      case 'error-handling':
+      case "error-handling":
         return this.createErrorHandlingWorkflow(goal, timestamp);
 
-      case 'scheduling':
+      case "scheduling":
         return this.createSchedulingWorkflow(goal, timestamp);
 
-      case 'file-operations':
+      case "file-operations":
         return this.createFileOperationsWorkflow(goal, timestamp);
 
-      case 'multi-step-workflow':
+      case "multi-step-workflow":
         return this.createMultiStepWorkflow(goal, timestamp);
 
       default:
@@ -322,31 +356,34 @@ Example format:
   /**
    * Create Slack notification workflow
    */
-  private createSlackNotificationWorkflow(goal: string, timestamp: string): GeneratedWorkflow {
+  private createSlackNotificationWorkflow(
+    goal: string,
+    timestamp: string
+  ): GeneratedWorkflow {
     return {
       name: `Slack Notification - ${timestamp}`,
       description: `Send Slack notifications based on: ${goal}`,
       nodes: [
         {
-          name: 'Manual Trigger',
-          type: 'n8n-nodes-base.manualTrigger',
+          name: "Manual Trigger",
+          type: "n8n-nodes-base.manualTrigger",
           position: [100, 100],
         },
         {
-          name: 'Slack Send Message',
-          type: 'n8n-nodes-base.slack',
+          name: "Slack Send Message",
+          type: "n8n-nodes-base.slack",
           position: [300, 100],
           parameters: {
-            resource: 'message',
-            operation: 'post',
-            channel: '#general',
-            text: 'Message from workflow',
+            resource: "message",
+            operation: "post",
+            channel: "#general",
+            text: "Message from workflow",
           },
         },
       ],
       connections: {
-        'Manual Trigger': {
-          main: [[{ node: 'Slack Send Message', type: 'main', index: 0 }]],
+        "Manual Trigger": {
+          main: [[{ node: "Slack Send Message", type: "main", index: 0 }]],
         },
       },
     };
@@ -355,31 +392,34 @@ Example format:
   /**
    * Create email workflow
    */
-  private createEmailWorkflow(goal: string, timestamp: string): GeneratedWorkflow {
+  private createEmailWorkflow(
+    goal: string,
+    timestamp: string
+  ): GeneratedWorkflow {
     return {
       name: `Email Workflow - ${timestamp}`,
       description: `Send emails based on: ${goal}`,
       nodes: [
         {
-          name: 'Manual Trigger',
-          type: 'n8n-nodes-base.manualTrigger',
+          name: "Manual Trigger",
+          type: "n8n-nodes-base.manualTrigger",
           position: [100, 100],
         },
         {
-          name: 'Send Email',
-          type: 'n8n-nodes-base.sendemail',
+          name: "Send Email",
+          type: "n8n-nodes-base.sendemail",
           position: [300, 100],
           parameters: {
-            toEmail: 'recipient@example.com',
-            subject: 'Email from workflow',
+            toEmail: "recipient@example.com",
+            subject: "Email from workflow",
             textOnly: false,
-            htmlEmail: '<p>Message body</p>',
+            htmlEmail: "<p>Message body</p>",
           },
         },
       ],
       connections: {
-        'Manual Trigger': {
-          main: [[{ node: 'Send Email', type: 'main', index: 0 }]],
+        "Manual Trigger": {
+          main: [[{ node: "Send Email", type: "main", index: 0 }]],
         },
       },
     };
@@ -388,27 +428,30 @@ Example format:
   /**
    * Create data transformation workflow
    */
-  private createDataTransformationWorkflow(goal: string, timestamp: string): GeneratedWorkflow {
+  private createDataTransformationWorkflow(
+    goal: string,
+    timestamp: string
+  ): GeneratedWorkflow {
     return {
       name: `Data Transformation - ${timestamp}`,
       description: `Transform data based on: ${goal}`,
       nodes: [
         {
-          name: 'Input Data',
-          type: 'n8n-nodes-base.manualTrigger',
+          name: "Input Data",
+          type: "n8n-nodes-base.manualTrigger",
           position: [100, 100],
         },
         {
-          name: 'Transform Data',
-          type: 'n8n-nodes-base.set',
+          name: "Transform Data",
+          type: "n8n-nodes-base.set",
           position: [300, 100],
           parameters: {
             assignments: {
               assignments: [
                 {
-                  name: 'transformedData',
-                  value: '={{ $json }}',
-                  type: 'expression',
+                  name: "transformedData",
+                  value: "={{ $json }}",
+                  type: "expression",
                 },
               ],
             },
@@ -416,8 +459,8 @@ Example format:
         },
       ],
       connections: {
-        'Input Data': {
-          main: [[{ node: 'Transform Data', type: 'main', index: 0 }]],
+        "Input Data": {
+          main: [[{ node: "Transform Data", type: "main", index: 0 }]],
         },
       },
     };
@@ -426,23 +469,26 @@ Example format:
   /**
    * Create API integration workflow
    */
-  private createApiIntegrationWorkflow(goal: string, timestamp: string): GeneratedWorkflow {
+  private createApiIntegrationWorkflow(
+    goal: string,
+    timestamp: string
+  ): GeneratedWorkflow {
     return {
       name: `API Integration - ${timestamp}`,
       description: `Integrate with APIs based on: ${goal}`,
       nodes: [
         {
-          name: 'Manual Trigger',
-          type: 'n8n-nodes-base.manualTrigger',
+          name: "Manual Trigger",
+          type: "n8n-nodes-base.manualTrigger",
           position: [100, 100],
         },
         {
-          name: 'HTTP Request',
-          type: 'n8n-nodes-base.httprequest',
+          name: "HTTP Request",
+          type: "n8n-nodes-base.httprequest",
           position: [300, 100],
           parameters: {
-            url: 'https://api.example.com/data',
-            method: 'GET',
+            url: "https://api.example.com/data",
+            method: "GET",
             sendHeaders: true,
             headerParameters: {
               parameters: [],
@@ -451,8 +497,8 @@ Example format:
         },
       ],
       connections: {
-        'Manual Trigger': {
-          main: [[{ node: 'HTTP Request', type: 'main', index: 0 }]],
+        "Manual Trigger": {
+          main: [[{ node: "HTTP Request", type: "main", index: 0 }]],
         },
       },
     };
@@ -461,29 +507,32 @@ Example format:
   /**
    * Create database CRUD workflow
    */
-  private createDatabaseCrudWorkflow(goal: string, timestamp: string): GeneratedWorkflow {
+  private createDatabaseCrudWorkflow(
+    goal: string,
+    timestamp: string
+  ): GeneratedWorkflow {
     return {
       name: `Database Operations - ${timestamp}`,
       description: `Database CRUD operations based on: ${goal}`,
       nodes: [
         {
-          name: 'Manual Trigger',
-          type: 'n8n-nodes-base.manualTrigger',
+          name: "Manual Trigger",
+          type: "n8n-nodes-base.manualTrigger",
           position: [100, 100],
         },
         {
-          name: 'Database Operation',
-          type: 'n8n-nodes-base.postgres',
+          name: "Database Operation",
+          type: "n8n-nodes-base.postgres",
           position: [300, 100],
           parameters: {
-            operation: 'executeQuery',
-            query: 'SELECT * FROM table_name LIMIT 10;',
+            operation: "executeQuery",
+            query: "SELECT * FROM table_name LIMIT 10;",
           },
         },
       ],
       connections: {
-        'Manual Trigger': {
-          main: [[{ node: 'Database Operation', type: 'main', index: 0 }]],
+        "Manual Trigger": {
+          main: [[{ node: "Database Operation", type: "main", index: 0 }]],
         },
       },
     };
@@ -492,50 +541,53 @@ Example format:
   /**
    * Create conditional flow workflow
    */
-  private createConditionalFlowWorkflow(goal: string, timestamp: string): GeneratedWorkflow {
+  private createConditionalFlowWorkflow(
+    goal: string,
+    timestamp: string
+  ): GeneratedWorkflow {
     return {
       name: `Conditional Flow - ${timestamp}`,
       description: `Conditional workflow based on: ${goal}`,
       nodes: [
         {
-          name: 'Manual Trigger',
-          type: 'n8n-nodes-base.manualTrigger',
+          name: "Manual Trigger",
+          type: "n8n-nodes-base.manualTrigger",
           position: [100, 100],
         },
         {
-          name: 'Check Condition',
-          type: 'n8n-nodes-base.if',
+          name: "Check Condition",
+          type: "n8n-nodes-base.if",
           position: [300, 100],
           parameters: {
             conditions: {
               boolean: [
                 {
-                  condition: 'true',
-                  value1: '={{ $json.value }}',
+                  condition: "true",
+                  value1: "={{ $json.value }}",
                 },
               ],
             },
           },
         },
         {
-          name: 'True Path',
-          type: 'n8n-nodes-base.noop',
+          name: "True Path",
+          type: "n8n-nodes-base.noop",
           position: [500, 50],
         },
         {
-          name: 'False Path',
-          type: 'n8n-nodes-base.noop',
+          name: "False Path",
+          type: "n8n-nodes-base.noop",
           position: [500, 150],
         },
       ],
       connections: {
-        'Manual Trigger': {
-          main: [[{ node: 'Check Condition', type: 'main', index: 0 }]],
+        "Manual Trigger": {
+          main: [[{ node: "Check Condition", type: "main", index: 0 }]],
         },
-        'Check Condition': {
+        "Check Condition": {
           main: [
-            [{ node: 'True Path', type: 'main', index: 0 }],
-            [{ node: 'False Path', type: 'main', index: 0 }],
+            [{ node: "True Path", type: "main", index: 0 }],
+            [{ node: "False Path", type: "main", index: 0 }],
           ],
         },
       },
@@ -545,37 +597,40 @@ Example format:
   /**
    * Create error handling workflow
    */
-  private createErrorHandlingWorkflow(goal: string, timestamp: string): GeneratedWorkflow {
+  private createErrorHandlingWorkflow(
+    goal: string,
+    timestamp: string
+  ): GeneratedWorkflow {
     return {
       name: `Error Handling - ${timestamp}`,
       description: `Error handling workflow based on: ${goal}`,
       nodes: [
         {
-          name: 'Manual Trigger',
-          type: 'n8n-nodes-base.manualTrigger',
+          name: "Manual Trigger",
+          type: "n8n-nodes-base.manualTrigger",
           position: [100, 100],
         },
         {
-          name: 'Risky Operation',
-          type: 'n8n-nodes-base.httprequest',
+          name: "Risky Operation",
+          type: "n8n-nodes-base.httprequest",
           position: [300, 100],
           parameters: {
-            url: 'https://api.example.com/data',
-            method: 'GET',
+            url: "https://api.example.com/data",
+            method: "GET",
           },
         },
         {
-          name: 'Error Handler',
-          type: 'n8n-nodes-base.noop',
+          name: "Error Handler",
+          type: "n8n-nodes-base.noop",
           position: [500, 100],
         },
       ],
       connections: {
-        'Manual Trigger': {
-          main: [[{ node: 'Risky Operation', type: 'main', index: 0 }]],
+        "Manual Trigger": {
+          main: [[{ node: "Risky Operation", type: "main", index: 0 }]],
         },
-        'Risky Operation': {
-          main: [[{ node: 'Error Handler', type: 'main', index: 0 }]],
+        "Risky Operation": {
+          main: [[{ node: "Error Handler", type: "main", index: 0 }]],
         },
       },
     };
@@ -584,33 +639,36 @@ Example format:
   /**
    * Create scheduling workflow
    */
-  private createSchedulingWorkflow(goal: string, timestamp: string): GeneratedWorkflow {
+  private createSchedulingWorkflow(
+    goal: string,
+    timestamp: string
+  ): GeneratedWorkflow {
     return {
       name: `Scheduled Execution - ${timestamp}`,
       description: `Scheduled workflow based on: ${goal}`,
       nodes: [
         {
-          name: 'Schedule Trigger',
-          type: 'n8n-nodes-base.scheduletrigger',
+          name: "Schedule Trigger",
+          type: "n8n-nodes-base.scheduletrigger",
           position: [100, 100],
           parameters: {
-            interval: ['days'],
+            interval: ["days"],
             daysInterval: 1,
           },
         },
         {
-          name: 'Execute Task',
-          type: 'n8n-nodes-base.httprequest',
+          name: "Execute Task",
+          type: "n8n-nodes-base.httprequest",
           position: [300, 100],
           parameters: {
-            url: 'https://api.example.com/task',
-            method: 'POST',
+            url: "https://api.example.com/task",
+            method: "POST",
           },
         },
       ],
       connections: {
-        'Schedule Trigger': {
-          main: [[{ node: 'Execute Task', type: 'main', index: 0 }]],
+        "Schedule Trigger": {
+          main: [[{ node: "Execute Task", type: "main", index: 0 }]],
         },
       },
     };
@@ -619,30 +677,33 @@ Example format:
   /**
    * Create file operations workflow
    */
-  private createFileOperationsWorkflow(goal: string, timestamp: string): GeneratedWorkflow {
+  private createFileOperationsWorkflow(
+    goal: string,
+    timestamp: string
+  ): GeneratedWorkflow {
     return {
       name: `File Operations - ${timestamp}`,
       description: `File operations workflow based on: ${goal}`,
       nodes: [
         {
-          name: 'Manual Trigger',
-          type: 'n8n-nodes-base.manualTrigger',
+          name: "Manual Trigger",
+          type: "n8n-nodes-base.manualTrigger",
           position: [100, 100],
         },
         {
-          name: 'File Operation',
-          type: 'n8n-nodes-base.readwritefile',
+          name: "File Operation",
+          type: "n8n-nodes-base.readwritefile",
           position: [300, 100],
           parameters: {
-            fileName: 'output.txt',
-            fileContent: 'File contents here',
-            encoding: 'utf8',
+            fileName: "output.txt",
+            fileContent: "File contents here",
+            encoding: "utf8",
           },
         },
       ],
       connections: {
-        'Manual Trigger': {
-          main: [[{ node: 'File Operation', type: 'main', index: 0 }]],
+        "Manual Trigger": {
+          main: [[{ node: "File Operation", type: "main", index: 0 }]],
         },
       },
     };
@@ -651,56 +712,59 @@ Example format:
   /**
    * Create multi-step workflow
    */
-  private createMultiStepWorkflow(goal: string, timestamp: string): GeneratedWorkflow {
+  private createMultiStepWorkflow(
+    goal: string,
+    timestamp: string
+  ): GeneratedWorkflow {
     return {
       name: `Multi-Step Workflow - ${timestamp}`,
       description: `Complex multi-step workflow based on: ${goal}`,
       nodes: [
         {
-          name: 'Start',
-          type: 'n8n-nodes-base.manualTrigger',
+          name: "Start",
+          type: "n8n-nodes-base.manualTrigger",
           position: [100, 100],
         },
         {
-          name: 'Step 1: Fetch Data',
-          type: 'n8n-nodes-base.httprequest',
+          name: "Step 1: Fetch Data",
+          type: "n8n-nodes-base.httprequest",
           position: [300, 100],
           parameters: {
-            url: 'https://api.example.com/data',
-            method: 'GET',
+            url: "https://api.example.com/data",
+            method: "GET",
           },
         },
         {
-          name: 'Step 2: Transform',
-          type: 'n8n-nodes-base.set',
+          name: "Step 2: Transform",
+          type: "n8n-nodes-base.set",
           position: [500, 100],
           parameters: {
             assignments: {
               assignments: [
                 {
-                  name: 'processedData',
-                  value: '={{ $json }}',
-                  type: 'expression',
+                  name: "processedData",
+                  value: "={{ $json }}",
+                  type: "expression",
                 },
               ],
             },
           },
         },
         {
-          name: 'Step 3: Store Results',
-          type: 'n8n-nodes-base.noop',
+          name: "Step 3: Store Results",
+          type: "n8n-nodes-base.noop",
           position: [700, 100],
         },
       ],
       connections: {
-        'Start': {
-          main: [[{ node: 'Step 1: Fetch Data', type: 'main', index: 0 }]],
+        Start: {
+          main: [[{ node: "Step 1: Fetch Data", type: "main", index: 0 }]],
         },
-        'Step 1: Fetch Data': {
-          main: [[{ node: 'Step 2: Transform', type: 'main', index: 0 }]],
+        "Step 1: Fetch Data": {
+          main: [[{ node: "Step 2: Transform", type: "main", index: 0 }]],
         },
-        'Step 2: Transform': {
-          main: [[{ node: 'Step 3: Store Results', type: 'main', index: 0 }]],
+        "Step 2: Transform": {
+          main: [[{ node: "Step 3: Store Results", type: "main", index: 0 }]],
         },
       },
     };
@@ -709,15 +773,23 @@ Example format:
   /**
    * Enhance workflow with goal-specific details
    */
-  private enhanceWorkflowWithGoal(workflow: GeneratedWorkflow, goal: string): void {
+  private enhanceWorkflowWithGoal(
+    workflow: GeneratedWorkflow,
+    goal: string
+  ): void {
     // Update workflow name to be more descriptive
-    workflow.name = `${workflow.name.split(' - ')[0]} - ${goal.substring(0, 30)}...`;
+    workflow.name = `${workflow.name.split(" - ")[0]} - ${goal.substring(
+      0,
+      30
+    )}...`;
 
     // Update description
     workflow.description = `Generated workflow for: ${goal}`;
 
     // Log enhancement
-    this.logger.debug(`Enhanced workflow with goal context: ${goal.substring(0, 50)}...`);
+    this.logger.debug(
+      `Enhanced workflow with goal context: ${goal.substring(0, 50)}...`
+    );
   }
 
   /**
@@ -726,54 +798,54 @@ Example format:
   private loadNodeRegistry(): void {
     const nodes: NodeTemplate[] = [
       {
-        name: 'Manual Trigger',
-        type: 'n8n-nodes-base.manualTrigger',
-        description: 'Manually trigger a workflow',
+        name: "Manual Trigger",
+        type: "n8n-nodes-base.manualTrigger",
+        description: "Manually trigger a workflow",
       },
       {
-        name: 'Schedule Trigger',
-        type: 'n8n-nodes-base.scheduletrigger',
-        description: 'Trigger a workflow on a schedule',
+        name: "Schedule Trigger",
+        type: "n8n-nodes-base.scheduletrigger",
+        description: "Trigger a workflow on a schedule",
       },
       {
-        name: 'Webhook',
-        type: 'n8n-nodes-base.webhook',
-        description: 'Trigger a workflow via webhook',
+        name: "Webhook",
+        type: "n8n-nodes-base.webhook",
+        description: "Trigger a workflow via webhook",
       },
       {
-        name: 'HTTP Request',
-        type: 'n8n-nodes-base.httprequest',
-        description: 'Make HTTP requests',
+        name: "HTTP Request",
+        type: "n8n-nodes-base.httprequest",
+        description: "Make HTTP requests",
       },
       {
-        name: 'Slack',
-        type: 'n8n-nodes-base.slack',
-        description: 'Send messages to Slack',
+        name: "Slack",
+        type: "n8n-nodes-base.slack",
+        description: "Send messages to Slack",
       },
       {
-        name: 'Email Send',
-        type: 'n8n-nodes-base.sendemail',
-        description: 'Send emails',
+        name: "Email Send",
+        type: "n8n-nodes-base.sendemail",
+        description: "Send emails",
       },
       {
-        name: 'Set',
-        type: 'n8n-nodes-base.set',
-        description: 'Transform and map data',
+        name: "Set",
+        type: "n8n-nodes-base.set",
+        description: "Transform and map data",
       },
       {
-        name: 'If',
-        type: 'n8n-nodes-base.if',
-        description: 'Conditional logic',
+        name: "If",
+        type: "n8n-nodes-base.if",
+        description: "Conditional logic",
       },
       {
-        name: 'No Operation',
-        type: 'n8n-nodes-base.noop',
-        description: 'Placeholder node',
+        name: "No Operation",
+        type: "n8n-nodes-base.noop",
+        description: "Placeholder node",
       },
       {
-        name: 'PostgreSQL',
-        type: 'n8n-nodes-base.postgres',
-        description: 'Interact with PostgreSQL databases',
+        name: "PostgreSQL",
+        type: "n8n-nodes-base.postgres",
+        description: "Interact with PostgreSQL databases",
       },
     ];
 
@@ -795,7 +867,7 @@ Example format:
       }
 
       // Ensure node type has proper package prefix
-      if (!node.type.includes('.')) {
+      if (!node.type.includes(".")) {
         node.type = `n8n-nodes-base.${node.type}`;
         this.logger.debug(`Added package prefix to node type: ${node.type}`);
       }
@@ -808,22 +880,24 @@ Example format:
 
     // Remove any system-managed fields that might have been accidentally added
     const systemManagedFields = [
-      'id',
-      'createdAt',
-      'updatedAt',
-      'versionId',
-      'isArchived',
-      'triggerCount',
-      'usedCredentials',
-      'sharedWithProjects',
-      'meta',
-      'shared',
+      "id",
+      "createdAt",
+      "updatedAt",
+      "versionId",
+      "isArchived",
+      "triggerCount",
+      "usedCredentials",
+      "sharedWithProjects",
+      "meta",
+      "shared",
     ];
 
     for (const field of systemManagedFields) {
       if (field in (workflow as any)) {
         delete (workflow as any)[field];
-        this.logger.debug(`Removed system-managed field "${field}" from workflow`);
+        this.logger.debug(
+          `Removed system-managed field "${field}" from workflow`
+        );
       }
     }
 
@@ -853,7 +927,7 @@ Example format:
       }
     }
 
-    this.logger.debug('Workflow API compliance check completed');
+    this.logger.debug("Workflow API compliance check completed");
   }
 }
 

@@ -1,307 +1,424 @@
 /**
  * Ollama Client
- * Handles communication with Ollama inference servers for both embedding and generation models
- * Compatible with Ollama API (unlike VLLMClient which expects vLLM endpoints)
+ *
+ * PRIMARY LLM backend for cross-platform compatibility.
+ * Works on Windows, macOS, Linux without additional setup.
+ *
+ * Supports:
+ * - Text generation (chat/completions)
+ * - Embeddings
+ * - Model management (pull, list)
+ * - Health checking
+ *
+ * Falls back gracefully when Ollama isn't available.
  */
 
-import { logger } from '../utils/logger';
+import { logger } from "../utils/logger";
 
-export interface OllamaClientConfig {
-  baseUrl: string; // Ollama server base URL (e.g., http://localhost:11434)
-  model: string; // Model name (embedding or generation)
-  timeout?: number; // Request timeout in milliseconds (default: 30000)
-  retries?: number; // Number of retries on failure (default: 3)
+// ============================================================================
+// TYPES
+// ============================================================================
+
+export interface OllamaConfig {
+  baseUrl?: string; // Default: http://localhost:11434
+  timeout?: number; // Request timeout in ms (default: 60000)
+  retries?: number; // Retry count (default: 2)
 }
 
-export interface EmbeddingResponse {
+export interface OllamaGenerateOptions {
+  temperature?: number; // 0.0-1.0 (default: 0.7)
+  maxTokens?: number; // Max tokens to generate (default: 2048)
+  topP?: number; // Top-p sampling (default: 0.9)
+  topK?: number; // Top-k sampling (default: 40)
+  stop?: string[]; // Stop sequences
+  system?: string; // System prompt
+}
+
+export interface OllamaGenerateResponse {
+  text: string;
+  model: string;
+  tokens: number;
+  generationTime: number;
+  done: boolean;
+}
+
+export interface OllamaEmbeddingResponse {
   embedding: number[];
-  modelId: string;
+  model: string;
   processingTime: number;
 }
 
-export interface GenerationResponse {
-  text: string;
-  tokens: number;
-  generationTime: number;
-  stopReason?: string;
-  modelId: string;
+export interface OllamaChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
 }
 
-export interface OllamaHealthStatus {
-  healthy: boolean;
-  model: string;
-  loadedModels: string[];
+export interface OllamaModelInfo {
+  name: string;
+  size: number;
+  digest: string;
+  modifiedAt: string;
+  details?: {
+    format: string;
+    family: string;
+    parameterSize: string;
+    quantizationLevel: string;
+  };
 }
 
-/**
- * Ollama Client for inference operations
- * Handles both embedding and text generation requests via Ollama API
- */
+// ============================================================================
+// OLLAMA CLIENT CLASS
+// ============================================================================
+
 export class OllamaClient {
   private baseUrl: string;
-  private model: string;
   private timeout: number;
   private retries: number;
   private isHealthy: boolean = false;
   private lastHealthCheck: number = 0;
-  private healthCheckInterval: number = 60000; // 60 seconds
+  private healthCheckInterval: number = 30000; // 30 seconds
 
-  constructor(config: OllamaClientConfig) {
-    this.baseUrl = config.baseUrl.replace(/\/$/, ''); // Remove trailing slash
-    this.model = config.model;
-    this.timeout = config.timeout || 30000;
-    this.retries = config.retries || 3;
+  constructor(config: OllamaConfig = {}) {
+    this.baseUrl = (config.baseUrl || "http://localhost:11434").replace(
+      /\/$/,
+      ""
+    );
+    this.timeout = config.timeout || 60000;
+    this.retries = config.retries || 2;
 
-    logger.info('[OllamaClient] Initialized', {
-      model: this.model,
+    logger.info("[OllamaClient] Initialized", {
       baseUrl: this.baseUrl,
       timeout: this.timeout,
-      retries: this.retries,
     });
   }
 
-  /**
-   * Generate embeddings for a text input
-   * Used for semantic understanding and knowledge graph queries
-   */
-  async generateEmbedding(text: string): Promise<EmbeddingResponse> {
-    const startTime = Date.now();
-
-    if (!text || text.trim().length === 0) {
-      throw new Error('Text input cannot be empty');
-    }
-
-    // Ensure health before attempting request
-    const isHealthy = await this.checkHealth(true);
-    if (!isHealthy) {
-      throw new Error(
-        `Ollama server at ${this.baseUrl} is not responding. Please ensure the server is running.`
-      );
-    }
-
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt < this.retries; attempt++) {
-      try {
-        const response = await this.makeRequest(
-          '/api/embeddings',
-          {
-            model: this.model,
-            prompt: text,
-          },
-          'POST'
-        );
-
-        if (!response.embedding) {
-          throw new Error('Invalid embedding response format');
-        }
-
-        const processingTime = Date.now() - startTime;
-
-        logger.debug('[OllamaClient] Embedding generated', {
-          model: this.model,
-          textLength: text.length,
-          embeddingDimension: response.embedding.length,
-          processingTime,
-          attempt: attempt + 1,
-        });
-
-        return {
-          embedding: response.embedding,
-          modelId: this.model,
-          processingTime,
-        };
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        logger.warn(
-          '[OllamaClient] Embedding request failed (attempt ' + (attempt + 1) + '):',
-          lastError
-        );
-
-        if (attempt < this.retries - 1) {
-          // Wait before retry (exponential backoff)
-          await this.delay(Math.pow(2, attempt) * 500);
-        }
-      }
-    }
-
-    throw new Error(
-      `Failed to generate embedding after ${this.retries} attempts: ${lastError?.message}`
-    );
-  }
+  // ==========================================================================
+  // HEALTH & CONNECTIVITY
+  // ==========================================================================
 
   /**
-   * Generate text using the generation model
-   * Used for conversation responses and workflow generation
-   */
-  async generateText(
-    prompt: string,
-    options?: {
-      maxTokens?: number;
-      temperature?: number;
-      topP?: number;
-      stopSequences?: string[];
-    }
-  ): Promise<GenerationResponse> {
-    const startTime = Date.now();
-
-    if (!prompt || prompt.trim().length === 0) {
-      throw new Error('Prompt cannot be empty');
-    }
-
-    // Ensure health before attempting request
-    const isHealthy = await this.checkHealth(true);
-    if (!isHealthy) {
-      throw new Error(
-        `Ollama server at ${this.baseUrl} is not responding. Please ensure the server is running.`
-      );
-    }
-
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt < this.retries; attempt++) {
-      try {
-        const response = await this.makeRequest(
-          '/api/generate',
-          {
-            model: this.model,
-            prompt: prompt,
-            stream: false,
-            options: {
-              temperature: options?.temperature ?? 0.7,
-              top_p: options?.topP ?? 0.9,
-              num_predict: options?.maxTokens ?? 256,
-            },
-            stop: options?.stopSequences,
-          },
-          'POST'
-        );
-
-        if (!response.response) {
-          throw new Error('Invalid generation response format');
-        }
-
-        const processingTime = Date.now() - startTime;
-
-        logger.debug('[OllamaClient] Text generated', {
-          model: this.model,
-          promptLength: prompt.length,
-          responseLength: response.response.length,
-          processingTime,
-          attempt: attempt + 1,
-        });
-
-        return {
-          text: response.response,
-          tokens: response.eval_count || 0,
-          generationTime: processingTime,
-          stopReason: response.stop_reason || undefined,
-          modelId: this.model,
-        };
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        logger.warn(
-          '[OllamaClient] Generation request failed (attempt ' + (attempt + 1) + '):',
-          lastError
-        );
-
-        if (attempt < this.retries - 1) {
-          // Wait before retry (exponential backoff)
-          await this.delay(Math.pow(2, attempt) * 500);
-        }
-      }
-    }
-
-    throw new Error(
-      `Failed to generate text after ${this.retries} attempts: ${lastError?.message}`
-    );
-  }
-
-  /**
-   * Check if the Ollama server is healthy and the model is loaded
+   * Check if Ollama is available and responding
    */
   async checkHealth(forceCheck: boolean = false): Promise<boolean> {
-    const now = Date.now();
-
-    // Use cached health status if available and not forced
-    if (!forceCheck && this.isHealthy && now - this.lastHealthCheck < this.healthCheckInterval) {
+    // Use cached result if recent
+    if (
+      !forceCheck &&
+      Date.now() - this.lastHealthCheck < this.healthCheckInterval
+    ) {
       return this.isHealthy;
     }
 
-    this.lastHealthCheck = now;
-
     try {
-      const response = await this.makeRequest('/api/tags', {}, 'GET', 5000);
+      const response = await this.makeRequest(
+        "/api/tags",
+        "GET",
+        undefined,
+        5000
+      );
+      this.isHealthy = response !== null && Array.isArray(response.models);
+      this.lastHealthCheck = Date.now();
 
-      const models = response.models || [];
-      const modelFound = models.some((m: any) => m.name === this.model || m.name.startsWith(this.model + ':'));
-
-      if (modelFound) {
-        this.isHealthy = true;
-        logger.debug('[OllamaClient] Health check passed', { model: this.model });
-      } else {
-        this.isHealthy = false;
-        logger.warn('[OllamaClient] Health check - model not loaded', { model: this.model });
+      if (this.isHealthy) {
+        logger.debug("[OllamaClient] Health check passed");
       }
-
       return this.isHealthy;
     } catch (error) {
       this.isHealthy = false;
-      logger.warn('[OllamaClient] Health check error:', error);
+      this.lastHealthCheck = Date.now();
+      logger.debug("[OllamaClient] Health check failed:", error);
       return false;
     }
   }
 
   /**
-   * Get detailed health status information
+   * Get Ollama version
    */
-  async getHealthStatus(): Promise<OllamaHealthStatus> {
+  async getVersion(): Promise<string | null> {
     try {
-      const response = await this.makeRequest('/api/tags', {}, 'GET');
+      const response = await this.makeRequest(
+        "/api/version",
+        "GET",
+        undefined,
+        5000
+      );
+      return response?.version || null;
+    } catch {
+      return null;
+    }
+  }
 
-      return {
-        healthy: true,
-        model: this.model,
-        loadedModels: (response.models || []).map((m: any) => m.name),
-      };
+  // ==========================================================================
+  // MODEL MANAGEMENT
+  // ==========================================================================
+
+  /**
+   * List all available models
+   */
+  async listModels(): Promise<OllamaModelInfo[]> {
+    try {
+      const response = await this.makeRequest("/api/tags", "GET");
+      return (response?.models || []).map((m: any) => ({
+        name: m.name,
+        size: m.size,
+        digest: m.digest,
+        modifiedAt: m.modified_at,
+        details: m.details,
+      }));
     } catch (error) {
-      return {
-        healthy: false,
-        model: this.model,
-        loadedModels: [],
-      };
+      logger.warn("[OllamaClient] Failed to list models:", error);
+      return [];
     }
   }
 
   /**
-   * Get current model information
+   * Check if a model is available locally
    */
-  getModel(): string {
-    return this.model;
+  async hasModel(modelName: string): Promise<boolean> {
+    const models = await this.listModels();
+    return models.some(
+      (m) =>
+        m.name === modelName ||
+        m.name.startsWith(modelName + ":") ||
+        modelName.includes(m.name)
+    );
   }
 
   /**
-   * Get the base URL
+   * Pull a model from Ollama registry
    */
-  getBaseUrl(): string {
-    return this.baseUrl;
+  async pullModel(
+    modelName: string,
+    onProgress?: (status: string, completed?: number, total?: number) => void
+  ): Promise<boolean> {
+    logger.info(`[OllamaClient] Pulling model: ${modelName}`);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/pull`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: modelName, stream: false }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Pull failed: ${response.status}`);
+      }
+
+      // For streaming progress (if needed in future)
+      const result = await response.json();
+
+      logger.info(`[OllamaClient] Model ${modelName} pulled successfully`);
+      return true;
+    } catch (error: any) {
+      logger.error(
+        `[OllamaClient] Failed to pull model ${modelName}:`,
+        error.message
+      );
+      return false;
+    }
   }
 
-  // ==========================================
-  // Private Helper Methods
-  // ==========================================
+  /**
+   * Delete a model
+   */
+  async deleteModel(modelName: string): Promise<boolean> {
+    try {
+      await this.makeRequest("/api/delete", "DELETE", { name: modelName });
+      logger.info(`[OllamaClient] Model ${modelName} deleted`);
+      return true;
+    } catch (error) {
+      logger.warn(`[OllamaClient] Failed to delete model ${modelName}:`, error);
+      return false;
+    }
+  }
+
+  // ==========================================================================
+  // TEXT GENERATION
+  // ==========================================================================
 
   /**
-   * Make an HTTP request to the Ollama server
+   * Generate text completion
+   */
+  async generate(
+    model: string,
+    prompt: string,
+    options: OllamaGenerateOptions = {}
+  ): Promise<OllamaGenerateResponse> {
+    const startTime = Date.now();
+
+    const body = {
+      model,
+      prompt,
+      system: options.system,
+      stream: false,
+      options: {
+        temperature: options.temperature ?? 0.7,
+        num_predict: options.maxTokens ?? 2048,
+        top_p: options.topP ?? 0.9,
+        top_k: options.topK ?? 40,
+        stop: options.stop,
+      },
+    };
+
+    const response = await this.makeRequestWithRetry(
+      "/api/generate",
+      "POST",
+      body
+    );
+
+    if (!response || !response.response) {
+      throw new Error("Invalid response from Ollama");
+    }
+
+    const generationTime = Date.now() - startTime;
+
+    return {
+      text: response.response,
+      model: response.model || model,
+      tokens:
+        response.eval_count || Math.ceil(response.response.split(/\s+/).length),
+      generationTime,
+      done: response.done ?? true,
+    };
+  }
+
+  /**
+   * Chat completion (multi-turn conversation)
+   */
+  async chat(
+    model: string,
+    messages: OllamaChatMessage[],
+    options: OllamaGenerateOptions = {}
+  ): Promise<OllamaGenerateResponse> {
+    const startTime = Date.now();
+
+    const body = {
+      model,
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      stream: false,
+      options: {
+        temperature: options.temperature ?? 0.7,
+        num_predict: options.maxTokens ?? 2048,
+        top_p: options.topP ?? 0.9,
+        top_k: options.topK ?? 40,
+        stop: options.stop,
+      },
+    };
+
+    const response = await this.makeRequestWithRetry("/api/chat", "POST", body);
+
+    if (!response || !response.message) {
+      throw new Error("Invalid chat response from Ollama");
+    }
+
+    const generationTime = Date.now() - startTime;
+
+    return {
+      text: response.message.content,
+      model: response.model || model,
+      tokens:
+        response.eval_count ||
+        Math.ceil(response.message.content.split(/\s+/).length),
+      generationTime,
+      done: response.done ?? true,
+    };
+  }
+
+  // ==========================================================================
+  // EMBEDDINGS
+  // ==========================================================================
+
+  /**
+   * Generate embeddings for text
+   */
+  async embed(model: string, text: string): Promise<OllamaEmbeddingResponse> {
+    const startTime = Date.now();
+
+    const body = {
+      model,
+      prompt: text,
+    };
+
+    const response = await this.makeRequestWithRetry(
+      "/api/embeddings",
+      "POST",
+      body
+    );
+
+    if (!response || !response.embedding) {
+      throw new Error("Invalid embedding response from Ollama");
+    }
+
+    return {
+      embedding: response.embedding,
+      model: model,
+      processingTime: Date.now() - startTime,
+    };
+  }
+
+  /**
+   * Generate embeddings for multiple texts (batch)
+   */
+  async embedBatch(
+    model: string,
+    texts: string[]
+  ): Promise<OllamaEmbeddingResponse[]> {
+    // Ollama doesn't support batch embeddings natively, so we parallelize
+    const results = await Promise.all(
+      texts.map((text) => this.embed(model, text))
+    );
+    return results;
+  }
+
+  // ==========================================================================
+  // PRIVATE HELPERS
+  // ==========================================================================
+
+  /**
+   * Make HTTP request with retry logic
+   */
+  private async makeRequestWithRetry(
+    endpoint: string,
+    method: "GET" | "POST" | "DELETE",
+    body?: any
+  ): Promise<any> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= this.retries; attempt++) {
+      try {
+        const result = await this.makeRequest(endpoint, method, body);
+        return result;
+      } catch (error: any) {
+        lastError = error;
+        logger.warn(
+          `[OllamaClient] Request failed (attempt ${attempt + 1}/${
+            this.retries + 1
+          }):`,
+          error.message
+        );
+
+        if (attempt < this.retries) {
+          // Exponential backoff
+          await this.delay(Math.pow(2, attempt) * 500);
+        }
+      }
+    }
+
+    throw lastError || new Error("Request failed after retries");
+  }
+
+  /**
+   * Make HTTP request to Ollama
    */
   private async makeRequest(
     endpoint: string,
-    body: any,
-    method: 'GET' | 'POST' = 'POST',
+    method: "GET" | "POST" | "DELETE",
+    body?: any,
     timeout: number = this.timeout
   ): Promise<any> {
     const url = `${this.baseUrl}${endpoint}`;
-
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -309,51 +426,100 @@ export class OllamaClient {
       const response = await fetch(url, {
         method,
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: method === 'GET' ? undefined : JSON.stringify(body),
+        body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(
-          `Ollama API error ${response.status}: ${errorText || response.statusText}`
+          `Ollama API error ${response.status}: ${
+            errorText || response.statusText
+          }`
         );
       }
 
-      const data = await response.json();
-      return data;
+      return await response.json();
+    } catch (error: any) {
+      if (error.name === "AbortError") {
+        throw new Error(`Request timeout (${timeout}ms) - Ollama may be busy`);
+      }
+      throw error;
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
   /**
-   * Delay helper for retries with exponential backoff
+   * Delay helper
    */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+
+  // ==========================================================================
+  // UTILITY METHODS
+  // ==========================================================================
+
+  /**
+   * Get base URL
+   */
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  /**
+   * Test if a model works with a simple prompt
+   */
+  async testModel(
+    modelName: string
+  ): Promise<{ success: boolean; latency?: number; error?: string }> {
+    try {
+      const startTime = Date.now();
+      const response = await this.generate(
+        modelName,
+        'Say "hello" in one word.',
+        {
+          maxTokens: 10,
+          temperature: 0,
+        }
+      );
+      return {
+        success: true,
+        latency: Date.now() - startTime,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+}
+
+// ============================================================================
+// SINGLETON & FACTORY
+// ============================================================================
+
+let defaultClient: OllamaClient | null = null;
+
+/**
+ * Get default Ollama client
+ */
+export function getOllamaClient(config?: OllamaConfig): OllamaClient {
+  if (!defaultClient) {
+    defaultClient = new OllamaClient(config);
+  }
+  return defaultClient;
 }
 
 /**
- * Create an OllamaClient for embedding operations
+ * Create a new Ollama client
  */
-export function createOllamaClient(
-  mode: 'embedding' | 'generation',
-  model: string,
-  baseUrl: string,
-  timeout?: number
-): OllamaClient {
-  logger.info(`[OllamaClient] Creating ${mode} client`, { model, baseUrl });
-
-  return new OllamaClient({
-    baseUrl,
-    model,
-    timeout: timeout || 30000,
-    retries: 3,
-  });
+export function createOllamaClient(config?: OllamaConfig): OllamaClient {
+  return new OllamaClient(config);
 }
 
 /**
@@ -362,15 +528,16 @@ export function createOllamaClient(
 export function createDualOllamaClients(
   embeddingModel: string,
   generationModel: string,
-  embeddingBaseUrl: string,
-  generationBaseUrl: string,
-  timeout?: number
-): {
-  embedding: OllamaClient;
-  generation: OllamaClient;
-} {
-  return {
-    embedding: createOllamaClient('embedding', embeddingModel, embeddingBaseUrl, timeout),
-    generation: createOllamaClient('generation', generationModel, generationBaseUrl, timeout),
-  };
+  embeddingBaseUrl?: string,
+  generationBaseUrl?: string
+): { embedding: OllamaClient; generation: OllamaClient } {
+  const embeddingClient = new OllamaClient({
+    baseUrl: embeddingBaseUrl,
+  });
+
+  const generationClient = new OllamaClient({
+    baseUrl: generationBaseUrl,
+  });
+
+  return { embedding: embeddingClient, generation: generationClient };
 }

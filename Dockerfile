@@ -1,117 +1,81 @@
 # syntax=docker/dockerfile:1.7
 
-# Stage 1: Builder (Full dependencies for TypeScript compilation)
+# ============================================================================
+# n8n Co-Pilot MCP Server - Docker Image
+# 
+# Supports two modes:
+# - MCP (stdio): For Claude Desktop integration
+# - HTTP: For Open WebUI and direct API access
+#
+# Build: docker build -t n8n-mcp:latest .
+# Run MCP: docker run -it --rm -e N8N_API_URL -e N8N_API_KEY n8n-mcp:latest
+# Run HTTP: docker run -d -p 3001:3001 -e MCP_MODE=http -e N8N_API_URL -e N8N_API_KEY n8n-mcp:latest
+# ============================================================================
+
+# Stage 1: Builder
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install build dependencies for native packages
-RUN apk add --no-cache python3 make g++ cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev
+# Install build dependencies for native packages (better-sqlite3)
+RUN apk add --no-cache python3 make g++
 
-# Copy package files for dependency installation
+# Copy package files
 COPY package.json package-lock.json ./
 
-# Install ALL dependencies (including n8n packages needed for compilation)
+# Install ALL dependencies (dev + prod)
 RUN --mount=type=cache,target=/root/.npm \
-    npm install
+    npm ci
 
-# Copy TypeScript config and source code
+# Copy TypeScript config and source
 COPY tsconfig.json ./
 COPY src ./src
 
-# Build full TypeScript including GraphRAG learning system and HTTP server
+# Build TypeScript
 RUN npx tsc
 
-# Copy pre-built database if it exists locally (speeds up build)
-COPY data ./data
-
-# Stage 2: Runtime (with browser automation support)
+# Stage 2: Production Runtime
 FROM node:20-slim AS runtime
 WORKDIR /app
 
-# Install Docker CLI and ALL Playwright system dependencies
-RUN apt-get update && apt-get install -y \
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
-    gnupg \
-    lsb-release \
-    libnspr4 \
-    libnss3 \
-    libasound2 \
-    libxss1 \
-    libglib2.0-0 \
-    libnss3-dev \
-    libgconf-2-4 \
-    libxrandr2 \
-    libasound2-dev \
-    libpangocairo-1.0-0 \
-    libatk1.0-0 \
-    libcairo-gobject2 \
-    libgtk-3-0 \
-    libgdk-pixbuf2.0-0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libgbm1 \
-    libegl1 \
-    libgl1 \
-    libgles2 \
-    xvfb \
-    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
-    && apt-get update \
-    && apt-get install -y docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy runtime-only package.json and add Puppeteer
-COPY package.runtime.json package.json
+# Copy package files for production install
+COPY package.json package-lock.json ./
 
-# Install runtime dependencies with cache mount
+# Install production dependencies only
 RUN --mount=type=cache,target=/root/.npm \
-    npm install --production --no-audit --no-fund
+    npm ci --production --no-audit --no-fund
 
-# Install Puppeteer with bundled Chromium
-RUN --mount=type=cache,target=/root/.npm \
-    npm install puppeteer --no-audit --no-fund
-
-# Copy built application and database from builder stage
+# Copy built application from builder
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/data ./data
 
-# Create GitHub cache directory for auto-updates
-RUN mkdir -p /app/data/github-cache
+# Copy data directory if exists (for pre-built databases)
+COPY --chown=node:node data* ./data/
 
-# Copy Python backend for GraphRAG support
-COPY python ./python
-
-# Copy required files
-COPY .env.example ./
-
-# Create non-root user (Debian syntax)
-RUN groupadd --gid 1001 nodejs && \
-    useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home nodejs && \
-    chown -R nodejs:nodejs /app
+# Create non-root user directories
+RUN mkdir -p /app/data && chown -R node:node /app
 
 # Switch to non-root user
-USER nodejs
+USER node
 
-# Install Puppeteer Chromium as nodejs user (bundled with package)
-RUN npx puppeteer browsers install chrome
-
-# Set Docker environment flag
-ENV IS_DOCKER=true
+# Environment defaults
 ENV NODE_ENV=production
+ENV MCP_MODE=stdio
+ENV PORT=3001
+ENV N8N_API_URL=http://localhost:5678
+ENV OLLAMA_URL=http://localhost:11434
 
-# Expose MCP port
-EXPOSE 3000
+# Expose HTTP port (only used in HTTP mode)
+EXPOSE 3001
 
-# Note: No health check needed for MCP stdio mode
+# Health check for HTTP mode
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
-# Copy entry point script with smart n8n version detection
-# This script detects n8n version from shared volume and auto-rebuilds if changed
-COPY --chmod=755 docker/entrypoint-auto-rebuild.sh ./
-
-# Start MCP server with automatic n8n version detection & rebuild
-CMD ["/bin/bash", "./entrypoint-auto-rebuild.sh"]
+# Start the Co-Pilot
+# Use MCP_MODE=http for HTTP server, default is stdio for Claude Desktop
+CMD ["node", "dist/main.js"]

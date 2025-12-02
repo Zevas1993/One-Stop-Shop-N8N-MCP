@@ -8,6 +8,7 @@ import { EnhancedConfigValidator } from "./enhanced-config-validator";
 import { ExpressionValidator } from "./expression-validator";
 import { CredentialValidator } from "./credential-validator";
 import { Logger } from "../utils/logger";
+import { NodeFilter } from "../core/node-filter";
 
 const logger = new Logger({ prefix: "[WorkflowValidator]" });
 
@@ -25,6 +26,9 @@ interface WorkflowNode {
 
 interface WorkflowConnection {
   [sourceNode: string]: {
+    [key: string]:
+      | Array<Array<{ node: string; type: string; index: number }>>
+      | undefined;
     main?: Array<Array<{ node: string; type: string; index: number }>>;
     error?: Array<Array<{ node: string; type: string; index: number }>>;
     ai_tool?: Array<Array<{ node: string; type: string; index: number }>>;
@@ -436,6 +440,20 @@ export class WorkflowValidator {
           continue;
         }
 
+        // STRICT CHECK: Use centralized NodeFilter policy
+        const nodeFilter = NodeFilter.getInstance();
+        if (!nodeFilter.isNodeAllowed(node.type)) {
+          const reason = nodeFilter.getRejectionReason(node.type);
+          result.errors.push({
+            type: "error",
+            nodeId: node.id,
+            nodeName: node.name,
+            message:
+              reason || `Node type "${node.type}" is not allowed by policy.`,
+          });
+          continue;
+        }
+
         // Check for credentials placed incorrectly in parameters
         if (node.parameters && typeof node.parameters === "object") {
           for (const [key, value] of Object.entries(node.parameters)) {
@@ -588,8 +606,11 @@ export class WorkflowValidator {
 
         // Validate credentials if present (Issue #2 - Credential Validation)
         if (node.credentials && typeof node.credentials === "object") {
-          for (const [credType, credConfig] of Object.entries(node.credentials)) {
-            const credValidation = this.credentialValidator.validateCredential(credConfig);
+          for (const [credType, credConfig] of Object.entries(
+            node.credentials
+          )) {
+            const credValidation =
+              this.credentialValidator.validateCredential(credConfig);
             if (!credValidation.valid) {
               credValidation.errors.forEach((error) => {
                 result.errors.push({
@@ -693,40 +714,18 @@ export class WorkflowValidator {
         continue;
       }
 
-      // Check main outputs
-      if (outputs.main) {
-        this.validateConnectionOutputs(
-          sourceName,
-          outputs.main,
-          nodeMap,
-          nodeIdMap,
-          result,
-          "main"
-        );
-      }
-
-      // Check error outputs
-      if (outputs.error) {
-        this.validateConnectionOutputs(
-          sourceName,
-          outputs.error,
-          nodeMap,
-          nodeIdMap,
-          result,
-          "error"
-        );
-      }
-
-      // Check AI tool outputs
-      if (outputs.ai_tool) {
-        this.validateConnectionOutputs(
-          sourceName,
-          outputs.ai_tool,
-          nodeMap,
-          nodeIdMap,
-          result,
-          "ai_tool"
-        );
+      // Check all connection types dynamically
+      for (const [type, connectionGroups] of Object.entries(outputs)) {
+        if (connectionGroups) {
+          this.validateConnectionOutputs(
+            sourceName,
+            connectionGroups,
+            nodeMap,
+            nodeIdMap,
+            result,
+            type
+          );
+        }
       }
     }
 
@@ -740,21 +739,13 @@ export class WorkflowValidator {
 
     // Add all target nodes
     Object.values(workflow.connections).forEach((outputs) => {
-      if (outputs.main && Array.isArray(outputs.main)) {
-        outputs.main.flat().forEach((conn) => {
-          if (conn) connectedNodes.add(conn.node);
-        });
-      }
-      if (outputs.error && Array.isArray(outputs.error)) {
-        outputs.error.flat().forEach((conn) => {
-          if (conn) connectedNodes.add(conn.node);
-        });
-      }
-      if (outputs.ai_tool && Array.isArray(outputs.ai_tool)) {
-        outputs.ai_tool.flat().forEach((conn) => {
-          if (conn) connectedNodes.add(conn.node);
-        });
-      }
+      Object.values(outputs).forEach((connectionGroups) => {
+        if (Array.isArray(connectionGroups)) {
+          connectionGroups.flat().forEach((conn) => {
+            if (conn && conn.node) connectedNodes.add(conn.node);
+          });
+        }
+      });
     });
 
     // Check for orphaned nodes
@@ -772,7 +763,9 @@ export class WorkflowValidator {
         normalizedType === "nodes-base.manualTrigger" ||
         normalizedType === "nodes-base.formTrigger";
 
-      if (!connectedNodes.has(node.name) && !isTrigger) {
+      const isStickyNote = node.type === "n8n-nodes-base.stickyNote";
+
+      if (!connectedNodes.has(node.name) && !isTrigger && !isStickyNote) {
         // Check if there are multiple nodes - disconnected nodes in multi-node workflows are errors
         const enabledNodeCount = workflow.nodes.filter(
           (n) => !n.disabled
@@ -815,7 +808,7 @@ export class WorkflowValidator {
     nodeMap: Map<string, WorkflowNode>,
     nodeIdMap: Map<string, WorkflowNode>,
     result: WorkflowValidationResult,
-    outputType: "main" | "error" | "ai_tool"
+    outputType: string
   ): void {
     if (!Array.isArray(outputs)) return;
 

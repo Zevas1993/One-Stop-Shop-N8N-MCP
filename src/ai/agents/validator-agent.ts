@@ -3,9 +3,10 @@
  * Validates generated n8n workflows for correctness and completeness
  */
 
-import { BaseAgent, AgentConfig, AgentInput, AgentOutput } from './base-agent';
-import { SharedMemory } from '../shared-memory';
-import { Logger } from '../../utils/logger';
+import { BaseAgent, AgentConfig, AgentInput, AgentOutput } from "./base-agent";
+import { SharedMemory } from "../shared-memory";
+import { Logger } from "../../utils/logger";
+import { LLMAdapterInterface } from "../llm-adapter";
 
 export interface ValidationResult {
   valid: boolean;
@@ -20,7 +21,7 @@ export interface ValidationError {
   type: string;
   message: string;
   node?: string;
-  severity: 'critical' | 'high' | 'medium';
+  severity: "critical" | "high" | "medium";
 }
 
 export interface ValidationWarning {
@@ -37,7 +38,7 @@ export interface ValidationStats {
   actionNodes: number;
   connectedNodes: number;
   orphanedNodes: number;
-  complexity: 'simple' | 'medium' | 'complex';
+  complexity: "simple" | "medium" | "complex";
 }
 
 /**
@@ -48,20 +49,17 @@ export class ValidatorAgent extends BaseAgent {
   private triggerNodeTypes: Set<string>;
   private actionNodeTypes: Set<string>;
 
-  constructor(
-    sharedMemory: SharedMemory,
-    llmClients?: { embedding?: any; generation?: any }
-  ) {
+  constructor(sharedMemory: SharedMemory, llmAdapter?: LLMAdapterInterface) {
     const config: AgentConfig = {
-      id: 'validator-agent',
-      name: 'Workflow Validation Agent',
-      description: 'Validates generated workflows for syntax and completeness',
-      role: 'workflow-validation',
+      id: "validator-agent",
+      name: "Workflow Validation Agent",
+      description: "Validates generated workflows for syntax and completeness",
+      role: "workflow-validation",
       contextBudget: 10000, // 10K tokens for validation
       timeout: 30000, // 30 seconds max
     };
 
-    super(config, sharedMemory, llmClients);
+    super(config, sharedMemory, llmAdapter);
     this.validNodeTypes = new Set();
     this.triggerNodeTypes = new Set();
     this.actionNodeTypes = new Set();
@@ -73,7 +71,11 @@ export class ValidatorAgent extends BaseAgent {
   async initialize(): Promise<void> {
     await super.initialize();
     this.loadNodeTypes();
-    this.logger.info('Validator agent initialized with ' + this.validNodeTypes.size + ' known node types');
+    this.logger.info(
+      "Validator agent initialized with " +
+        this.validNodeTypes.size +
+        " known node types"
+    );
   }
 
   /**
@@ -83,16 +85,17 @@ export class ValidatorAgent extends BaseAgent {
     const startTime = Date.now();
 
     try {
-      this.logger.debug('Validating workflow');
+      this.logger.debug("Validating workflow");
 
       // Get generated workflow from shared memory
-      const workflowData = await this.sharedMemory.get('generated-workflow');
+      const workflowData = await this.sharedMemory.get("generated-workflow");
 
       if (!workflowData || !workflowData.workflow) {
         return {
           success: false,
           result: null,
-          error: 'No generated workflow found in shared memory. Workflow Agent must run first.',
+          error:
+            "No generated workflow found in shared memory. Workflow Agent must run first.",
           executionTime: Date.now() - startTime,
         };
       }
@@ -104,7 +107,7 @@ export class ValidatorAgent extends BaseAgent {
 
       // Store validation result in shared memory
       await this.sharedMemory.set(
-        'workflow-validation-result',
+        "workflow-validation-result",
         {
           validationResult,
           workflowName: workflow.name,
@@ -116,7 +119,11 @@ export class ValidatorAgent extends BaseAgent {
       );
 
       this.logger.info(
-        `Workflow validation complete: ${validationResult.valid ? 'VALID' : 'INVALID'} (${validationResult.errors.length} errors, ${validationResult.warnings.length} warnings)`
+        `Workflow validation complete: ${
+          validationResult.valid ? "VALID" : "INVALID"
+        } (${validationResult.errors.length} errors, ${
+          validationResult.warnings.length
+        } warnings)`
       );
 
       return {
@@ -128,16 +135,17 @@ export class ValidatorAgent extends BaseAgent {
         },
         executionTime: Date.now() - startTime,
         tokensUsed: Math.min(
-          validationResult.nodeCount * 50 + validationResult.errors.length * 100,
+          validationResult.nodeCount * 50 +
+            validationResult.errors.length * 100,
           this.config.contextBudget
         ),
       };
     } catch (error) {
-      this.logger.error('Workflow validation failed', error as Error);
+      this.logger.error("Workflow validation failed", error as Error);
       return {
         success: false,
         result: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
         executionTime: Date.now() - startTime,
       };
     }
@@ -156,17 +164,24 @@ export class ValidatorAgent extends BaseAgent {
       actionNodes: 0,
       connectedNodes: 0,
       orphanedNodes: 0,
-      complexity: 'simple',
+      complexity: "simple",
     };
 
     // Check workflow structure
     if (!workflow) {
       errors.push({
-        type: 'STRUCTURE_ERROR',
-        message: 'Workflow is null or undefined',
-        severity: 'critical',
+        type: "STRUCTURE_ERROR",
+        message: "Workflow is null or undefined",
+        severity: "critical",
       });
-      return { valid: false, nodeCount: 0, connectionCount: 0, errors, warnings, stats };
+      return {
+        valid: false,
+        nodeCount: 0,
+        connectionCount: 0,
+        errors,
+        warnings,
+        stats,
+      };
     }
 
     // Validate against API schema requirements if available
@@ -175,30 +190,44 @@ export class ValidatorAgent extends BaseAgent {
     }
 
     // Check required fields
-    if (!workflow.name || typeof workflow.name !== 'string') {
+    if (!workflow.name || typeof workflow.name !== "string") {
       errors.push({
-        type: 'MISSING_FIELD',
-        message: 'Workflow must have a valid name',
-        severity: 'critical',
+        type: "MISSING_FIELD",
+        message: "Workflow must have a valid name",
+        severity: "critical",
       });
     }
 
     if (!Array.isArray(workflow.nodes)) {
       errors.push({
-        type: 'STRUCTURE_ERROR',
-        message: 'Workflow must have a nodes array',
-        severity: 'critical',
+        type: "STRUCTURE_ERROR",
+        message: "Workflow must have a nodes array",
+        severity: "critical",
       });
-      return { valid: false, nodeCount: 0, connectionCount: 0, errors, warnings, stats };
+      return {
+        valid: false,
+        nodeCount: 0,
+        connectionCount: 0,
+        errors,
+        warnings,
+        stats,
+      };
     }
 
-    if (!workflow.connections || typeof workflow.connections !== 'object') {
+    if (!workflow.connections || typeof workflow.connections !== "object") {
       errors.push({
-        type: 'STRUCTURE_ERROR',
-        message: 'Workflow must have a connections object',
-        severity: 'critical',
+        type: "STRUCTURE_ERROR",
+        message: "Workflow must have a connections object",
+        severity: "critical",
       });
-      return { valid: false, nodeCount: 0, connectionCount: 0, errors, warnings, stats };
+      return {
+        valid: false,
+        nodeCount: 0,
+        connectionCount: 0,
+        errors,
+        warnings,
+        stats,
+      };
     }
 
     // Validate nodes
@@ -206,18 +235,25 @@ export class ValidatorAgent extends BaseAgent {
 
     if (workflow.nodes.length === 0) {
       errors.push({
-        type: 'STRUCTURE_ERROR',
-        message: 'Workflow must have at least one node',
-        severity: 'critical',
+        type: "STRUCTURE_ERROR",
+        message: "Workflow must have at least one node",
+        severity: "critical",
       });
-      return { valid: false, nodeCount: 0, connectionCount: 0, errors, warnings, stats };
+      return {
+        valid: false,
+        nodeCount: 0,
+        connectionCount: 0,
+        errors,
+        warnings,
+        stats,
+      };
     }
 
     if (workflow.nodes.length > 100) {
       warnings.push({
-        type: 'PERFORMANCE_WARNING',
+        type: "PERFORMANCE_WARNING",
         message: `Workflow has ${workflow.nodes.length} nodes which may impact performance`,
-        suggestion: 'Consider breaking large workflows into smaller ones',
+        suggestion: "Consider breaking large workflows into smaller ones",
       });
     }
 
@@ -237,7 +273,12 @@ export class ValidatorAgent extends BaseAgent {
     }
 
     // Validate connections
-    const connectionResults = this.validateConnections(workflow, connectedNodeNames, errors, warnings);
+    const connectionResults = this.validateConnections(
+      workflow,
+      connectedNodeNames,
+      errors,
+      warnings
+    );
     stats.totalConnections = connectionResults.connectionCount;
     stats.connectedNodes = connectedNodeNames.size;
 
@@ -248,10 +289,10 @@ export class ValidatorAgent extends BaseAgent {
       if (!connectedNodeNames.has(nodeName)) {
         stats.orphanedNodes++;
         warnings.push({
-          type: 'ORPHANED_NODE',
+          type: "ORPHANED_NODE",
           message: `Node "${nodeName}" is not connected to the workflow`,
           node: nodeName,
-          suggestion: 'Connect this node or remove it',
+          suggestion: "Connect this node or remove it",
         });
       }
     }
@@ -259,45 +300,46 @@ export class ValidatorAgent extends BaseAgent {
     // Check for trigger nodes
     if (stats.triggerNodes === 0) {
       errors.push({
-        type: 'MISSING_TRIGGER',
-        message: 'Workflow must have at least one trigger node (e.g., Manual Trigger, Schedule)',
-        severity: 'critical',
+        type: "MISSING_TRIGGER",
+        message:
+          "Workflow must have at least one trigger node (e.g., Manual Trigger, Schedule)",
+        severity: "critical",
       });
     }
 
     if (stats.triggerNodes > 1) {
       warnings.push({
-        type: 'MULTIPLE_TRIGGERS',
+        type: "MULTIPLE_TRIGGERS",
         message: `Workflow has ${stats.triggerNodes} trigger nodes which is unusual`,
-        suggestion: 'Workflows typically have a single trigger node',
+        suggestion: "Workflows typically have a single trigger node",
       });
     }
 
     // Check for action nodes
     if (stats.actionNodes === 0) {
       errors.push({
-        type: 'NO_ACTIONS',
-        message: 'Workflow must have at least one action node',
-        severity: 'high',
+        type: "NO_ACTIONS",
+        message: "Workflow must have at least one action node",
+        severity: "high",
       });
     }
 
     // Determine complexity
     if (stats.totalNodes <= 3) {
-      stats.complexity = 'simple';
+      stats.complexity = "simple";
     } else if (stats.totalNodes <= 10) {
-      stats.complexity = 'medium';
+      stats.complexity = "medium";
     } else {
-      stats.complexity = 'complex';
+      stats.complexity = "complex";
     }
 
     // Perform semantic validation if LLM available
     this.performSemanticValidation(workflow, warnings).catch((error) => {
-      this.logger.debug('Semantic validation skipped or failed:', error);
+      this.logger.debug("Semantic validation skipped or failed:", error);
     });
 
     // Final validation: valid if no critical errors
-    const hasCriticalErrors = errors.some((e) => e.severity === 'critical');
+    const hasCriticalErrors = errors.some((e) => e.severity === "critical");
 
     return {
       valid: !hasCriticalErrors,
@@ -323,12 +365,12 @@ export class ValidatorAgent extends BaseAgent {
     try {
       const nodeList = workflow.nodes
         .map((n: any) => `${n.name} (${n.type})`)
-        .join(', ');
+        .join(", ");
 
       const prompt = `Review this n8n workflow for potential issues:
 
 Workflow: ${workflow.name}
-Description: ${workflow.description || 'N/A'}
+Description: ${workflow.description || "N/A"}
 Node Count: ${workflow.nodes.length}
 Nodes: ${nodeList}
 
@@ -352,13 +394,15 @@ If no issues found, return: []`;
         const aiWarnings = this.parseAIWarnings(aiResponse);
         if (aiWarnings.length > 0) {
           warnings.push(...aiWarnings);
-          this.logger.info(`AI validation found ${aiWarnings.length} semantic warnings`);
+          this.logger.info(
+            `AI validation found ${aiWarnings.length} semantic warnings`
+          );
         } else {
-          this.logger.debug('AI validation found no semantic issues');
+          this.logger.debug("AI validation found no semantic issues");
         }
       }
     } catch (error) {
-      this.logger.warn('Semantic validation failed:', error);
+      this.logger.warn("Semantic validation failed:", error);
     }
   }
 
@@ -370,19 +414,19 @@ If no issues found, return: []`;
       // Extract JSON from response (might have markdown code blocks)
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (!jsonMatch) {
-        this.logger.debug('No JSON array found in AI validation response');
+        this.logger.debug("No JSON array found in AI validation response");
         return [];
       }
 
       const warnings = JSON.parse(jsonMatch[0]);
 
       return warnings.map((w: any) => ({
-        type: w.type || 'SEMANTIC_WARNING',
-        message: w.message || w.description || 'Unknown semantic issue',
+        type: w.type || "SEMANTIC_WARNING",
+        message: w.message || w.description || "Unknown semantic issue",
         suggestion: w.suggestion || w.fix,
       }));
     } catch (error) {
-      this.logger.warn('Failed to parse AI warnings:', error);
+      this.logger.warn("Failed to parse AI warnings:", error);
       return [];
     }
   }
@@ -397,21 +441,21 @@ If no issues found, return: []`;
     stats: ValidationStats
   ): void {
     // Check required node fields
-    if (!node.name || typeof node.name !== 'string') {
+    if (!node.name || typeof node.name !== "string") {
       errors.push({
-        type: 'INVALID_NODE_NAME',
-        message: 'Node must have a valid name',
-        severity: 'critical',
+        type: "INVALID_NODE_NAME",
+        message: "Node must have a valid name",
+        severity: "critical",
       });
       return;
     }
 
-    if (!node.type || typeof node.type !== 'string') {
+    if (!node.type || typeof node.type !== "string") {
       errors.push({
-        type: 'INVALID_NODE_TYPE',
+        type: "INVALID_NODE_TYPE",
         message: `Node "${node.name}" must have a valid type`,
         node: node.name,
-        severity: 'critical',
+        severity: "critical",
       });
       return;
     }
@@ -419,30 +463,30 @@ If no issues found, return: []`;
     // Check if node type is known
     if (!this.validNodeTypes.has(node.type)) {
       warnings.push({
-        type: 'UNKNOWN_NODE_TYPE',
+        type: "UNKNOWN_NODE_TYPE",
         message: `Node "${node.name}" has unknown type: ${node.type}`,
         node: node.name,
-        suggestion: 'Verify the node type exists in n8n',
+        suggestion: "Verify the node type exists in n8n",
       });
     }
 
     // Check position
     if (!Array.isArray(node.position) || node.position.length !== 2) {
       errors.push({
-        type: 'INVALID_POSITION',
+        type: "INVALID_POSITION",
         message: `Node "${node.name}" must have a valid position [x, y]`,
         node: node.name,
-        severity: 'high',
+        severity: "high",
       });
     }
 
     // Check parameters (optional but good to have)
-    if (node.parameters && typeof node.parameters !== 'object') {
+    if (node.parameters && typeof node.parameters !== "object") {
       errors.push({
-        type: 'INVALID_PARAMETERS',
+        type: "INVALID_PARAMETERS",
         message: `Node "${node.name}" has invalid parameters`,
         node: node.name,
-        severity: 'medium',
+        severity: "medium",
       });
     }
 
@@ -461,15 +505,17 @@ If no issues found, return: []`;
     let connectionCount = 0;
     const nodeNames = new Set(workflow.nodes.map((n: any) => n.name));
 
-    for (const [sourceName, connectionData] of Object.entries(workflow.connections)) {
+    for (const [sourceName, connectionData] of Object.entries(
+      workflow.connections
+    )) {
       // Track source node as connected
       connectedNodeNames.add(sourceName);
 
       if (!nodeNames.has(sourceName)) {
         errors.push({
-          type: 'INVALID_CONNECTION_SOURCE',
+          type: "INVALID_CONNECTION_SOURCE",
           message: `Connection references unknown node: ${sourceName}`,
-          severity: 'high',
+          severity: "high",
         });
         continue;
       }
@@ -478,9 +524,9 @@ If no issues found, return: []`;
 
       if (!conn.main || !Array.isArray(conn.main)) {
         errors.push({
-          type: 'INVALID_CONNECTION_FORMAT',
+          type: "INVALID_CONNECTION_FORMAT",
           message: `Node "${sourceName}" has invalid connection format (missing main array)`,
-          severity: 'high',
+          severity: "high",
         });
         continue;
       }
@@ -489,9 +535,9 @@ If no issues found, return: []`;
       for (const connectionPath of conn.main) {
         if (!Array.isArray(connectionPath)) {
           errors.push({
-            type: 'INVALID_CONNECTION_PATH',
+            type: "INVALID_CONNECTION_PATH",
             message: `Node "${sourceName}" has invalid connection path (not an array)`,
-            severity: 'high',
+            severity: "high",
           });
           continue;
         }
@@ -501,9 +547,11 @@ If no issues found, return: []`;
 
           if (!connectionPoint.node || !nodeNames.has(connectionPoint.node)) {
             errors.push({
-              type: 'INVALID_CONNECTION_TARGET',
-              message: `Connection from "${sourceName}" references unknown target: ${connectionPoint.node || 'undefined'}`,
-              severity: 'high',
+              type: "INVALID_CONNECTION_TARGET",
+              message: `Connection from "${sourceName}" references unknown target: ${
+                connectionPoint.node || "undefined"
+              }`,
+              severity: "high",
             });
             continue;
           }
@@ -511,19 +559,19 @@ If no issues found, return: []`;
           // Track target node as connected
           connectedNodeNames.add(connectionPoint.node);
 
-          if (connectionPoint.type !== 'main') {
+          if (connectionPoint.type !== "main") {
             warnings.push({
-              type: 'UNUSUAL_CONNECTION_TYPE',
+              type: "UNUSUAL_CONNECTION_TYPE",
               message: `Connection has non-standard type: ${connectionPoint.type}`,
               suggestion: 'Standard connections should use "main" type',
             });
           }
 
-          if (typeof connectionPoint.index !== 'number') {
+          if (typeof connectionPoint.index !== "number") {
             errors.push({
-              type: 'INVALID_CONNECTION_INDEX',
+              type: "INVALID_CONNECTION_INDEX",
               message: `Connection from "${sourceName}" to "${connectionPoint.node}" has invalid index`,
-              severity: 'medium',
+              severity: "medium",
             });
           }
         }
@@ -553,33 +601,33 @@ If no issues found, return: []`;
   private loadNodeTypes(): void {
     // Trigger node types
     const triggerTypes = [
-      'n8n-nodes-base.manualTrigger',
-      'n8n-nodes-base.scheduletrigger',
-      'n8n-nodes-base.webhook',
-      'n8n-nodes-base.wait',
-      'n8n-nodes-base.interval',
+      "n8n-nodes-base.manualTrigger",
+      "n8n-nodes-base.scheduletrigger",
+      "n8n-nodes-base.webhook",
+      "n8n-nodes-base.wait",
+      "n8n-nodes-base.interval",
     ];
 
     // Action node types (sample - these would be much larger in production)
     const actionTypes = [
-      'n8n-nodes-base.httprequest',
-      'n8n-nodes-base.slack',
-      'n8n-nodes-base.sendemail',
-      'n8n-nodes-base.set',
-      'n8n-nodes-base.if',
-      'n8n-nodes-base.noop',
-      'n8n-nodes-base.postgres',
-      'n8n-nodes-base.mysql',
-      'n8n-nodes-base.readwritefile',
-      'n8n-nodes-base.function',
-      'n8n-nodes-base.code',
-      'n8n-nodes-base.switch',
-      'n8n-nodes-base.merge',
-      'n8n-nodes-base.split',
-      'n8n-nodes-base.loop',
-      'n8n-nodes-base.wait',
-      'n8n-nodes-base.debug',
-      'n8n-nodes-base.executeCommand',
+      "n8n-nodes-base.httprequest",
+      "n8n-nodes-base.slack",
+      "n8n-nodes-base.sendemail",
+      "n8n-nodes-base.set",
+      "n8n-nodes-base.if",
+      "n8n-nodes-base.noop",
+      "n8n-nodes-base.postgres",
+      "n8n-nodes-base.mysql",
+      "n8n-nodes-base.readwritefile",
+      "n8n-nodes-base.function",
+      "n8n-nodes-base.code",
+      "n8n-nodes-base.switch",
+      "n8n-nodes-base.merge",
+      "n8n-nodes-base.split",
+      "n8n-nodes-base.loop",
+      "n8n-nodes-base.wait",
+      "n8n-nodes-base.debug",
+      "n8n-nodes-base.executeCommand",
     ];
 
     // All valid node types
@@ -608,22 +656,22 @@ If no issues found, return: []`;
   ): void {
     // Check for system-managed fields that should never be sent
     const systemManagedFields = [
-      'id',
-      'createdAt',
-      'updatedAt',
-      'versionId',
-      'isArchived',
-      'triggerCount',
-      'usedCredentials',
-      'sharedWithProjects',
-      'meta',
-      'shared',
+      "id",
+      "createdAt",
+      "updatedAt",
+      "versionId",
+      "isArchived",
+      "triggerCount",
+      "usedCredentials",
+      "sharedWithProjects",
+      "meta",
+      "shared",
     ];
 
     for (const field of systemManagedFields) {
       if (field in workflow) {
         warnings.push({
-          type: 'SYSTEM_MANAGED_FIELD',
+          type: "SYSTEM_MANAGED_FIELD",
           message: `Workflow contains system-managed field "${field}" that should not be sent in API requests`,
           suggestion: `Remove the "${field}" field before creating/updating workflows in n8n API`,
         });
@@ -631,16 +679,18 @@ If no issues found, return: []`;
     }
 
     // Check connection format: must use node NAMES not IDs
-    if (workflow.connections && typeof workflow.connections === 'object') {
+    if (workflow.connections && typeof workflow.connections === "object") {
       const nodeNames = new Set((workflow.nodes || []).map((n: any) => n.name));
 
-      for (const [sourceName, connData] of Object.entries(workflow.connections)) {
+      for (const [sourceName, connData] of Object.entries(
+        workflow.connections
+      )) {
         // Check if source node name is valid
         if (!nodeNames.has(sourceName as string)) {
           errors.push({
-            type: 'INVALID_CONNECTION_NODE_NAME',
+            type: "INVALID_CONNECTION_NODE_NAME",
             message: `Connection references unknown source node name: "${sourceName}". All connection keys must match existing node names.`,
-            severity: 'high',
+            severity: "high",
           });
         }
 
@@ -652,9 +702,9 @@ If no issues found, return: []`;
               for (const connPoint of connPath) {
                 if (connPoint.node && !nodeNames.has(connPoint.node)) {
                   errors.push({
-                    type: 'INVALID_CONNECTION_TARGET',
+                    type: "INVALID_CONNECTION_TARGET",
                     message: `Connection target references unknown node name: "${connPoint.node}". Node names are case-sensitive and must match exactly.`,
-                    severity: 'high',
+                    severity: "high",
                   });
                 }
               }
@@ -667,28 +717,28 @@ If no issues found, return: []`;
     // Check node types include package prefix
     if (Array.isArray(workflow.nodes)) {
       for (const node of workflow.nodes) {
-        if (node.type && typeof node.type === 'string') {
+        if (node.type && typeof node.type === "string") {
           // Check for common mistakes
-          if (node.type === 'webhook' || node.type === 'nodes-base.webhook') {
+          if (node.type === "webhook" || node.type === "nodes-base.webhook") {
             errors.push({
-              type: 'INVALID_NODE_TYPE_FORMAT',
+              type: "INVALID_NODE_TYPE_FORMAT",
               message: `Node "${node.name}" has invalid type "${node.type}". Must use full package prefix like "n8n-nodes-base.webhook"`,
-              severity: 'critical',
+              severity: "critical",
             });
           }
 
           // Warn if missing n8n-nodes-base prefix
-          if (!node.type.includes('.')) {
+          if (!node.type.includes(".")) {
             errors.push({
-              type: 'MISSING_NODE_TYPE_PREFIX',
+              type: "MISSING_NODE_TYPE_PREFIX",
               message: `Node "${node.name}" type "${node.type}" is missing the package prefix. Should be "n8n-nodes-base.${node.type}" or similar.`,
-              severity: 'critical',
+              severity: "critical",
             });
           }
         }
       }
     }
 
-    this.logger.debug('API schema validation completed');
+    this.logger.debug("API schema validation completed");
   }
 }

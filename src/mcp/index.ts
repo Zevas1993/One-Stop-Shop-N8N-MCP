@@ -3,10 +3,7 @@
 import dotenv from "dotenv";
 // Always try to load .env file - this provides defaults for local development
 try {
-  const result = dotenv.config();
-  if (result.parsed) {
-    Object.assign(process.env, result.parsed);
-  }
+  dotenv.config();
 } catch (e) {
   // Ignore errors if .env doesn't exist
 }

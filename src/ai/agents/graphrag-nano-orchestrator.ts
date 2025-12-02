@@ -15,8 +15,9 @@ import { WorkflowAgent } from "./workflow-agent";
 import { ValidatorAgent } from "./validator-agent";
 import { SharedMemory } from "../shared-memory";
 import { GraphRAGBridge, QueryGraphResult } from "../graphrag-bridge";
-import { VLLMClient } from "../vllm-client";
+import { LLMAdapterInterface, createLLMAdapter } from "../llm-adapter";
 import { logger } from "../../utils/logger";
+import { getEventBus, EventBus, EventTypes } from "../event-bus";
 
 export interface NanoAgentPipelineConfig {
   enableGraphRAG: boolean;
@@ -53,21 +54,22 @@ export class GraphRAGNanoOrchestrator {
   private sharedMemory: SharedMemory;
   private graphRag: GraphRAGBridge;
   private config: NanoAgentPipelineConfig;
+  private eventBus: EventBus | null = null;
 
   constructor(
     config?: Partial<NanoAgentPipelineConfig>,
-    llmClients?: {
-      embedding?: VLLMClient;
-      generation?: VLLMClient;
-    }
+    llmAdapter?: LLMAdapterInterface
   ) {
     // Initialize shared memory for agent coordination
     this.sharedMemory = new SharedMemory();
 
-    // Initialize agents with optional LLM clients
-    this.patternAgent = new PatternAgent(this.sharedMemory, llmClients);
-    this.workflowAgent = new WorkflowAgent(this.sharedMemory, llmClients);
-    this.validatorAgent = new ValidatorAgent(this.sharedMemory, llmClients);
+    // Initialize agents with unified LLM adapter
+    // If no adapter provided, create one (it will handle availability internally)
+    const adapter = llmAdapter || createLLMAdapter();
+
+    this.patternAgent = new PatternAgent(this.sharedMemory, adapter);
+    this.workflowAgent = new WorkflowAgent(this.sharedMemory, adapter);
+    this.validatorAgent = new ValidatorAgent(this.sharedMemory, adapter);
 
     // Initialize GraphRAG bridge
     this.graphRag = GraphRAGBridge.get();
@@ -81,24 +83,15 @@ export class GraphRAGNanoOrchestrator {
     };
 
     // Log LLM availability
-    if (llmClients?.embedding || llmClients?.generation) {
-      logger.info(
-        "[GraphRAG Orchestrator] Initialized with nano LLM support",
-        {
-          hasEmbedding: !!llmClients.embedding,
-          hasGeneration: !!llmClients.generation,
-        }
-      );
+    if (adapter && adapter.isAvailable()) {
+      logger.info("[GraphRAG Orchestrator] Initialized with LLM support");
     } else {
       logger.info(
-        "[GraphRAG Orchestrator] Initialized without LLM clients (rule-based fallback)"
+        "[GraphRAG Orchestrator] Initialized without LLM support (rule-based fallback)"
       );
     }
 
-    logger.info(
-      "[GraphRAG Orchestrator] Configuration:",
-      this.config
-    );
+    logger.info("[GraphRAG Orchestrator] Configuration:", this.config);
   }
 
   /**
@@ -109,6 +102,9 @@ export class GraphRAGNanoOrchestrator {
 
     // Initialize shared memory first
     await this.sharedMemory.initialize();
+
+    // Initialize event bus
+    this.eventBus = await getEventBus();
 
     await this.patternAgent.initialize();
     await this.workflowAgent.initialize();
@@ -158,6 +154,21 @@ export class GraphRAGNanoOrchestrator {
           result.pattern?.patternName || "none"
         }`
       );
+
+      // Publish pattern discovered event
+      if (this.eventBus && result.pattern) {
+        await this.eventBus.publish(
+          EventTypes.PATTERN_DISCOVERED,
+          {
+            patternId: result.pattern.patternName, // Using name as ID for now
+            patternName: result.pattern.patternName,
+            description: result.pattern.description,
+            confidence: result.pattern.confidence,
+            nodeTypes: result.pattern.suggestedNodes,
+          },
+          "graphrag-orchestrator"
+        );
+      }
 
       // Step 2: GraphRAG Query (if enabled)
       if (this.config.enableGraphRAG && result.pattern) {
@@ -218,6 +229,25 @@ export class GraphRAGNanoOrchestrator {
         } nodes`
       );
 
+      // Publish workflow created event
+      if (this.eventBus && result.workflow) {
+        await this.eventBus.publish(
+          EventTypes.WORKFLOW_CREATED,
+          {
+            name: result.workflow.name || "Generated Workflow",
+            nodeCount: result.workflow.nodes?.length || 0,
+            nodeTypes: result.workflow.nodes?.map((n: any) => n.type) || [],
+            hasTrigger: result.workflow.nodes?.some(
+              (n: any) =>
+                n.type.includes("trigger") || n.type.includes("webhook")
+            ),
+            connectionCount: Object.keys(result.workflow.connections || {})
+              .length,
+          },
+          "graphrag-orchestrator"
+        );
+      }
+
       // Step 4: Validation
       logger.info(`[Pipeline] Step 4: Validating generated workflow`);
       const validationStart = Date.now();
@@ -226,11 +256,39 @@ export class GraphRAGNanoOrchestrator {
 
       if (!validationResult.success) {
         result.errors.push(`Validation failed: ${validationResult.error}`);
+
+        // Publish validation failed event
+        if (this.eventBus) {
+          await this.eventBus.publish(
+            EventTypes.VALIDATION_FAILED,
+            {
+              workflowName: result.workflow?.name || "Unknown",
+              errors: [{ message: validationResult.error }],
+              failedLayer: "validation-agent",
+            },
+            "graphrag-orchestrator"
+          );
+        }
+
         return result;
       }
 
       result.validationResult = validationResult.result;
       logger.info(`[Pipeline] Validation passed`);
+
+      // Publish validation completed event
+      if (this.eventBus) {
+        await this.eventBus.publish(
+          EventTypes.VALIDATION_COMPLETED,
+          {
+            workflowName: result.workflow?.name || "Unknown",
+            valid: true,
+            nodeCount: result.workflow?.nodes?.length || 0,
+            passedLayers: ["schema", "nodes", "connections", "semantic"],
+          },
+          "graphrag-orchestrator"
+        );
+      }
 
       // Success!
       result.success = true;

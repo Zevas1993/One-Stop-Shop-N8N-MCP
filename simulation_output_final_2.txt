@@ -1,0 +1,18 @@
+≡ƒÜÇ Starting Complex Workflow Agent Simulation...
+Error: listen EADDRINUSE: address already in use :::5678
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at Server.listen (node:net:2099:7)
+    at C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\src\scripts\test-complex-workflow-creation.ts:88:12
+    at new Promise (<anonymous>)
+    at startMockN8nServer (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\src\scripts\test-complex-workflow-creation.ts:31:10)
+    at runSimulation (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\src\scripts\test-complex-workflow-creation.ts:100:28)
+    at Object.<anonymous> (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\src\scripts\test-complex-workflow-creation.ts:424:1)
+    at Module._compile (node:internal/modules/cjs/loader:1554:14)
+    at Module.m._compile (C:\Users\Chris Boyd\Documents\MCP-Servers\One-Stop-Shop-N8N-MCP\node_modules\ts-node\src\index.ts:1618:23) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 5678
+}

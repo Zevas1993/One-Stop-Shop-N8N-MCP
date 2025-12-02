@@ -3,10 +3,10 @@
  * Provides common functionality for all specialized agents
  */
 
-import { SharedMemory } from '../shared-memory';
-import { Logger } from '../../utils/logger';
-import { APISchemaLoader } from '../knowledge/api-schema-loader';
-import { VLLMClient } from '../vllm-client';
+import { SharedMemory } from "../shared-memory";
+import { Logger } from "../../utils/logger";
+import { APISchemaLoader } from "../knowledge/api-schema-loader";
+import { LLMAdapterInterface } from "../llm-adapter";
 
 export interface AgentConfig {
   id: string;
@@ -36,7 +36,7 @@ export interface AgentTask {
   id: string;
   agentId: string;
   input: AgentInput;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: "pending" | "running" | "completed" | "failed";
   output?: AgentOutput;
   createdAt: number;
   startedAt?: number;
@@ -52,34 +52,28 @@ export abstract class BaseAgent {
   protected logger: Logger;
   protected isRunning = false;
   protected apiSchemaLoader: APISchemaLoader;
-  protected apiSchemaKnowledge: string = '';
+  protected apiSchemaKnowledge: string = "";
 
-  // Optional nano LLM clients for AI-enhanced agents
-  protected embeddingClient?: VLLMClient;
-  protected generationClient?: VLLMClient;
+  // Unified LLM adapter
+  protected llmAdapter?: LLMAdapterInterface;
 
   constructor(
     config: AgentConfig,
     sharedMemory: SharedMemory,
-    llmClients?: {
-      embedding?: VLLMClient;
-      generation?: VLLMClient;
-    }
+    llmAdapter?: LLMAdapterInterface
   ) {
     this.config = config;
     this.sharedMemory = sharedMemory;
     this.logger = new Logger({ prefix: `Agent[${config.id}]` });
     this.apiSchemaLoader = APISchemaLoader.getInstance();
 
-    // Store optional LLM clients
-    this.embeddingClient = llmClients?.embedding;
-    this.generationClient = llmClients?.generation;
+    // Store unified LLM adapter
+    this.llmAdapter = llmAdapter;
 
     // Log LLM availability
-    if (this.embeddingClient || this.generationClient) {
-      this.logger.debug('Agent initialized with nano LLM support', {
-        hasEmbedding: !!this.embeddingClient,
-        hasGeneration: !!this.generationClient,
+    if (this.llmAdapter) {
+      this.logger.debug("Agent initialized with LLM support", {
+        available: this.llmAdapter.isAvailable(),
       });
     }
   }
@@ -100,9 +94,9 @@ export abstract class BaseAgent {
     // Load API schema knowledge
     try {
       this.apiSchemaKnowledge = await this.apiSchemaLoader.getAgentKnowledge();
-      this.logger.debug('API schema knowledge loaded successfully');
+      this.logger.debug("API schema knowledge loaded successfully");
     } catch (error) {
-      this.logger.warn('Failed to load API schema knowledge', error);
+      this.logger.warn("Failed to load API schema knowledge", error);
       // Continue with empty knowledge - fallback will be used
     }
 
@@ -132,7 +126,9 @@ export abstract class BaseAgent {
     this.isRunning = true;
 
     try {
-      this.logger.debug(`Processing input: ${JSON.stringify(input).substring(0, 100)}`);
+      this.logger.debug(
+        `Processing input: ${JSON.stringify(input).substring(0, 100)}`
+      );
 
       // Create task record
       const taskId = this.generateTaskId();
@@ -140,7 +136,7 @@ export abstract class BaseAgent {
         id: taskId,
         agentId: this.config.id,
         input,
-        status: 'running',
+        status: "running",
         createdAt: startTime,
         startedAt: Date.now(),
       };
@@ -156,7 +152,7 @@ export abstract class BaseAgent {
       const executionTime = Date.now() - startTime;
 
       // Update task record
-      task.status = 'completed';
+      task.status = "completed";
       task.output = output;
       task.completedAt = Date.now();
       await this.sharedMemory.set(`task:${taskId}`, task, this.config.id);
@@ -166,7 +162,8 @@ export abstract class BaseAgent {
       return output;
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
       this.logger.error(`Execution failed: ${errorMessage}`);
 
@@ -198,7 +195,11 @@ export abstract class BaseAgent {
   /**
    * Write to shared memory
    */
-  protected async writeMemory<T = any>(key: string, value: T, ttl?: number): Promise<void> {
+  protected async writeMemory<T = any>(
+    key: string,
+    value: T,
+    ttl?: number
+  ): Promise<void> {
     return this.sharedMemory.set(key, value, this.config.id, ttl);
   }
 
@@ -266,7 +267,9 @@ export abstract class BaseAgent {
    * Generate unique task ID
    */
   private generateTaskId(): string {
-    return `${this.config.id}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    return `${this.config.id}-${Date.now()}-${Math.random()
+      .toString(36)
+      .substring(7)}`;
   }
 
   /**
@@ -295,8 +298,11 @@ export abstract class BaseAgent {
     try {
       return await this.apiSchemaLoader.getGuidanceFor(context);
     } catch (error) {
-      this.logger.warn(`Failed to get API guidance for context: ${context}`, error);
-      return '';
+      this.logger.warn(
+        `Failed to get API guidance for context: ${context}`,
+        error
+      );
+      return "";
     }
   }
 
@@ -308,27 +314,28 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Generate embedding for text using nano LLM (if available)
-   * Returns null if embedding client not available
+   * Generate embedding for text using LLM adapter (if available)
+   * Returns null if adapter not available
    */
   protected async generateEmbedding(text: string): Promise<number[] | null> {
-    if (!this.embeddingClient) {
-      this.logger.debug('Embedding client not available - skipping embedding generation');
+    if (!this.llmAdapter || !this.llmAdapter.isAvailable()) {
+      this.logger.debug(
+        "LLM adapter not available - skipping embedding generation"
+      );
       return null;
     }
 
     try {
-      const response = await this.embeddingClient.generateEmbedding(text);
-      return response.embedding;
+      return await this.llmAdapter.embed(text);
     } catch (error) {
-      this.logger.warn('Failed to generate embedding:', error);
+      this.logger.warn("Failed to generate embedding:", error);
       return null;
     }
   }
 
   /**
-   * Generate text using nano LLM (if available)
-   * Returns null if generation client not available
+   * Generate text using LLM adapter (if available)
+   * Returns null if adapter not available
    */
   protected async generateText(
     prompt: string,
@@ -339,16 +346,20 @@ export abstract class BaseAgent {
       stopSequences?: string[];
     }
   ): Promise<string | null> {
-    if (!this.generationClient) {
-      this.logger.debug('Generation client not available - skipping text generation');
+    if (!this.llmAdapter || !this.llmAdapter.isAvailable()) {
+      this.logger.debug("LLM adapter not available - skipping text generation");
       return null;
     }
 
     try {
-      const response = await this.generationClient.generateText(prompt, options);
-      return response.text;
+      return await this.llmAdapter.generate(prompt, {
+        maxTokens: options?.maxTokens,
+        temperature: options?.temperature,
+        topP: options?.topP,
+        stop: options?.stopSequences,
+      });
     } catch (error) {
-      this.logger.warn('Failed to generate text:', error);
+      this.logger.warn("Failed to generate text:", error);
       return null;
     }
   }
@@ -358,7 +369,7 @@ export abstract class BaseAgent {
    */
   protected cosineSimilarity(vecA: number[], vecB: number[]): number {
     if (vecA.length !== vecB.length) {
-      throw new Error('Vectors must have same length for cosine similarity');
+      throw new Error("Vectors must have same length for cosine similarity");
     }
 
     let dotProduct = 0;
@@ -375,12 +386,13 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Check if LLM clients are available
+   * Check if LLM support is available
    */
   protected hasLLMSupport(): { embedding: boolean; generation: boolean } {
+    const available = !!this.llmAdapter && this.llmAdapter.isAvailable();
     return {
-      embedding: !!this.embeddingClient,
-      generation: !!this.generationClient,
+      embedding: available,
+      generation: available,
     };
   }
 }
@@ -390,7 +402,7 @@ export abstract class BaseAgent {
  */
 export class AgentRegistry {
   private agents = new Map<string, BaseAgent>();
-  private logger = new Logger({ prefix: 'AgentRegistry' });
+  private logger = new Logger({ prefix: "AgentRegistry" });
 
   /**
    * Register an agent
@@ -419,7 +431,9 @@ export class AgentRegistry {
    * Get agents by role
    */
   getAgentsByRole(role: string): BaseAgent[] {
-    return Array.from(this.agents.values()).filter((agent) => agent.getConfig().role === role);
+    return Array.from(this.agents.values()).filter(
+      (agent) => agent.getConfig().role === role
+    );
   }
 
   /**
@@ -432,20 +446,20 @@ export class AgentRegistry {
       await agent.initialize();
     }
 
-    this.logger.info('All agents initialized');
+    this.logger.info("All agents initialized");
   }
 
   /**
    * Shutdown all agents
    */
   async shutdownAll(): Promise<void> {
-    this.logger.info('Shutting down all agents');
+    this.logger.info("Shutting down all agents");
 
     for (const agent of this.agents.values()) {
       await agent.shutdown();
     }
 
-    this.logger.info('All agents shut down');
+    this.logger.info("All agents shut down");
   }
 
   /**
