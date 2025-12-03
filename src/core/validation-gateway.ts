@@ -129,6 +129,7 @@ export interface ValidationError {
   message: string;
   path?: string;
   suggestion?: string;
+  alternatives?: string[];
 }
 
 export interface ValidationWarning {
@@ -422,7 +423,7 @@ export class ValidationGateway extends EventEmitter {
       if (!nodeFilter.isNodeAllowed(node.type)) {
         const reason = nodeFilter.getRejectionReason(node.type);
         errors.push({
-          layer: "nodeRestrictions" as any, // Cast as any if type definition isn't updated yet
+          layer: "nodeRestrictions",
           code: "NODE_NOT_ALLOWED",
           message:
             reason || `Node type "${node.type}" is not allowed by policy`,

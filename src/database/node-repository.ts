@@ -1,10 +1,21 @@
-import { DatabaseAdapter } from './database-adapter';
-import { ParsedNode } from '../parsers/node-parser';
-import { nodeInfoCache, searchCache, QueryCache } from '../utils/query-cache';
+import { DatabaseAdapter } from "./database-adapter";
+import { ParsedNode } from "../parsers/node-parser";
+import { SimpleCache } from "../utils/simple-cache";
 
 export class NodeRepository {
+  private nodeInfoCache = new SimpleCache({
+    enabled: true,
+    ttl: 300,
+    maxSize: 100,
+  });
+  private searchCache = new SimpleCache({
+    enabled: true,
+    ttl: 60,
+    maxSize: 50,
+  });
+
   constructor(private db: DatabaseAdapter) {}
-  
+
   /**
    * Save node with proper JSON serialization
    */
@@ -17,7 +28,7 @@ export class NodeRepository {
         properties_schema, operations, credentials_required
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    
+
     stmt.run(
       node.nodeType,
       node.packageName,
@@ -36,22 +47,26 @@ export class NodeRepository {
       JSON.stringify(node.credentials, null, 2)
     );
   }
-  
+
   /**
    * Get node with proper JSON deserialization and caching
    */
   getNode(nodeType: string): any {
     // Check cache first
-    const cacheKey = QueryCache.generateKey('node', nodeType);
-    const cached = nodeInfoCache.get(cacheKey);
+    const cacheKey = `node:${nodeType}`;
+    const cached = this.nodeInfoCache.get(cacheKey);
     if (cached) return cached;
-    
-    const row = this.db.prepare(`
+
+    const row = this.db
+      .prepare(
+        `
       SELECT * FROM nodes WHERE node_type = ?
-    `).get(nodeType) as any;
-    
+    `
+      )
+      .get(nodeType) as any;
+
     if (!row) return null;
-    
+
     const result = {
       nodeType: row.node_type,
       displayName: row.display_name,
@@ -67,45 +82,53 @@ export class NodeRepository {
       properties: this.safeJsonParse(row.properties_schema, []),
       operations: this.safeJsonParse(row.operations, []),
       credentials: this.safeJsonParse(row.credentials_required, []),
-      hasDocumentation: !!row.documentation
+      hasDocumentation: !!row.documentation,
     };
-    
+
     // Cache the result
-    nodeInfoCache.set(cacheKey, result);
+    this.nodeInfoCache.set(cacheKey, result);
     return result;
   }
-  
+
   /**
    * Get AI tools with proper filtering
    */
   getAITools(): any[] {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       SELECT node_type, display_name, description, package_name
-      FROM nodes 
+      FROM nodes
       WHERE is_ai_tool = 1
       ORDER BY display_name
-    `).all() as any[];
-    
-    return rows.map(row => ({
+    `
+      )
+      .all() as any[];
+
+    return rows.map((row) => ({
       nodeType: row.node_type,
       displayName: row.display_name,
       description: row.description,
-      package: row.package_name
+      package: row.package_name,
     }));
   }
-  
+
   /**
    * Get node info (alias for getNode with more comprehensive data)
    */
   getNodeInfo(nodeType: string): any {
     // Check cache first
-    const cacheKey = QueryCache.generateKey('node_info', nodeType);
-    const cached = nodeInfoCache.get(cacheKey);
+    const cacheKey = `node_info:${nodeType}`;
+    const cached = this.nodeInfoCache.get(cacheKey);
     if (cached) return cached;
 
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       SELECT * FROM nodes WHERE node_type = ?
-    `).get(nodeType) as any;
+    `
+      )
+      .get(nodeType) as any;
 
     if (!row) return null;
 
@@ -125,11 +148,11 @@ export class NodeRepository {
       operations: this.safeJsonParse(row.operations, []),
       credentials: this.safeJsonParse(row.credentials_required, []),
       documentation: row.documentation,
-      hasDocumentation: !!row.documentation
+      hasDocumentation: !!row.documentation,
     };
 
     // Cache the result
-    nodeInfoCache.set(cacheKey, result);
+    this.nodeInfoCache.set(cacheKey, result);
     return result;
   }
 
@@ -139,14 +162,18 @@ export class NodeRepository {
    */
   getNodeByType(nodeType: string, typeVersion?: number): any {
     // Check cache first
-    const cacheKey = QueryCache.generateKey('node_by_type', nodeType, String(typeVersion || ''));
-    const cached = nodeInfoCache.get(cacheKey);
+    const cacheKey = `node_by_type:${nodeType}:${typeVersion || ""}`;
+    const cached = this.nodeInfoCache.get(cacheKey);
     if (cached) return cached;
 
     // Try exact match first
-    let row = this.db.prepare(`
+    let row = this.db
+      .prepare(
+        `
       SELECT * FROM nodes WHERE node_type = ?
-    `).get(nodeType) as any;
+    `
+      )
+      .get(nodeType) as any;
 
     // If not found, try normalized versions
     // Workflows use full package names, but database stores shortened names
@@ -154,45 +181,77 @@ export class NodeRepository {
       let normalizedType = nodeType;
 
       // Handle: n8n-nodes-base.httpRequest → nodes-base.httpRequest
-      if (nodeType.startsWith('n8n-nodes-base.')) {
-        normalizedType = nodeType.replace('n8n-nodes-base.', 'nodes-base.');
-        row = this.db.prepare(`
+      if (nodeType.startsWith("n8n-nodes-base.")) {
+        normalizedType = nodeType.replace("n8n-nodes-base.", "nodes-base.");
+        row = this.db
+          .prepare(
+            `
           SELECT * FROM nodes WHERE node_type = ?
-        `).get(normalizedType) as any;
+        `
+          )
+          .get(normalizedType) as any;
       }
       // Handle: @n8n/n8n-nodes-langchain.agent → nodes-langchain.agent
-      else if (nodeType.startsWith('@n8n/n8n-nodes-langchain.')) {
-        normalizedType = nodeType.replace('@n8n/n8n-nodes-langchain.', 'nodes-langchain.');
-        row = this.db.prepare(`
+      else if (nodeType.startsWith("@n8n/n8n-nodes-langchain.")) {
+        normalizedType = nodeType.replace(
+          "@n8n/n8n-nodes-langchain.",
+          "nodes-langchain."
+        );
+        row = this.db
+          .prepare(
+            `
           SELECT * FROM nodes WHERE node_type = ?
-        `).get(normalizedType) as any;
+        `
+          )
+          .get(normalizedType) as any;
       }
       // Handle: n8n-nodes-langchain.agent → nodes-langchain.agent
-      else if (nodeType.startsWith('n8n-nodes-langchain.')) {
-        normalizedType = nodeType.replace('n8n-nodes-langchain.', 'nodes-langchain.');
-        row = this.db.prepare(`
+      else if (nodeType.startsWith("n8n-nodes-langchain.")) {
+        normalizedType = nodeType.replace(
+          "n8n-nodes-langchain.",
+          "nodes-langchain."
+        );
+        row = this.db
+          .prepare(
+            `
           SELECT * FROM nodes WHERE node_type = ?
-        `).get(normalizedType) as any;
+        `
+          )
+          .get(normalizedType) as any;
       }
       // Handle: @n8n/n8n-nodes-base.httpRequest → nodes-base.httpRequest
-      else if (nodeType.startsWith('@n8n/n8n-nodes-base.')) {
-        normalizedType = nodeType.replace('@n8n/n8n-nodes-base.', 'nodes-base.');
-        row = this.db.prepare(`
+      else if (nodeType.startsWith("@n8n/n8n-nodes-base.")) {
+        normalizedType = nodeType.replace(
+          "@n8n/n8n-nodes-base.",
+          "nodes-base."
+        );
+        row = this.db
+          .prepare(
+            `
           SELECT * FROM nodes WHERE node_type = ?
-        `).get(normalizedType) as any;
+        `
+          )
+          .get(normalizedType) as any;
       }
       // Generic fallback: Remove any n8n- or @n8n/ prefix
-      else if (nodeType.startsWith('n8n-')) {
+      else if (nodeType.startsWith("n8n-")) {
         normalizedType = nodeType.substring(4); // Remove 'n8n-'
-        row = this.db.prepare(`
+        row = this.db
+          .prepare(
+            `
           SELECT * FROM nodes WHERE node_type = ?
-        `).get(normalizedType) as any;
-      }
-      else if (nodeType.startsWith('@n8n/')) {
+        `
+          )
+          .get(normalizedType) as any;
+      } else if (nodeType.startsWith("@n8n/")) {
         normalizedType = nodeType.substring(5); // Remove '@n8n/'
-        row = this.db.prepare(`
+        row = this.db
+          .prepare(
+            `
           SELECT * FROM nodes WHERE node_type = ?
-        `).get(normalizedType) as any;
+        `
+          )
+          .get(normalizedType) as any;
       }
     }
 
@@ -214,11 +273,11 @@ export class NodeRepository {
       operations: this.safeJsonParse(row.operations, []),
       credentials: this.safeJsonParse(row.credentials_required, []),
       documentation: row.documentation,
-      hasDocumentation: !!row.documentation
+      hasDocumentation: !!row.documentation,
     };
 
     // Cache the result
-    nodeInfoCache.set(cacheKey, result);
+    this.nodeInfoCache.set(cacheKey, result);
     return result;
   }
 
@@ -226,7 +285,7 @@ export class NodeRepository {
    * List nodes with optional filtering
    */
   listNodes(options: any = {}): any[] {
-    let query = 'SELECT * FROM nodes WHERE 1=1';
+    let query = "SELECT * FROM nodes WHERE 1=1";
     const params: any[] = [];
 
     // Package filter - support multiple package name formats
@@ -234,41 +293,44 @@ export class NodeRepository {
       const packageVariants = [
         options.package,
         `@n8n/${options.package}`,
-        options.package.replace('@n8n/', '')
+        options.package.replace("@n8n/", ""),
       ];
-      query += ' AND package_name IN (' + packageVariants.map(() => '?').join(',') + ')';
+      query +=
+        " AND package_name IN (" +
+        packageVariants.map(() => "?").join(",") +
+        ")";
       params.push(...packageVariants);
     }
 
     // Category filter
     if (options.category) {
-      query += ' AND category = ?';
+      query += " AND category = ?";
       params.push(options.category);
     }
 
     // Development style filter
     if (options.developmentStyle) {
-      query += ' AND development_style = ?';
+      query += " AND development_style = ?";
       params.push(options.developmentStyle);
     }
 
     // AI tool filter
     if (options.isAITool !== undefined) {
-      query += ' AND is_ai_tool = ?';
+      query += " AND is_ai_tool = ?";
       params.push(options.isAITool ? 1 : 0);
     }
 
-    query += ' ORDER BY display_name';
+    query += " ORDER BY display_name";
 
     // Limit results
     if (options.limit) {
-      query += ' LIMIT ?';
+      query += " LIMIT ?";
       params.push(options.limit);
     }
 
     const rows = this.db.prepare(query).all(...params) as any[];
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       nodeType: row.node_type,
       displayName: row.display_name,
       description: row.description,
@@ -279,7 +341,7 @@ export class NodeRepository {
       isTrigger: !!row.is_trigger,
       isWebhook: !!row.is_webhook,
       isVersioned: !!row.is_versioned,
-      version: row.version
+      version: row.version,
     }));
   }
 
@@ -288,20 +350,22 @@ export class NodeRepository {
    */
   searchNodes(query: string, options: any = {}): any[] {
     // Check cache first
-    const cacheKey = QueryCache.generateKey('search', query, JSON.stringify(options));
-    const cached = searchCache.get(cacheKey);
+    const cacheKey = `search:${query}:${JSON.stringify(options)}`;
+    const cached = this.searchCache.get(cacheKey);
     if (cached) return cached;
-    
+
     const searchQuery = `
-      SELECT * FROM nodes 
+      SELECT * FROM nodes
       WHERE (display_name LIKE ? OR description LIKE ? OR node_type LIKE ?)
       ORDER BY display_name
     `;
-    
+
     const searchTerm = `%${query}%`;
-    const rows = this.db.prepare(searchQuery).all(searchTerm, searchTerm, searchTerm) as any[];
-    
-    const result = rows.map(row => ({
+    const rows = this.db
+      .prepare(searchQuery)
+      .all(searchTerm, searchTerm, searchTerm) as any[];
+
+    const result = rows.map((row) => ({
       nodeType: row.node_type,
       displayName: row.display_name,
       description: row.description,
@@ -311,11 +375,11 @@ export class NodeRepository {
       isTrigger: !!row.is_trigger,
       isWebhook: !!row.is_webhook,
       isVersioned: !!row.is_versioned,
-      version: row.version
+      version: row.version,
     }));
-    
+
     // Cache the search results
-    searchCache.set(cacheKey, result);
+    this.searchCache.set(cacheKey, result);
     return result;
   }
 
@@ -323,10 +387,14 @@ export class NodeRepository {
    * Get node documentation
    */
   getNodeDocumentation(nodeType: string): string | null {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       SELECT documentation FROM nodes WHERE node_type = ?
-    `).get(nodeType) as any;
-    
+    `
+      )
+      .get(nodeType) as any;
+
     return row?.documentation || null;
   }
 
@@ -334,11 +402,23 @@ export class NodeRepository {
    * Get database statistics
    */
   getDatabaseStatistics(): any {
-    const totalNodes = this.db.prepare('SELECT COUNT(*) as count FROM nodes').get() as any;
-    const aiTools = this.db.prepare('SELECT COUNT(*) as count FROM nodes WHERE is_ai_tool = 1').get() as any;
-    const triggers = this.db.prepare('SELECT COUNT(*) as count FROM nodes WHERE is_trigger = 1').get() as any;
-    const webhooks = this.db.prepare('SELECT COUNT(*) as count FROM nodes WHERE is_webhook = 1').get() as any;
-    const withDocs = this.db.prepare('SELECT COUNT(*) as count FROM nodes WHERE documentation IS NOT NULL').get() as any;
+    const totalNodes = this.db
+      .prepare("SELECT COUNT(*) as count FROM nodes")
+      .get() as any;
+    const aiTools = this.db
+      .prepare("SELECT COUNT(*) as count FROM nodes WHERE is_ai_tool = 1")
+      .get() as any;
+    const triggers = this.db
+      .prepare("SELECT COUNT(*) as count FROM nodes WHERE is_trigger = 1")
+      .get() as any;
+    const webhooks = this.db
+      .prepare("SELECT COUNT(*) as count FROM nodes WHERE is_webhook = 1")
+      .get() as any;
+    const withDocs = this.db
+      .prepare(
+        "SELECT COUNT(*) as count FROM nodes WHERE documentation IS NOT NULL"
+      )
+      .get() as any;
 
     return {
       totalNodes: totalNodes.count,
@@ -346,7 +426,7 @@ export class NodeRepository {
       triggers: triggers.count,
       webhooks: webhooks.count,
       withDocumentation: withDocs.count,
-      categories: this.getCategories()
+      categories: this.getCategories(),
     };
   }
 
@@ -355,7 +435,9 @@ export class NodeRepository {
    * Used for verification after rebuild
    */
   getTotalCount(): number {
-    const result = this.db.prepare('SELECT COUNT(*) as count FROM nodes').get() as any;
+    const result = this.db
+      .prepare("SELECT COUNT(*) as count FROM nodes")
+      .get() as any;
     return result.count;
   }
 
@@ -365,9 +447,13 @@ export class NodeRepository {
    */
   getDbVersion(): string | null {
     try {
-      const row = this.db.prepare(`
+      const row = this.db
+        .prepare(
+          `
         SELECT value FROM db_metadata WHERE key = 'n8n_version'
-      `).get() as any;
+      `
+        )
+        .get() as any;
 
       return row?.value || null;
     } catch (error) {
@@ -381,10 +467,14 @@ export class NodeRepository {
    * Called after successful rebuild for specific version
    */
   setDbVersion(version: string): void {
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT OR REPLACE INTO db_metadata (key, value, updated_at)
       VALUES ('n8n_version', ?, CURRENT_TIMESTAMP)
-    `).run(version);
+    `
+      )
+      .run(version);
   }
 
   /**
@@ -393,13 +483,17 @@ export class NodeRepository {
    */
   initializeMetadata(): void {
     try {
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         CREATE TABLE IF NOT EXISTS db_metadata (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-      `).run();
+      `
+        )
+        .run();
     } catch (error) {
       // Table already exists, ignore error
     }
@@ -409,11 +503,15 @@ export class NodeRepository {
    * Get all categories
    */
   private getCategories(): string[] {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       SELECT DISTINCT category FROM nodes WHERE category IS NOT NULL ORDER BY category
-    `).all() as any[];
-    
-    return rows.map(row => row.category);
+    `
+      )
+      .all() as any[];
+
+    return rows.map((row) => row.category);
   }
 
   private safeJsonParse(json: string, defaultValue: any): any {

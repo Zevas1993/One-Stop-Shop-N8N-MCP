@@ -134,6 +134,19 @@ export class GraphRAGNanoOrchestrator {
       errors: [],
     };
 
+    // Publish pipeline started event
+    if (this.eventBus) {
+      await this.eventBus.publish(
+        EventTypes.PIPELINE_STARTED,
+        {
+          goal,
+          timestamp: new Date().toISOString(),
+          config: this.config,
+        },
+        "graphrag-orchestrator"
+      );
+    }
+
     try {
       // Step 1: Pattern Discovery
       logger.info(`[Pipeline] Step 1: Pattern discovery for goal: "${goal}"`);
@@ -294,6 +307,21 @@ export class GraphRAGNanoOrchestrator {
       result.success = true;
       result.executionStats.totalTime = Date.now() - startTime;
 
+      // Publish pipeline completed event
+      if (this.eventBus) {
+        await this.eventBus.publish(
+          EventTypes.PIPELINE_COMPLETED,
+          {
+            goal,
+            success: true,
+            workflowName: result.workflow?.name || "Unknown",
+            nodeCount: result.workflow?.nodes?.length || 0,
+            executionStats: result.executionStats,
+          },
+          "graphrag-orchestrator"
+        );
+      }
+
       logger.info(
         `[Pipeline] ✅ Complete pipeline succeeded in ${result.executionStats.totalTime}ms`
       );
@@ -304,6 +332,22 @@ export class GraphRAGNanoOrchestrator {
           error instanceof Error ? error.message : String(error)
         }`
       );
+      result.executionStats.totalTime = Date.now() - startTime;
+
+      // Publish pipeline failed event
+      if (this.eventBus) {
+        await this.eventBus.publish(
+          EventTypes.PIPELINE_FAILED,
+          {
+            goal,
+            errors: result.errors,
+            failedAt: "exception",
+            executionStats: result.executionStats,
+          },
+          "graphrag-orchestrator"
+        );
+      }
+
       logger.error("[Pipeline] Pipeline error:", error);
       return result;
     }

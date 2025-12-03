@@ -100,7 +100,7 @@ export class MCPToolService {
     // Filter by node policy
     const nodeFilter = NodeFilter.getInstance();
     const filteredNodes = rawNodes.filter((node) =>
-      nodeFilter.isNodeAllowed(node.type || node.name)
+      nodeFilter.isNodeAllowed(this.getNodeType(node))
     );
 
     const result = {
@@ -121,9 +121,9 @@ export class MCPToolService {
     // Get raw results (fetch more than limit to account for filtering)
     const rawNodes = this.repository.searchNodes(query, { limit: limit * 2 });
 
-    // Filter by node policy
+    // Filter by node policy (using consistent helper)
     const filteredNodes = rawNodes.filter((node) =>
-      nodeFilter.isNodeAllowed(node.nodeType || node.name)
+      nodeFilter.isNodeAllowed(this.getNodeType(node))
     );
 
     // Apply limit after filtering
@@ -1088,6 +1088,14 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
   }
 
   // --- Private Helpers ---
+
+  /**
+   * Get standardized node type from node object
+   * Handles inconsistent property access patterns
+   */
+  private getNodeType(node: any): string {
+    return node.type || node.nodeType || node.name || "unknown";
+  }
 
   private resolveNode(nodeType: string): any {
     let node = this.repository.getNode(nodeType);

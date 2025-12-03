@@ -1,0 +1,32 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo.build",
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "scripts/**/*",
+    "tests/**/*",
+    "tests-examples/**/*",
+    "e2e/**/*",
+    "coverage/**/*",
+    "src/tests/**/*",
+    "src/scripts/rebuild-github.ts",
+    "src/services/error-handler.ts",
+    "src/services/github-monitor.ts",
+    "src/services/github-sync.ts",
+    "src/database/optimized-*.ts",
+    "src/mcp/server-refactored.ts"
+  ]
+}

@@ -541,6 +541,11 @@ export async function resetEventBus(): Promise<void> {
 // ============================================================================
 
 export const EventTypes = {
+  // Pipeline events
+  PIPELINE_STARTED: 'pipeline:started',
+  PIPELINE_COMPLETED: 'pipeline:completed',
+  PIPELINE_FAILED: 'pipeline:failed',
+
   // Validation events
   VALIDATION_STARTED: 'validation:started',
   VALIDATION_COMPLETED: 'validation:completed',

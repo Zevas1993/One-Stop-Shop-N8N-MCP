@@ -18,24 +18,38 @@ Transform your n8n workflow development with an intelligent co-pilot that preven
 
 ## ⚡ Quick Start
 
-### Option 1: NPX (Recommended for Claude Desktop)
+### One-Command Start
 
 ```bash
-# Install globally
-npm install -g n8n-mcp
+# Clone and enter directory
+git clone https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP.git
+cd One-Stop-Shop-N8N-MCP
 
-# Or run directly
-npx n8n-mcp
+# Install dependencies
+npm install
+
+# Start the server (smart launcher handles everything)
+npm run go
 ```
 
-Configure in Claude Desktop (`claude_desktop_config.json`):
+**Windows users:** Just double-click `Start-MCP-Server.bat`
+
+The smart launcher automatically:
+- ✅ Checks Node.js version
+- ✅ Uses pre-built dist/ if available
+- ✅ Falls back to ts-node if needed
+- ✅ Sets sensible defaults
+
+### Configure Claude Desktop
+
+Add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "n8n-copilot": {
-      "command": "npx",
-      "args": ["n8n-mcp"],
+      "command": "node",
+      "args": ["C:/path/to/One-Stop-Shop-N8N-MCP/start.js"],
       "env": {
         "N8N_API_URL": "http://localhost:5678",
         "N8N_API_KEY": "your-api-key"

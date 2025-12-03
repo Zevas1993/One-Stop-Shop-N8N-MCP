@@ -1,13 +1,16 @@
 {
   "mcpServers": {
-    "n8n-local": {
+    "n8n-copilot": {
       "command": "node",
       "args": [
-        "C:/Users/Chris Boyd/Documents/MCP-Servers/n8n-mcp-server/build/index.js"
+        "C:/Users/Chris Boyd/Documents/MCP-Servers/One-Stop-Shop-N8N-MCP/start.js"
       ],
       "env": {
-        "N8N_API_URL": "http://localhost:5678/api/v1",
-        "N8N_API_KEY": "your_actual_n8n_api_key_here"
+        "N8N_API_URL": "http://localhost:5678",
+        "N8N_API_KEY": "your_n8n_api_key_here",
+        "OLLAMA_URL": "http://localhost:11434",
+        "N8N_AUTO_SYNC": "false",
+        "ALLOW_COMMUNITY_NODES": "false"
       },
       "disabled": false,
       "autoApprove": []

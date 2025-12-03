@@ -5,6 +5,8 @@
     "lib": ["ES2020", "dom"],
     "outDir": "./dist",
     "rootDir": "./src",
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -32,11 +34,13 @@
     "node_modules", 
     "dist", 
     "**/*.test.ts",
+    "src/tests/**/*",
     "src/mcp/server-refactored.ts",
     "src/scripts/rebuild-github.ts",
     "src/services/error-handler.ts",
     "src/services/github-monitor.ts",
     "src/services/github-sync.ts",
-    "src/database/optimized-*.ts"
+    "src/database/optimized-*.ts",
+    "scripts/archive/**/*"
   ]
 }

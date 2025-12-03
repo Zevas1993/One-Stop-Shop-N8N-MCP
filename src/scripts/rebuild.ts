@@ -320,8 +320,8 @@ async function extractNodesFromDocker(extractor: NodeSourceExtractor, dockerVolu
 function validateDatabase(repository: NodeRepository): { passed: boolean; issues: string[] } {
   const issues = [];
   
-  // Check critical nodes
-  const criticalNodes = ['n8n-nodes-base.HttpRequest', 'n8n-nodes-base.Code', 'n8n-nodes-base.Webhook', 'n8n-nodes-base.Slack', 'n8n-nodes-base.MySQL', 'n8n-nodes-base.MongoDb'];
+  // Check critical nodes (note: n8n uses camelCase for node types)
+  const criticalNodes = ['n8n-nodes-base.httpRequest', 'n8n-nodes-base.code', 'n8n-nodes-base.webhook', 'n8n-nodes-base.slack', 'n8n-nodes-base.mySql', 'n8n-nodes-base.mongoDb'];
   
   for (const nodeType of criticalNodes) {
     const node = repository.getNode(nodeType);
