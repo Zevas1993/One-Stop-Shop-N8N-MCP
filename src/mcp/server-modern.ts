@@ -11,6 +11,7 @@ import { handleUpdatePartialWorkflow } from "./handlers-workflow-diff";
 import { N8nVersionMonitor } from "../services/n8n-version-monitor";
 import { N8nNodeSync } from "../services/n8n-node-sync";
 import { logger } from "../utils/logger";
+import { PROJECT_VERSION } from "../utils/version";
 import { MCPToolService } from "../services/mcp-tool-service";
 import { LazyInitializationManager } from "./lazy-initialization-manager";
 import { GraphPopulationService } from "../services/graph-population-service";
@@ -66,7 +67,7 @@ export class UnifiedMCPServer {
   constructor() {
     this.server = new McpServer({
       name: "n8n-mcp-unified",
-      version: "3.0.0",
+      version: PROJECT_VERSION,
     });
 
     // Wrap the tool method to capture handlers and definitions

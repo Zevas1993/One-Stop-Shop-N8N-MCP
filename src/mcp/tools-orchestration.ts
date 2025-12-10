@@ -3,109 +3,118 @@
  * Exposes multi-agent orchestration capabilities through MCP interface
  */
 
-import { ToolDefinition } from '../types';
-import { createOrchestrator, GraphRAGOrchestrator } from '../ai/graphrag-orchestrator';
+import { ToolDefinition } from "../types";
+import { GraphRAGNanoOrchestrator } from "../ai/agents/graphrag-nano-orchestrator";
 
 // Global orchestrator instance (lazy-loaded)
-let orchestrator: GraphRAGOrchestrator | null = null;
+let orchestrator: GraphRAGNanoOrchestrator | null = null;
 
 /**
  * Get or create the orchestrator instance
  */
-async function getOrchestrator(): Promise<GraphRAGOrchestrator> {
+async function getOrchestrator(): Promise<GraphRAGNanoOrchestrator> {
   if (!orchestrator) {
-    orchestrator = await createOrchestrator();
+    orchestrator = new GraphRAGNanoOrchestrator({
+      enableGraphRAG: true,
+    });
+    await orchestrator.initialize();
   }
   return orchestrator;
 }
 
 export const orchestrationTools: ToolDefinition[] = [
   {
-    name: 'orchestrate_workflow',
+    name: "orchestrate_workflow",
     description:
-      'Uses AI agents to discover workflow patterns, generate n8n workflow JSON, and validate the structure. Executes the complete multi-agent pipeline: Pattern Discovery → Workflow Generation → Validation.',
+      "Uses AI agents to discover workflow patterns, generate n8n workflow JSON, and validate the structure. Executes the complete multi-agent pipeline: Pattern Discovery → Workflow Generation → Validation.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         goal: {
-          type: 'string',
-          description: 'Natural language description of the workflow to create (e.g., "Send Slack notifications when data arrives")',
+          type: "string",
+          description:
+            'Natural language description of the workflow to create (e.g., "Send Slack notifications when data arrives")',
         },
         context: {
-          type: 'object',
-          description: 'Optional context information (e.g., platform, user role, environment)',
+          type: "object",
+          description:
+            "Optional context information (e.g., platform, user role, environment)",
           properties: {
             platform: {
-              type: 'string',
+              type: "string",
               description: 'Target platform (e.g., "n8n", "zapier", "make")',
             },
             userRole: {
-              type: 'string',
-              description: 'User role or skill level (e.g., "admin", "developer", "business-user")',
+              type: "string",
+              description:
+                'User role or skill level (e.g., "admin", "developer", "business-user")',
             },
             environment: {
-              type: 'string',
-              description: 'Environment context (e.g., "production", "staging", "local")',
+              type: "string",
+              description:
+                'Environment context (e.g., "production", "staging", "local")',
             },
           },
         },
         allowRetry: {
-          type: 'boolean',
-          description: 'Allow retry if validation fails (default: true)',
+          type: "boolean",
+          description: "Allow retry if validation fails (default: true)",
           default: true,
         },
         maxRetries: {
-          type: 'number',
-          description: 'Maximum number of retries (default: 1)',
+          type: "number",
+          description: "Maximum number of retries (default: 1)",
           default: 1,
         },
       },
-      required: ['goal'],
+      required: ["goal"],
     },
   },
   {
-    name: 'validate_workflow_structure',
+    name: "validate_workflow_structure",
     description:
-      'Validates a workflow JSON structure for correctness and completeness. Checks node types, connections, required fields, and generates detailed error/warning reports.',
+      "Validates a workflow JSON structure for correctness and completeness. Checks node types, connections, required fields, and generates detailed error/warning reports.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         workflow: {
-          type: 'object',
-          description: 'The n8n workflow JSON to validate',
+          type: "object",
+          description: "The n8n workflow JSON to validate",
           properties: {
             name: {
-              type: 'string',
-              description: 'Workflow name',
+              type: "string",
+              description: "Workflow name",
             },
             nodes: {
-              type: 'array',
-              description: 'Array of workflow nodes',
+              type: "array",
+              description: "Array of workflow nodes",
             },
             connections: {
-              type: 'object',
-              description: 'Node connections (source → targets)',
+              type: "object",
+              description: "Node connections (source → targets)",
             },
           },
-          required: ['name', 'nodes', 'connections'],
+          required: ["name", "nodes", "connections"],
         },
       },
-      required: ['workflow'],
+      required: ["workflow"],
     },
   },
   {
-    name: 'get_orchestration_status',
-    description: 'Get the current status of the orchestrator, including initialization state and shared memory statistics.',
+    name: "get_orchestration_status",
+    description:
+      "Get the current status of the orchestrator, including initialization state and shared memory statistics.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {},
     },
   },
   {
-    name: 'clear_orchestration_state',
-    description: 'Clear all cached state from the orchestrator (patterns, workflows, validation results). Useful before running new orchestrations.',
+    name: "clear_orchestration_state",
+    description:
+      "Clear all cached state from the orchestrator (patterns, workflows, validation results). Useful before running new orchestrations.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {},
     },
   },
@@ -123,27 +132,26 @@ export async function handleOrchestrate(args: {
   try {
     const orchestrator = await getOrchestrator();
 
-    const result = await orchestrator.orchestrate({
-      goal: args.goal,
-      context: args.context,
-      allowRetry: args.allowRetry !== false,
-      maxRetries: args.maxRetries || 1,
-    });
+    const result = await orchestrator.executePipeline(args.goal, args.context);
 
     return {
       success: result.success,
       goal: result.goal,
       workflow: result.workflow || null,
       validationResult: result.validationResult || null,
-      stages: result.stages,
-      executionTime: result.executionTime,
-      tokensUsed: result.tokensUsed,
+      stages: {
+        pattern: result.pattern,
+        graph: result.graphInsights,
+        generation: result.workflow ? { success: true } : { success: false },
+        validation: result.validationResult,
+      },
+      executionTime: result.executionStats.totalTime,
       errors: result.errors || [],
     };
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: error instanceof Error ? error.message : "Unknown error occurred",
     };
   }
 }
@@ -151,7 +159,9 @@ export async function handleOrchestrate(args: {
 /**
  * Handle validate_workflow_structure tool
  */
-export async function handleValidateWorkflow(args: { workflow: any }): Promise<any> {
+export async function handleValidateWorkflow(args: {
+  workflow: any;
+}): Promise<any> {
   try {
     // This would integrate with the validator agent directly
     // For now, returning a basic validation
@@ -163,31 +173,31 @@ export async function handleValidateWorkflow(args: { workflow: any }): Promise<a
     // Basic structure validation
     if (!workflow.name) {
       errors.push({
-        type: 'MISSING_NAME',
-        message: 'Workflow must have a name',
-        severity: 'critical',
+        type: "MISSING_NAME",
+        message: "Workflow must have a name",
+        severity: "critical",
       });
     }
 
     if (!Array.isArray(workflow.nodes)) {
       errors.push({
-        type: 'MISSING_NODES',
-        message: 'Workflow must have a nodes array',
-        severity: 'critical',
+        type: "MISSING_NODES",
+        message: "Workflow must have a nodes array",
+        severity: "critical",
       });
     } else if (workflow.nodes.length === 0) {
       errors.push({
-        type: 'EMPTY_NODES',
-        message: 'Workflow must have at least one node',
-        severity: 'critical',
+        type: "EMPTY_NODES",
+        message: "Workflow must have at least one node",
+        severity: "critical",
       });
     }
 
-    if (!workflow.connections || typeof workflow.connections !== 'object') {
+    if (!workflow.connections || typeof workflow.connections !== "object") {
       errors.push({
-        type: 'MISSING_CONNECTIONS',
-        message: 'Workflow must have connections object',
-        severity: 'critical',
+        type: "MISSING_CONNECTIONS",
+        message: "Workflow must have connections object",
+        severity: "critical",
       });
     }
 
@@ -198,9 +208,9 @@ export async function handleValidateWorkflow(args: { workflow: any }): Promise<a
       for (const node of workflow.nodes) {
         if (!node.name) {
           errors.push({
-            type: 'NODE_MISSING_NAME',
-            message: 'Node must have a name',
-            severity: 'high',
+            type: "NODE_MISSING_NAME",
+            message: "Node must have a name",
+            severity: "high",
           });
         } else {
           nodeNames.add(node.name);
@@ -208,13 +218,13 @@ export async function handleValidateWorkflow(args: { workflow: any }): Promise<a
 
         if (!node.type) {
           errors.push({
-            type: 'NODE_MISSING_TYPE',
+            type: "NODE_MISSING_TYPE",
             message: `Node "${node.name}" must have a type`,
-            severity: 'high',
+            severity: "high",
           });
-        } else if (!node.type.startsWith('n8n-')) {
+        } else if (!node.type.startsWith("n8n-")) {
           warnings.push({
-            type: 'UNUSUAL_NODE_TYPE',
+            type: "UNUSUAL_NODE_TYPE",
             message: `Node type "${node.type}" doesn't follow n8n naming convention`,
             suggestion: 'Should start with "n8n-nodes-base." or similar',
           });
@@ -222,20 +232,20 @@ export async function handleValidateWorkflow(args: { workflow: any }): Promise<a
 
         if (!Array.isArray(node.position) || node.position.length !== 2) {
           warnings.push({
-            type: 'INVALID_POSITION',
+            type: "INVALID_POSITION",
             message: `Node "${node.name}" has invalid position`,
           });
         }
       }
 
       // Connection validation
-      if (workflow.connections && typeof workflow.connections === 'object') {
+      if (workflow.connections && typeof workflow.connections === "object") {
         for (const [source, conn] of Object.entries(workflow.connections)) {
           if (!nodeNames.has(source)) {
             errors.push({
-              type: 'INVALID_CONNECTION_SOURCE',
+              type: "INVALID_CONNECTION_SOURCE",
               message: `Connection references unknown node: ${source}`,
-              severity: 'high',
+              severity: "high",
             });
           }
 
@@ -246,9 +256,9 @@ export async function handleValidateWorkflow(args: { workflow: any }): Promise<a
                 for (const target of path) {
                   if (!nodeNames.has(target.node)) {
                     errors.push({
-                      type: 'INVALID_CONNECTION_TARGET',
+                      type: "INVALID_CONNECTION_TARGET",
                       message: `Connection from "${source}" references unknown node: ${target.node}`,
-                      severity: 'high',
+                      severity: "high",
                     });
                   }
                 }
@@ -259,7 +269,7 @@ export async function handleValidateWorkflow(args: { workflow: any }): Promise<a
       }
     }
 
-    const hasCriticalErrors = errors.some((e) => e.severity === 'critical');
+    const hasCriticalErrors = errors.some((e) => e.severity === "critical");
 
     return {
       valid: !hasCriticalErrors,
@@ -267,7 +277,9 @@ export async function handleValidateWorkflow(args: { workflow: any }): Promise<a
       warnings,
       summary: {
         nodeCount: Array.isArray(workflow.nodes) ? workflow.nodes.length : 0,
-        connectionCount: workflow.connections ? Object.keys(workflow.connections).length : 0,
+        connectionCount: workflow.connections
+          ? Object.keys(workflow.connections).length
+          : 0,
         errorCount: errors.length,
         warningCount: warnings.length,
       },
@@ -275,7 +287,10 @@ export async function handleValidateWorkflow(args: { workflow: any }): Promise<a
   } catch (error) {
     return {
       valid: false,
-      error: error instanceof Error ? error.message : 'Unknown error during validation',
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unknown error during validation",
     };
   }
 }
@@ -286,17 +301,19 @@ export async function handleValidateWorkflow(args: { workflow: any }): Promise<a
 export async function handleGetStatus(): Promise<any> {
   try {
     const orchestrator = await getOrchestrator();
-    const status = await orchestrator.getStatus();
+    const memory = orchestrator.getSharedMemory();
+    const stats = await memory.getStats();
 
     return {
-      initialized: status.initialized,
-      agentsReady: status.agentsReady,
-      sharedMemory: status.sharedMemoryStats,
+      initialized: true,
+      agentsReady: true,
+      sharedMemory: stats,
       timestamp: new Date().toISOString(),
     };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : 'Unknown error getting status',
+      error:
+        error instanceof Error ? error.message : "Unknown error getting status",
     };
   }
 }
@@ -306,18 +323,24 @@ export async function handleGetStatus(): Promise<any> {
  */
 export async function handleClearState(): Promise<any> {
   try {
-    const orchestrator = await getOrchestrator();
-    await orchestrator.clearState();
+    if (orchestrator) {
+      await orchestrator.cleanup();
+      orchestrator = null;
+    }
+
+    // Re-initialize immediately to be ready
+    await getOrchestrator();
 
     return {
       success: true,
-      message: 'Orchestration state cleared successfully',
+      message: "Orchestration state cleared successfully",
       timestamp: new Date().toISOString(),
     };
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error clearing state',
+      error:
+        error instanceof Error ? error.message : "Unknown error clearing state",
     };
   }
 }
@@ -328,10 +351,10 @@ export async function handleClearState(): Promise<any> {
 export async function shutdownOrchestrator(): Promise<void> {
   if (orchestrator) {
     try {
-      await orchestrator.shutdown();
+      await orchestrator.cleanup();
       orchestrator = null;
     } catch (error) {
-      console.error('Error shutting down orchestrator:', error);
+      console.error("Error shutting down orchestrator:", error);
     }
   }
 }

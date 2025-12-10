@@ -8,7 +8,7 @@ import {
   handleValidateWorkflow,
   handleGetStatus,
   handleClearState,
-} from '../../src/mcp/tools-orchestration';
+} from '../../src/../src/mcp/tools-orchestration';
 
 describe('MCP Orchestration Tools Integration', () => {
   describe('orchestrate_workflow tool', () => {

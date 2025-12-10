@@ -2,8 +2,9 @@
 
 import dotenv from "dotenv";
 // Always try to load .env file - this provides defaults for local development
+// Use override: true to ensure .env values take precedence (fixes Windows # character issue)
 try {
-  dotenv.config();
+  dotenv.config({ override: true });
 } catch (e) {
   // Ignore errors if .env doesn't exist
 }

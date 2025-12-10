@@ -127,7 +127,7 @@ export class EventBus {
         correlationId TEXT,
         priority TEXT DEFAULT 'normal',
         processed INTEGER DEFAULT 0,
-        createdAt INTEGER NOT NULL DEFAULT (unixepoch('now', 'milliseconds'))
+        createdAt INTEGER NOT NULL
       );
 
       CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
@@ -181,8 +181,8 @@ export class EventBus {
     try {
       // Persist event
       const stmt = this.db.prepare(`
-        INSERT INTO events (id, type, source, data, timestamp, correlationId, priority)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO events (id, type, source, data, timestamp, correlationId, priority, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -192,7 +192,8 @@ export class EventBus {
         JSON.stringify(event.data),
         event.timestamp,
         event.correlationId || null,
-        event.priority
+        event.priority,
+        Date.now()  // Explicitly set createdAt to avoid SQLite version issues
       );
 
       logger.debug(`[EventBus] Published: ${type} from ${source}`, {

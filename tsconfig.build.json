@@ -27,6 +27,8 @@
     "src/services/github-monitor.ts",
     "src/services/github-sync.ts",
     "src/database/optimized-*.ts",
-    "src/mcp/server-refactored.ts"
+    "src/mcp/server-refactored.ts",
+    "src/n8n/**/*",
+    "src/utils/bridge.ts"
   ]
 }

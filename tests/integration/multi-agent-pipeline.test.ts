@@ -5,8 +5,8 @@
 
 import path from 'path';
 import fs from 'fs';
-import { GraphRAGOrchestrator, createOrchestrator } from '../../src/ai/graphrag-orchestrator';
-import { getSharedMemory } from '../../src/ai/shared-memory';
+import { GraphRAGOrchestrator, createOrchestrator } from '../../src/../src/ai/graphrag-orchestrator';
+import { getSharedMemory } from '../../src/../src/ai/shared-memory';
 
 describe('Multi-Agent Orchestration Pipeline', () => {
   let orchestrator: GraphRAGOrchestrator;

@@ -11,6 +11,8 @@
 import axios, { AxiosInstance } from "axios";
 import { logger } from "../utils/logger";
 import { EventEmitter } from "events";
+import { NodeFilter } from "./node-filter";
+import { N8nSessionManager } from "../services/n8n-session-manager";
 
 // ============================================================================
 // TYPES
@@ -85,6 +87,7 @@ export class NodeCatalog extends EventEmitter {
   private n8nVersion: string | null = null;
   private syncInterval: NodeJS.Timeout | null = null;
   private isConnected: boolean = false;
+  private sessionManager: N8nSessionManager | null = null;
 
   // Sync settings
   private readonly SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -190,30 +193,98 @@ export class NodeCatalog extends EventEmitter {
   }
 
   /**
+   * Initialize session-based authentication for internal endpoints
+   * This enables access to /types/nodes.json which provides the full node catalog
+   */
+  async initializeSessionAuth(): Promise<boolean> {
+    const username = process.env.N8N_USERNAME;
+    const password = process.env.N8N_PASSWORD;
+
+    if (!username || !password) {
+      logger.debug(
+        "[NodeCatalog] Session auth disabled (N8N_USERNAME/PASSWORD not set)"
+      );
+      return false;
+    }
+
+    try {
+      this.sessionManager = new N8nSessionManager({
+        n8nUrl: this.n8nUrl,
+        username,
+        password,
+      });
+
+      const success = await this.sessionManager.login();
+
+      if (success) {
+        logger.info(
+          "[NodeCatalog] Session authentication enabled for internal endpoints"
+        );
+      }
+
+      return success;
+    } catch (error: any) {
+      logger.warn(
+        "[NodeCatalog] Session auth initialization failed:",
+        error.message
+      );
+      this.sessionManager = null;
+      return false;
+    }
+  }
+
+  /**
    * Sync node catalog from live n8n instance
    * This is the core sync method - fetches all node types directly from n8n
+   *
+   * Priority order:
+   * 1. Session-authenticated /types/nodes.json (full catalog)
+   * 2. API-key /types/nodes.json (usually fails with 401)
+   * 3. API-key /rest/node-types (fallback)
+   * 4. Extract from existing workflows (last resort)
    */
   async syncFromN8n(): Promise<void> {
     const startTime = Date.now();
     logger.info("[NodeCatalog] Syncing node catalog from n8n...");
 
     try {
-      // Method 1: Try the undocumented /types/nodes.json endpoint
-      // This returns the full node catalog that n8n uses internally
       let nodesData: any[] = [];
 
-      try {
-        const response = await this.client.get("/types/nodes.json");
-        nodesData = response.data || [];
-        logger.debug(
-          `[NodeCatalog] Got ${nodesData.length} nodes from /types/nodes.json`
-        );
-      } catch (error) {
-        logger.debug(
-          "[NodeCatalog] /types/nodes.json not available, trying alternative..."
-        );
+      // Method 1: Try session-authenticated /types/nodes.json (best - full catalog)
+      if (this.sessionManager?.isSessionValid()) {
+        try {
+          nodesData = await this.sessionManager.requestInternal(
+            "/types/nodes.json"
+          );
+          logger.info(
+            `[NodeCatalog] Got ${nodesData?.length || 0} nodes via session auth /types/nodes.json`
+          );
+        } catch (error: any) {
+          logger.debug(
+            "[NodeCatalog] Session auth /types/nodes.json failed:",
+            error.message
+          );
+          nodesData = [];
+        }
+      }
 
-        // Method 2: Fallback to /rest/node-types endpoint
+      // Method 2: Try API-key /types/nodes.json (usually returns 401)
+      if (!nodesData || nodesData.length === 0) {
+        try {
+          const response = await this.client.get("/types/nodes.json");
+          nodesData = response.data || [];
+          logger.debug(
+            `[NodeCatalog] Got ${nodesData.length} nodes from /types/nodes.json`
+          );
+        } catch (error) {
+          logger.debug(
+            "[NodeCatalog] /types/nodes.json not available, trying alternative..."
+          );
+        }
+      }
+
+      // Method 3: Try API-key /rest/node-types (fallback)
+      if (!nodesData || nodesData.length === 0) {
         try {
           const response = await this.client.get("/rest/node-types");
           nodesData = response.data?.data || response.data || [];
@@ -224,10 +295,12 @@ export class NodeCatalog extends EventEmitter {
           logger.debug(
             "[NodeCatalog] /rest/node-types not available, trying workflow extraction..."
           );
-
-          // Method 3: Extract from existing workflows (least preferred)
-          nodesData = await this.extractNodesFromWorkflows();
         }
+      }
+
+      // Method 4: Extract from existing workflows (last resort)
+      if (!nodesData || nodesData.length === 0) {
+        nodesData = await this.extractNodesFromWorkflows();
       }
 
       // Parse and store node types
@@ -267,7 +340,8 @@ export class NodeCatalog extends EventEmitter {
     } catch (error) {
       logger.error("[NodeCatalog] Sync failed:", error);
       this.emit("syncError", error);
-      throw error;
+      // Do NOT throw - allow the connector to continue with an empty catalog
+      // This enables graceful degradation when n8n node endpoints are unavailable
     }
   }
 
@@ -282,11 +356,24 @@ export class NodeCatalog extends EventEmitter {
     const seenNodeTypes = new Map<string, any>();
 
     try {
-      // Fetch all workflows
-      const response = await this.client.get("/api/v1/workflows", {
-        params: { limit: 1000 },
-      });
-      const workflows = response.data?.data || [];
+      // Fetch all workflows with pagination (n8n API limit is 250)
+      let allWorkflows: any[] = [];
+      let cursor: string | undefined;
+      const pageSize = 250;
+
+      do {
+        const params: any = { limit: pageSize };
+        if (cursor) params.cursor = cursor;
+
+        const response = await this.client.get("/api/v1/workflows", { params });
+        const workflows = response.data?.data || [];
+        allWorkflows = allWorkflows.concat(workflows);
+
+        // Get next cursor for pagination
+        cursor = response.data?.nextCursor;
+      } while (cursor);
+
+      const workflows = allWorkflows;
 
       for (const workflow of workflows) {
         // Fetch full workflow to get node details
@@ -517,10 +604,11 @@ export class NodeCatalog extends EventEmitter {
   }
 
   /**
-   * Check if connected and synced
+   * Check if connected (doesn't require nodes to be synced)
+   * We allow the system to start even with an empty catalog - graceful degradation
    */
   isReady(): boolean {
-    return this.isConnected && this.nodeTypes.size > 0;
+    return this.isConnected;
   }
 
   /**

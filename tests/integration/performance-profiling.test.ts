@@ -3,11 +3,11 @@
  * Measures and validates performance characteristics of the multi-agent system
  */
 
-import { createOrchestrator } from '../../src/ai/graphrag-orchestrator';
-import { PatternAgent } from '../../src/ai/agents/pattern-agent';
-import { WorkflowAgent } from '../../src/ai/agents/workflow-agent';
-import { ValidatorAgent } from '../../src/ai/agents/validator-agent';
-import { getSharedMemory } from '../../src/ai/shared-memory';
+import { createOrchestrator } from '../../src/../src/ai/graphrag-orchestrator';
+import { PatternAgent } from '../../src/../src/ai/agents/pattern-agent';
+import { WorkflowAgent } from '../../src/../src/ai/agents/workflow-agent';
+import { ValidatorAgent } from '../../src/../src/ai/agents/validator-agent';
+import { getSharedMemory } from '../../src/../src/ai/shared-memory';
 
 describe('Performance Profiling', () => {
   const PERF_TARGETS = {

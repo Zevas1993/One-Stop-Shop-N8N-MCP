@@ -807,13 +807,13 @@ export class ValidationGateway extends EventEmitter {
     try {
       const axios = (await import("axios")).default;
 
-      // Prepare workflow for creation
+      // Prepare workflow for creation (n8n rejects 'active' as read-only)
       const testWorkflow = {
         name: `__validation_test_${Date.now()}`,
         nodes: workflow.nodes,
         connections: workflow.connections,
         settings: workflow.settings,
-        active: false, // Never activate test workflows
+        // NOTE: Do NOT include 'active' - n8n marks it as read-only in POST requests
       };
 
       // Try to create the workflow

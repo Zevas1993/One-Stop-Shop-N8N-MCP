@@ -10,10 +10,11 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { UnifiedMCPServer } from "./mcp/server-modern";
 import { ConsoleManager } from "./utils/console-manager";
 import { logger } from "./utils/logger";
+import { PROJECT_VERSION } from "./utils/version";
 import { GraphRAGLearningService } from "./services/graphrag-learning-service";
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ override: true });
 
 interface Session {
   server: UnifiedMCPServer;
@@ -239,7 +240,7 @@ export class SingleSessionHTTPServer {
       res.json({
         status: "ok",
         mode: "single-session",
-        version: "2.7.3",
+        version: PROJECT_VERSION,
         uptime: Math.floor(process.uptime()),
         sessionActive: !!this.session,
         sessionAge: this.session

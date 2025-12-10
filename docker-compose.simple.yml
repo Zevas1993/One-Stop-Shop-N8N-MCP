@@ -38,9 +38,9 @@ services:
       N8N_API_TIMEOUT: ${N8N_API_TIMEOUT:-30000}
       N8N_API_MAX_RETRIES: ${N8N_API_MAX_RETRIES:-3}
 
-      # N8N Browser Authentication
-      N8N_USERNAME: ${N8N_USERNAME:-chrisboyd1993@gmail.com}
-      N8N_PASSWORD: ${N8N_PASSWORD:-AlastorB2024!@#}
+      # N8N Browser Authentication (set in .env file)
+      N8N_USERNAME: ${N8N_USERNAME:-}
+      N8N_PASSWORD: ${N8N_PASSWORD:-}
 
       # ============================================
       # Nano LLM Configuration

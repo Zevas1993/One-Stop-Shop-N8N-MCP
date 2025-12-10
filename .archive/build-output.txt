@@ -1,4 +1,0 @@
-
-> n8n-mcp@2.7.1 build
-> tsc
-

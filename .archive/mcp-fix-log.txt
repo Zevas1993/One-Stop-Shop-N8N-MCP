@@ -1,6 +1,0 @@
-=== FIX WORKFLOW VIA MCP SERVER ===
-
-Connecting to MCP server...
-✅ Connected to MCP server
-
-⏳ Waiting 10 seconds for MCP server initialization...

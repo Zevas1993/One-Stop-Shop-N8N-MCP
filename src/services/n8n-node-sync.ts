@@ -249,8 +249,8 @@ export class N8nNodeSync {
     try {
       logger.info('Attempting to rebuild from Docker container...');
 
-      // Use npm run rebuild:local which supports Docker extraction
-      const { stdout, stderr } = await execAsync('npm run rebuild:local', {
+      // Use npm run db:rebuild which supports Docker extraction
+      const { stdout, stderr } = await execAsync('npm run db:rebuild', {
         env: {
           ...process.env,
           N8N_VERSION_OVERRIDE: version
@@ -292,7 +292,7 @@ export class N8nNodeSync {
       logger.info('Attempting to rebuild from local npm packages...');
 
       // Run npm rebuild command
-      const { stdout, stderr } = await execAsync('npm run rebuild:local', {
+      const { stdout, stderr } = await execAsync('npm run db:rebuild', {
         env: {
           ...process.env,
           N8N_VERSION_OVERRIDE: version

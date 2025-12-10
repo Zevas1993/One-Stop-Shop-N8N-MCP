@@ -9,9 +9,11 @@ coverage/
 .env.development.local
 .env.test.local
 .env.production.local
-*.env
 **/env/**
 **/.env/**
+
+# Allow .env.example for user setup documentation
+!.env.example
 
 # Additional credential protection
 config.json
@@ -105,10 +107,25 @@ nodes.db
 .kiro/
 .qodo/
 
-# Backup directories
+# Claude Code local settings (may contain command history with credentials)
+.claude/settings.local.json
+
+# Backup directories (may contain debug scripts with credentials)
 archive/
+.archive/
 backup/
 
 # Temporary test files
 *test-results*.json
 *test-output*.json
+
+# Prevent root directory clutter
+/simulation_output*.txt
+/fix_log*.txt
+/*_log.txt
+/debug-db*.js
+/fix-db*.js
+
+# Scripts
+scripts/debug/
+scripts/scratchpad/

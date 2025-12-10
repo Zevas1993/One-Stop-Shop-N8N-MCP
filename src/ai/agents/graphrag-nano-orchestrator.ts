@@ -115,7 +115,10 @@ export class GraphRAGNanoOrchestrator {
   /**
    * Execute full pipeline: pattern discovery → graph query → workflow generation → validation
    */
-  async executePipeline(goal: string): Promise<PipelineResult> {
+  async executePipeline(
+    goal: string,
+    context?: Record<string, any>
+  ): Promise<PipelineResult> {
     const startTime = Date.now();
     const result: PipelineResult = {
       success: false,
@@ -142,6 +145,7 @@ export class GraphRAGNanoOrchestrator {
           goal,
           timestamp: new Date().toISOString(),
           config: this.config,
+          context,
         },
         "graphrag-orchestrator"
       );
@@ -151,7 +155,7 @@ export class GraphRAGNanoOrchestrator {
       // Step 1: Pattern Discovery
       logger.info(`[Pipeline] Step 1: Pattern discovery for goal: "${goal}"`);
       const patternStart = Date.now();
-      const patternResult = await this.runPatternDiscovery(goal);
+      const patternResult = await this.runPatternDiscovery(goal, context);
       result.executionStats.patternDiscoveryTime = Date.now() - patternStart;
 
       if (!patternResult.success) {
@@ -356,13 +360,17 @@ export class GraphRAGNanoOrchestrator {
   /**
    * Step 1: Run pattern discovery agent
    */
-  private async runPatternDiscovery(goal: string): Promise<AgentOutput> {
+  private async runPatternDiscovery(
+    goal: string,
+    context?: Record<string, any>
+  ): Promise<AgentOutput> {
     try {
       const input: AgentInput = {
         goal,
         context: {
           timestamp: new Date().toISOString(),
           sourceType: "graphrag-orchestrator",
+          ...context,
         },
       };
 

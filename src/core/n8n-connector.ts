@@ -1,12 +1,12 @@
 /**
  * n8n Connector
- * 
+ *
  * Stateless passthrough to n8n - NO local storage of workflows.
  * n8n is the ONLY source of truth for workflow data.
- * 
+ *
  * All workflow operations go through the ValidationGateway first,
  * ensuring nothing broken reaches n8n.
- * 
+ *
  * Key Principles:
  * 1. STATELESS - No workflow caching, no local storage
  * 2. VALIDATED - All writes pass through ValidationGateway
@@ -14,11 +14,16 @@
  * 4. LIVE - Node catalog synced from n8n on connect
  */
 
-import axios, { AxiosInstance } from 'axios';
-import { logger } from '../utils/logger';
-import { EventEmitter } from 'events';
-import { NodeCatalog, initNodeCatalog } from './node-catalog';
-import { ValidationGateway, ValidationResult, initValidationGateway, GatewayConfig } from './validation-gateway';
+import axios, { AxiosInstance } from "axios";
+import { logger } from "../utils/logger";
+import { EventEmitter } from "events";
+import { NodeCatalog, initNodeCatalog, getNodeCatalog } from "./node-catalog";
+import {
+  ValidationGateway,
+  ValidationResult,
+  initValidationGateway,
+  GatewayConfig,
+} from "./validation-gateway";
 
 // ============================================================================
 // TYPES
@@ -57,7 +62,7 @@ export interface Execution {
   mode: string;
   startedAt: string;
   stoppedAt?: string;
-  status: 'running' | 'success' | 'error' | 'waiting' | 'canceled';
+  status: "running" | "success" | "error" | "waiting" | "canceled";
   data?: any;
   retryOf?: string;
   retrySuccessId?: string;
@@ -104,8 +109,8 @@ export class N8nConnector extends EventEmitter {
     this.config = config;
 
     // Normalize URL
-    const baseUrl = config.n8nUrl.endsWith('/') 
-      ? config.n8nUrl.slice(0, -1) 
+    const baseUrl = config.n8nUrl.endsWith("/")
+      ? config.n8nUrl.slice(0, -1)
       : config.n8nUrl;
     const apiUrl = `${baseUrl}/api/v1`;
 
@@ -113,12 +118,12 @@ export class N8nConnector extends EventEmitter {
       baseURL: apiUrl,
       timeout: config.timeout || 30000,
       headers: {
-        'X-N8N-API-KEY': config.apiKey,
-        'Content-Type': 'application/json',
+        "X-N8N-API-KEY": config.apiKey,
+        "Content-Type": "application/json",
       },
     });
 
-    logger.info('[N8nConnector] Initialized for:', baseUrl);
+    logger.info("[N8nConnector] Initialized for:", baseUrl);
   }
 
   // ==========================================================================
@@ -132,44 +137,84 @@ export class N8nConnector extends EventEmitter {
    * - Starts periodic sync
    */
   async connect(): Promise<boolean> {
-    logger.info('[N8nConnector] Connecting to n8n...');
+    logger.info("[N8nConnector] Connecting to n8n...");
 
     try {
       // 1. Health check
       const health = await this.healthCheck();
       if (!health.ok) {
-        logger.error('[N8nConnector] n8n not reachable:', health.error);
+        logger.error("[N8nConnector] n8n not reachable:", health.error);
         return false;
       }
       this.n8nVersion = health.version || null;
-      logger.info(`[N8nConnector] n8n version: ${this.n8nVersion || 'unknown'}`);
+      logger.info(
+        `[N8nConnector] n8n version: ${this.n8nVersion || "unknown"}`
+      );
 
-      // 2. Initialize node catalog (syncs from n8n)
-      this.nodeCatalog = await initNodeCatalog(this.config.n8nUrl, this.config.apiKey);
-      
+      // 2. Initialize node catalog
+      this.nodeCatalog = getNodeCatalog(
+        this.config.n8nUrl,
+        this.config.apiKey
+      );
+
+      // 2a. Try session authentication for internal endpoints (optional)
+      // This enables access to /types/nodes.json which provides the full node catalog
+      if (process.env.N8N_USERNAME && process.env.N8N_PASSWORD) {
+        try {
+          const sessionSuccess =
+            await this.nodeCatalog.initializeSessionAuth();
+          if (sessionSuccess) {
+            logger.info(
+              "[N8nConnector] Session auth enabled - full node catalog available"
+            );
+          }
+        } catch (sessionError: any) {
+          logger.debug(
+            "[N8nConnector] Session auth not available:",
+            sessionError.message
+          );
+        }
+      }
+
+      // 2b. Connect and sync node catalog from n8n
+      try {
+        await this.nodeCatalog.connect();
+      } catch (catalogError: any) {
+        logger.warn(
+          "[N8nConnector] NodeCatalog sync failed, continuing with empty catalog:",
+          catalogError.message
+        );
+        // Continue with potentially empty catalog - graceful degradation
+      }
+
       // 3. Initialize validation gateway
       this.validationGateway = initValidationGateway(
-        this.nodeCatalog,
+        this.nodeCatalog!, // Non-null assertion: set in try or catch above
         this.config.n8nUrl,
         this.config.apiKey,
         this.config.validationConfig
       );
 
-      // 4. Set up event forwarding
-      this.nodeCatalog.on('synced', (stats) => this.emit('catalogSynced', stats));
-      this.nodeCatalog.on('error', (err) => this.emit('catalogError', err));
-      this.validationGateway.on('validationFailed', (result) => this.emit('validationFailed', result));
+      // 4. Set up event forwarding (null-safe)
+      if (this.nodeCatalog) {
+        this.nodeCatalog.on("synced", (stats) =>
+          this.emit("catalogSynced", stats)
+        );
+        this.nodeCatalog.on("error", (err) => this.emit("catalogError", err));
+      }
+      this.validationGateway.on("validationFailed", (result) =>
+        this.emit("validationFailed", result)
+      );
 
       this.isConnected = true;
-      this.emit('connected', this.getStats());
+      this.emit("connected", this.getStats());
 
-      logger.info('[N8nConnector] ✅ Connected successfully');
+      logger.info("[N8nConnector] ✅ Connected successfully");
       return true;
-
     } catch (error: any) {
-      logger.error('[N8nConnector] Connection failed:', error.message);
+      logger.error("[N8nConnector] Connection failed:", error.message);
       this.isConnected = false;
-      this.emit('error', error);
+      this.emit("error", error);
       return false;
     }
   }
@@ -182,8 +227,8 @@ export class N8nConnector extends EventEmitter {
       this.nodeCatalog.disconnect();
     }
     this.isConnected = false;
-    this.emit('disconnected');
-    logger.info('[N8nConnector] Disconnected');
+    this.emit("disconnected");
+    logger.info("[N8nConnector] Disconnected");
   }
 
   /**
@@ -211,15 +256,21 @@ export class N8nConnector extends EventEmitter {
   /**
    * Health check for n8n
    */
-  async healthCheck(): Promise<{ ok: boolean; version?: string; error?: string }> {
+  async healthCheck(): Promise<{
+    ok: boolean;
+    version?: string;
+    error?: string;
+  }> {
     try {
       // Try the health endpoint
-      const response = await this.client.get('/health');
+      const response = await this.client.get("/health");
       return { ok: true, version: response.data?.version };
     } catch (error) {
       // Fallback: try listing workflows
       try {
-        const response = await this.client.get('/workflows', { params: { limit: 1 } });
+        const response = await this.client.get("/workflows", {
+          params: { limit: 1 },
+        });
         return { ok: true };
       } catch (fallbackError: any) {
         return { ok: false, error: fallbackError.message };
@@ -235,9 +286,9 @@ export class N8nConnector extends EventEmitter {
    * Create a workflow in n8n
    * VALIDATES before sending - will reject broken workflows
    */
-  async createWorkflow(workflow: Partial<Workflow>): Promise<{ 
-    success: boolean; 
-    workflow?: Workflow; 
+  async createWorkflow(workflow: Partial<Workflow>): Promise<{
+    success: boolean;
+    workflow?: Workflow;
     validation?: ValidationResult;
     error?: string;
   }> {
@@ -246,13 +297,18 @@ export class N8nConnector extends EventEmitter {
     // Validate first!
     if (this.validationGateway) {
       const validation = await this.validationGateway.validate(workflow);
-      
+
       if (!validation.valid) {
-        logger.warn('[N8nConnector] Workflow validation failed:', validation.errors);
+        logger.warn(
+          "[N8nConnector] Workflow validation failed:",
+          validation.errors
+        );
         return {
           success: false,
           validation,
-          error: `Validation failed: ${validation.errors.map(e => e.message).join('; ')}`,
+          error: `Validation failed: ${validation.errors
+            .map((e) => e.message)
+            .join("; ")}`,
         };
       }
     }
@@ -260,18 +316,17 @@ export class N8nConnector extends EventEmitter {
     try {
       // Clean workflow for n8n API
       const cleanedWorkflow = this.cleanWorkflowForCreate(workflow);
-      
-      const response = await this.client.post('/workflows', cleanedWorkflow);
+
+      const response = await this.client.post("/workflows", cleanedWorkflow);
       const createdWorkflow = response.data;
 
       logger.info(`[N8nConnector] ✅ Created workflow: ${createdWorkflow.id}`);
-      this.emit('workflowCreated', createdWorkflow);
+      this.emit("workflowCreated", createdWorkflow);
 
       return { success: true, workflow: createdWorkflow };
-
     } catch (error: any) {
       const errorMsg = this.extractError(error);
-      logger.error('[N8nConnector] Create workflow failed:', errorMsg);
+      logger.error("[N8nConnector] Create workflow failed:", errorMsg);
       return { success: false, error: errorMsg };
     }
   }
@@ -295,7 +350,10 @@ export class N8nConnector extends EventEmitter {
    * Update a workflow in n8n
    * VALIDATES before sending - will reject broken workflows
    */
-  async updateWorkflow(id: string, workflow: Partial<Workflow>): Promise<{
+  async updateWorkflow(
+    id: string,
+    workflow: Partial<Workflow>
+  ): Promise<{
     success: boolean;
     workflow?: Workflow;
     validation?: ValidationResult;
@@ -306,27 +364,35 @@ export class N8nConnector extends EventEmitter {
     // Validate first!
     if (this.validationGateway) {
       const validation = await this.validationGateway.validate(workflow);
-      
+
       if (!validation.valid) {
-        logger.warn('[N8nConnector] Workflow validation failed:', validation.errors);
+        logger.warn(
+          "[N8nConnector] Workflow validation failed:",
+          validation.errors
+        );
         return {
           success: false,
           validation,
-          error: `Validation failed: ${validation.errors.map(e => e.message).join('; ')}`,
+          error: `Validation failed: ${validation.errors
+            .map((e) => e.message)
+            .join("; ")}`,
         };
       }
     }
 
     try {
       const cleanedWorkflow = this.cleanWorkflowForUpdate(workflow);
-      
+
       // Try PUT first, fallback to PATCH
       let response;
       try {
         response = await this.client.put(`/workflows/${id}`, cleanedWorkflow);
       } catch (putError: any) {
         if (putError.response?.status === 405) {
-          response = await this.client.patch(`/workflows/${id}`, cleanedWorkflow);
+          response = await this.client.patch(
+            `/workflows/${id}`,
+            cleanedWorkflow
+          );
         } else {
           throw putError;
         }
@@ -334,13 +400,12 @@ export class N8nConnector extends EventEmitter {
 
       const updatedWorkflow = response.data;
       logger.info(`[N8nConnector] ✅ Updated workflow: ${id}`);
-      this.emit('workflowUpdated', updatedWorkflow);
+      this.emit("workflowUpdated", updatedWorkflow);
 
       return { success: true, workflow: updatedWorkflow };
-
     } catch (error: any) {
       const errorMsg = this.extractError(error);
-      logger.error('[N8nConnector] Update workflow failed:', errorMsg);
+      logger.error("[N8nConnector] Update workflow failed:", errorMsg);
       return { success: false, error: errorMsg };
     }
   }
@@ -352,10 +417,13 @@ export class N8nConnector extends EventEmitter {
     try {
       await this.client.delete(`/workflows/${id}`);
       logger.info(`[N8nConnector] Deleted workflow: ${id}`);
-      this.emit('workflowDeleted', { id });
+      this.emit("workflowDeleted", { id });
       return true;
     } catch (error: any) {
-      logger.error('[N8nConnector] Delete workflow failed:', this.extractError(error));
+      logger.error(
+        "[N8nConnector] Delete workflow failed:",
+        this.extractError(error)
+      );
       return false;
     }
   }
@@ -363,17 +431,20 @@ export class N8nConnector extends EventEmitter {
   /**
    * List all workflows (direct passthrough)
    */
-  async listWorkflows(params?: { 
-    active?: boolean; 
-    tags?: string; 
+  async listWorkflows(params?: {
+    active?: boolean;
+    tags?: string;
     limit?: number;
     cursor?: string;
   }): Promise<{ data: Workflow[]; nextCursor?: string }> {
     try {
-      const response = await this.client.get('/workflows', { params });
+      const response = await this.client.get("/workflows", { params });
       return response.data;
     } catch (error: any) {
-      logger.error('[N8nConnector] List workflows failed:', this.extractError(error));
+      logger.error(
+        "[N8nConnector] List workflows failed:",
+        this.extractError(error)
+      );
       return { data: [] };
     }
   }
@@ -384,10 +455,15 @@ export class N8nConnector extends EventEmitter {
   async setWorkflowActive(id: string, active: boolean): Promise<boolean> {
     try {
       await this.client.patch(`/workflows/${id}`, { active });
-      logger.info(`[N8nConnector] Workflow ${id} ${active ? 'activated' : 'deactivated'}`);
+      logger.info(
+        `[N8nConnector] Workflow ${id} ${active ? "activated" : "deactivated"}`
+      );
       return true;
     } catch (error: any) {
-      logger.error('[N8nConnector] Set workflow active failed:', this.extractError(error));
+      logger.error(
+        "[N8nConnector] Set workflow active failed:",
+        this.extractError(error)
+      );
       return false;
     }
   }
@@ -401,10 +477,16 @@ export class N8nConnector extends EventEmitter {
    */
   async executeWorkflow(id: string, data?: any): Promise<Execution | null> {
     try {
-      const response = await this.client.post(`/workflows/${id}/run`, data || {});
+      const response = await this.client.post(
+        `/workflows/${id}/run`,
+        data || {}
+      );
       return response.data;
     } catch (error: any) {
-      logger.error('[N8nConnector] Execute workflow failed:', this.extractError(error));
+      logger.error(
+        "[N8nConnector] Execute workflow failed:",
+        this.extractError(error)
+      );
       return null;
     }
   }
@@ -412,18 +494,25 @@ export class N8nConnector extends EventEmitter {
   /**
    * Trigger a webhook workflow
    */
-  async triggerWebhook(webhookUrl: string, data?: any, method: string = 'POST'): Promise<any> {
+  async triggerWebhook(
+    webhookUrl: string,
+    data?: any,
+    method: string = "POST"
+  ): Promise<any> {
     try {
       const response = await axios({
         method: method as any,
         url: webhookUrl,
-        data: method !== 'GET' ? data : undefined,
-        params: method === 'GET' ? data : undefined,
+        data: method !== "GET" ? data : undefined,
+        params: method === "GET" ? data : undefined,
         timeout: 120000, // Webhooks may take longer
       });
       return response.data;
     } catch (error: any) {
-      logger.error('[N8nConnector] Trigger webhook failed:', this.extractError(error));
+      logger.error(
+        "[N8nConnector] Trigger webhook failed:",
+        this.extractError(error)
+      );
       throw error;
     }
   }
@@ -431,7 +520,10 @@ export class N8nConnector extends EventEmitter {
   /**
    * Get execution details
    */
-  async getExecution(id: string, includeData: boolean = false): Promise<Execution | null> {
+  async getExecution(
+    id: string,
+    includeData: boolean = false
+  ): Promise<Execution | null> {
     try {
       const response = await this.client.get(`/executions/${id}`, {
         params: { includeData },
@@ -450,15 +542,18 @@ export class N8nConnector extends EventEmitter {
    */
   async listExecutions(params?: {
     workflowId?: string;
-    status?: 'running' | 'success' | 'error' | 'waiting';
+    status?: "running" | "success" | "error" | "waiting";
     limit?: number;
     cursor?: string;
   }): Promise<{ data: Execution[]; nextCursor?: string }> {
     try {
-      const response = await this.client.get('/executions', { params });
+      const response = await this.client.get("/executions", { params });
       return response.data;
     } catch (error: any) {
-      logger.error('[N8nConnector] List executions failed:', this.extractError(error));
+      logger.error(
+        "[N8nConnector] List executions failed:",
+        this.extractError(error)
+      );
       return { data: [] };
     }
   }
@@ -472,7 +567,10 @@ export class N8nConnector extends EventEmitter {
       logger.info(`[N8nConnector] Stopped execution: ${id}`);
       return true;
     } catch (error: any) {
-      logger.error('[N8nConnector] Stop execution failed:', this.extractError(error));
+      logger.error(
+        "[N8nConnector] Stop execution failed:",
+        this.extractError(error)
+      );
       return false;
     }
   }
@@ -484,12 +582,18 @@ export class N8nConnector extends EventEmitter {
   /**
    * List available credentials
    */
-  async listCredentials(params?: { type?: string; limit?: number }): Promise<Credential[]> {
+  async listCredentials(params?: {
+    type?: string;
+    limit?: number;
+  }): Promise<Credential[]> {
     try {
-      const response = await this.client.get('/credentials', { params });
+      const response = await this.client.get("/credentials", { params });
       return response.data?.data || [];
     } catch (error: any) {
-      logger.error('[N8nConnector] List credentials failed:', this.extractError(error));
+      logger.error(
+        "[N8nConnector] List credentials failed:",
+        this.extractError(error)
+      );
       return [];
     }
   }
@@ -555,7 +659,9 @@ export class N8nConnector extends EventEmitter {
   /**
    * Validate a workflow without sending to n8n
    */
-  async validateWorkflow(workflow: Partial<Workflow>): Promise<ValidationResult | null> {
+  async validateWorkflow(
+    workflow: Partial<Workflow>
+  ): Promise<ValidationResult | null> {
     if (!this.validationGateway) {
       return null;
     }
@@ -571,7 +677,8 @@ export class N8nConnector extends EventEmitter {
    * Removes read-only fields that n8n rejects
    */
   private cleanWorkflowForCreate(workflow: Partial<Workflow>): any {
-    const { id, createdAt, updatedAt, versionId, ...clean } = workflow as any;
+    const { id, createdAt, updatedAt, versionId, active, ...clean } =
+      workflow as any;
     return clean;
   }
 
@@ -596,7 +703,7 @@ export class N8nConnector extends EventEmitter {
     if (error.message) {
       return error.message;
     }
-    return 'Unknown error';
+    return "Unknown error";
   }
 }
 
@@ -611,9 +718,9 @@ let connectorInstance: N8nConnector | null = null;
  */
 export function getN8nConnector(): N8nConnector {
   if (!connectorInstance) {
-    const n8nUrl = process.env.N8N_API_URL || 'http://localhost:5678';
-    const apiKey = process.env.N8N_API_KEY || '';
-    
+    const n8nUrl = process.env.N8N_API_URL || "http://localhost:5678";
+    const apiKey = process.env.N8N_API_KEY || "";
+
     connectorInstance = new N8nConnector({ n8nUrl, apiKey });
   }
   return connectorInstance;
@@ -622,10 +729,12 @@ export function getN8nConnector(): N8nConnector {
 /**
  * Initialize and connect (call on startup)
  */
-export async function initN8nConnector(config?: ConnectorConfig): Promise<N8nConnector> {
+export async function initN8nConnector(
+  config?: ConnectorConfig
+): Promise<N8nConnector> {
   const finalConfig = config || {
-    n8nUrl: process.env.N8N_API_URL || 'http://localhost:5678',
-    apiKey: process.env.N8N_API_KEY || '',
+    n8nUrl: process.env.N8N_API_URL || "http://localhost:5678",
+    apiKey: process.env.N8N_API_KEY || "",
   };
 
   connectorInstance = new N8nConnector(finalConfig);

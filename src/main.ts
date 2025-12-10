@@ -23,8 +23,9 @@
 
 import dotenv from "dotenv";
 // Always try to load .env file - this provides defaults for local development
+// Use override: true to ensure .env values take precedence (fixes Windows # character issue)
 try {
-  dotenv.config();
+  dotenv.config({ override: true });
 } catch (e) {
   // Ignore errors if .env doesn't exist
 }
@@ -338,13 +339,15 @@ async function startHttpServer(config: ServerConfig): Promise<void> {
 async function main(): Promise<void> {
   const config = getConfig();
 
-  console.log("");
-  console.log("╔════════════════════════════════════════════════════════════╗");
-  console.log("║              n8n Co-Pilot MCP Server v3.0.0                ║");
-  console.log("║                                                            ║");
-  console.log("║  Stateless • Validated • Live Sync • LLM-Powered          ║");
-  console.log("╚════════════════════════════════════════════════════════════╝");
-  console.log("");
+  // In MCP mode, EVERYTHING must go to stderr to avoid breaking JSON-RPC on stdout
+  const logFn = config.mode === "mcp" ? console.error : console.log;
+  logFn("");
+  logFn("╔════════════════════════════════════════════════════════════╗");
+  logFn("║              n8n Co-Pilot MCP Server v3.0.0                ║");
+  logFn("║                                                            ║");
+  logFn("║  Stateless • Validated • Live Sync • LLM-Powered          ║");
+  logFn("╚════════════════════════════════════════════════════════════╝");
+  logFn("");
 
   logger.info(`[Main] Starting in ${config.mode.toUpperCase()} mode...`);
   logger.info(`[Main] n8n URL: ${config.n8nUrl}`);
@@ -400,6 +403,7 @@ async function main(): Promise<void> {
 
   // Initialize core (n8n connection, validation, etc.)
   logger.info("[Main] Step 2/2: Initializing core...");
+  let coreReady = false;
   try {
     await initCore({
       n8nUrl: config.n8nUrl,
@@ -408,10 +412,13 @@ async function main(): Promise<void> {
       enableDryRun: config.enableDryRun,
       enableSemanticCheck: aiReady,
     });
+    coreReady = true;
   } catch (error: any) {
     logger.error("[Main] Failed to initialize core:", error.message);
-    logger.error("[Main] Make sure n8n is running and accessible");
-    process.exit(1);
+    logger.warn(
+      "[Main] Running in degraded mode - n8n features will be limited"
+    );
+    // Don't exit - allow MCP interface to run with limited functionality
   }
 
   // Wire LLM brain to validation gateway if AI is available

@@ -1,6 +1,0 @@
-Interactive Workflow Building Session with MCP Server
-
-The MCP server is running with 42 tools available.
-I will now interact with it directly via stdin/stdout JSON-RPC protocol.
-
-Step 1: Search for Teams node

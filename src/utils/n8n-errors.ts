@@ -129,6 +129,27 @@ export class N8nServerError extends N8nApiError {
   }
 }
 
+export class N8nSessionAuthError extends N8nApiError {
+  constructor(message = 'Session authentication failed') {
+    super(
+      message,
+      401,
+      'SESSION_AUTH_ERROR',
+      undefined,
+      [
+        '1. Verify N8N_USERNAME and N8N_PASSWORD environment variables are correct',
+        '2. Ensure the n8n user account exists and is active',
+        '3. MFA-enabled accounts are not currently supported',
+        '4. Check if n8n instance is accessible at N8N_API_URL',
+        '5. Session auth will fallback to API key + workflow extraction',
+        '6. Session auth is optional - the server can function without it'
+      ],
+      true // Retryable - session may be refreshable
+    );
+    this.name = 'N8nSessionAuthError';
+  }
+}
+
 // Error handling utility
 export function handleN8nApiError(error: unknown): N8nApiError {
   if (error instanceof N8nApiError) {

@@ -1,9 +1,9 @@
 /**
  * MCP Interface
- * 
+ *
  * Exposes the n8n Co-Pilot core as MCP (Model Context Protocol) tools.
  * This is the interface that AI agents (like Claude) connect to.
- * 
+ *
  * Key Features:
  * 1. All workflow operations go through ValidationGateway
  * 2. Live node catalog from connected n8n instance
@@ -11,15 +11,16 @@
  * 4. Clear error messages with fix suggestions
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   Tool,
-} from '@modelcontextprotocol/sdk/types.js';
-import { logger } from '../utils/logger';
-import { getCore, CoreOrchestrator, isCoreReady } from '../core';
+} from "@modelcontextprotocol/sdk/types.js";
+import { logger } from "../utils/logger";
+import { PROJECT_VERSION } from "../utils/version";
+import { getCore, CoreOrchestrator, isCoreReady } from "../core";
 
 // ============================================================================
 // MCP TOOL DEFINITIONS
@@ -32,9 +33,9 @@ import { getCore, CoreOrchestrator, isCoreReady } from '../core';
 export const MCP_TOOLS: Tool[] = [
   // === WORKFLOW MANAGEMENT ===
   {
-    name: 'n8n_create_workflow',
-    description: `Create a new workflow in n8n. 
-    
+    name: "n8n_create_workflow",
+    description: `Create a new workflow in n8n.
+
 ⚠️ IMPORTANT: All workflows are validated before creation. Invalid workflows will be rejected with detailed error messages.
 
 The workflow must include:
@@ -49,127 +50,119 @@ Validation includes:
 - Credential requirements
 - n8n dry-run test`,
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         name: {
-          type: 'string',
-          description: 'Name of the workflow',
+          type: "string",
+          description: "Name of the workflow",
         },
         nodes: {
-          type: 'array',
-          description: 'Array of node configurations',
+          type: "array",
+          description: "Array of node configurations",
           items: {
-            type: 'object',
+            type: "object",
             properties: {
-              name: { type: 'string', description: 'Unique node name' },
-              type: { type: 'string', description: 'Node type (e.g., n8n-nodes-base.httpRequest)' },
-              typeVersion: { type: 'number', description: 'Node version' },
-              position: { type: 'array', items: { type: 'number' }, description: '[x, y] position' },
-              parameters: { type: 'object', description: 'Node parameters' },
-              credentials: { type: 'object', description: 'Credential references' },
+              name: { type: "string", description: "Unique node name" },
+              type: {
+                type: "string",
+                description: "Node type (e.g., n8n-nodes-base.httpRequest)",
+              },
+              typeVersion: { type: "number", description: "Node version" },
+              position: {
+                type: "array",
+                items: { type: "number" },
+                description: "[x, y] position",
+              },
+              parameters: { type: "object", description: "Node parameters" },
+              credentials: {
+                type: "object",
+                description: "Credential references",
+              },
             },
-            required: ['name', 'type'],
+            required: ["name", "type"],
           },
         },
         connections: {
-          type: 'object',
-          description: 'Node connections. Format: { "NodeName": { "main": [[{ "node": "TargetNode", "type": "main", "index": 0 }]] } }',
+          type: "object",
+          description:
+            'Node connections. Format: { "NodeName": { "main": [[{ "node": "TargetNode", "type": "main", "index": 0 }]] } }',
         },
         settings: {
-          type: 'object',
-          description: 'Workflow settings (optional)',
+          type: "object",
+          description: "Workflow settings (optional)",
         },
       },
-      required: ['name', 'nodes', 'connections'],
+      required: ["name", "nodes", "connections"],
     },
   },
   {
-    name: 'n8n_get_workflow',
-    description: 'Get a workflow by ID from n8n',
+    name: "n8n_get_workflow",
+    description: "Get a workflow by ID from n8n",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         id: {
-          type: 'string',
-          description: 'Workflow ID',
+          type: "string",
+          description: "Workflow ID",
         },
       },
-      required: ['id'],
+      required: ["id"],
     },
   },
   {
-    name: 'n8n_update_workflow',
-    description: `Update an existing workflow. 
-    
+    name: "n8n_update_workflow",
+    description: `Update an existing workflow.
+
 ⚠️ IMPORTANT: Updates are validated before applying. Invalid updates will be rejected.`,
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         id: {
-          type: 'string',
-          description: 'Workflow ID to update',
+          type: "string",
+          description: "Workflow ID to update",
         },
         workflow: {
-          type: 'object',
-          description: 'Updated workflow data',
+          type: "object",
+          description: "Updated workflow data",
         },
       },
-      required: ['id', 'workflow'],
+      required: ["id", "workflow"],
     },
   },
   {
-    name: 'n8n_delete_workflow',
-    description: 'Delete a workflow from n8n',
+    name: "n8n_delete_workflow",
+    description: "Delete a workflow from n8n",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         id: {
-          type: 'string',
-          description: 'Workflow ID to delete',
+          type: "string",
+          description: "Workflow ID to delete",
         },
       },
-      required: ['id'],
+      required: ["id"],
     },
   },
   {
-    name: 'n8n_list_workflows',
-    description: 'List all workflows in n8n',
+    name: "n8n_list_workflows",
+    description: "List all workflows in n8n",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         active: {
-          type: 'boolean',
-          description: 'Filter by active status',
+          type: "boolean",
+          description: "Filter by active status",
         },
         limit: {
-          type: 'number',
-          description: 'Maximum workflows to return (default: 50)',
+          type: "number",
+          description: "Maximum workflows to return (default: 50)",
         },
       },
     },
   },
-  {
-    name: 'n8n_activate_workflow',
-    description: 'Activate or deactivate a workflow',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: {
-          type: 'string',
-          description: 'Workflow ID',
-        },
-        active: {
-          type: 'boolean',
-          description: 'Whether to activate (true) or deactivate (false)',
-        },
-      },
-      required: ['id', 'active'],
-    },
-  },
-
   // === VALIDATION ===
   {
-    name: 'n8n_validate_workflow',
+    name: "n8n_validate_workflow",
     description: `Validate a workflow without creating it.
 
 Returns detailed validation results including:
@@ -181,72 +174,54 @@ Returns detailed validation results including:
 
 Use this to check workflows before submitting them.`,
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         workflow: {
-          type: 'object',
-          description: 'Workflow to validate',
+          type: "object",
+          description: "Workflow to validate",
         },
       },
-      required: ['workflow'],
+      required: ["workflow"],
     },
   },
 
   // === EXECUTION ===
   {
-    name: 'n8n_execute_workflow',
-    description: 'Execute a workflow directly (requires workflow to be saved)',
+    name: "n8n_get_execution",
+    description: "Get details of a workflow execution",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         id: {
-          type: 'string',
-          description: 'Workflow ID to execute',
-        },
-        data: {
-          type: 'object',
-          description: 'Input data for the workflow (optional)',
-        },
-      },
-      required: ['id'],
-    },
-  },
-  {
-    name: 'n8n_get_execution',
-    description: 'Get details of a workflow execution',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: {
-          type: 'string',
-          description: 'Execution ID',
+          type: "string",
+          description: "Execution ID",
         },
         includeData: {
-          type: 'boolean',
-          description: 'Include execution data (default: false)',
+          type: "boolean",
+          description: "Include execution data (default: false)",
         },
       },
-      required: ['id'],
+      required: ["id"],
     },
   },
   {
-    name: 'n8n_list_executions',
-    description: 'List workflow executions',
+    name: "n8n_list_executions",
+    description: "List workflow executions",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         workflowId: {
-          type: 'string',
-          description: 'Filter by workflow ID',
+          type: "string",
+          description: "Filter by workflow ID",
         },
         status: {
-          type: 'string',
-          enum: ['running', 'success', 'error', 'waiting'],
-          description: 'Filter by status',
+          type: "string",
+          enum: ["running", "success", "error", "waiting"],
+          description: "Filter by status",
         },
         limit: {
-          type: 'number',
-          description: 'Maximum executions to return (default: 20)',
+          type: "number",
+          description: "Maximum executions to return (default: 20)",
         },
       },
     },
@@ -254,81 +229,85 @@ Use this to check workflows before submitting them.`,
 
   // === NODE DISCOVERY ===
   {
-    name: 'n8n_search_nodes',
+    name: "n8n_search_nodes",
     description: `Search for available node types in this n8n instance.
 
-⚠️ IMPORTANT: Always search for nodes before using them in workflows. 
+⚠️ IMPORTANT: Always search for nodes before using them in workflows.
 Only nodes returned by this search are guaranteed to exist.`,
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         query: {
-          type: 'string',
+          type: "string",
           description: 'Search query (e.g., "slack", "http", "database")',
         },
       },
-      required: ['query'],
+      required: ["query"],
     },
   },
   {
-    name: 'n8n_get_node_info',
-    description: 'Get detailed information about a specific node type',
+    name: "n8n_get_node_info",
+    description: "Get detailed information about a specific node type",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         nodeType: {
-          type: 'string',
+          type: "string",
           description: 'Node type (e.g., "n8n-nodes-base.httpRequest")',
         },
       },
-      required: ['nodeType'],
+      required: ["nodeType"],
     },
   },
   {
-    name: 'n8n_list_trigger_nodes',
-    description: 'List all available trigger nodes (nodes that can start a workflow)',
+    name: "n8n_list_trigger_nodes",
+    description:
+      "List all available trigger nodes (nodes that can start a workflow)",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {},
     },
   },
   {
-    name: 'n8n_list_ai_nodes',
-    description: 'List all AI-capable nodes (LangChain, AI Agent, etc.)',
+    name: "n8n_list_ai_nodes",
+    description: "List all AI-capable nodes (LangChain, AI Agent, etc.)",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {},
     },
   },
 
   // === SYSTEM ===
   {
-    name: 'n8n_status',
-    description: 'Get the status of the n8n Co-Pilot system including connection status, node count, and LLM availability',
+    name: "n8n_status",
+    description:
+      "Get the status of the n8n Co-Pilot system including connection status, node count, and LLM availability",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {},
     },
   },
   {
-    name: 'n8n_resync_catalog',
-    description: 'Force a resync of the node catalog from n8n. Use if nodes seem out of date.',
+    name: "n8n_resync_catalog",
+    description:
+      "Force a resync of the node catalog from n8n. Use if nodes seem out of date.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {},
     },
   },
 
   // === CREDENTIALS ===
   {
-    name: 'n8n_list_credentials',
-    description: 'List available credentials (names and types only, not secrets)',
+    name: "n8n_list_credentials",
+    description:
+      "List available credentials (names and types only, not secrets)",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         type: {
-          type: 'string',
-          description: 'Filter by credential type',
+          type: "string",
+          description: "Filter by credential type",
         },
       },
     },
@@ -341,9 +320,21 @@ Only nodes returned by this search are guaranteed to exist.`,
 
 type ToolHandler = (params: any) => Promise<any>;
 
-function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler> {
-  const connector = core.getConnector();
-  const catalog = core.getNodeCatalog();
+function createToolHandlers(
+  core: CoreOrchestrator
+): Record<string, ToolHandler> {
+  // Handle case where core is not fully initialized
+  let connector: any = null;
+  let catalog: any = null;
+  try {
+    connector = core.getConnector();
+    catalog = core.getNodeCatalog();
+  } catch (e) {
+    // Core not fully initialized - handlers will return errors
+    logger.warn(
+      "[MCP] Core not fully initialized - some tools will be unavailable"
+    );
+  }
 
   return {
     // Workflow Management
@@ -359,12 +350,14 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
         return {
           success: false,
           error: result.error,
-          validation: result.validation ? {
-            errors: result.validation.errors,
-            warnings: result.validation.warnings,
-            passedLayers: result.validation.passedLayers,
-            failedLayer: result.validation.failedLayer,
-          } : undefined,
+          validation: result.validation
+            ? {
+                errors: result.validation.errors,
+                warnings: result.validation.warnings,
+                passedLayers: result.validation.passedLayers,
+                failedLayer: result.validation.failedLayer,
+              }
+            : undefined,
         };
       }
 
@@ -379,7 +372,7 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
     async n8n_get_workflow(params) {
       const workflow = await connector.getWorkflow(params.id);
       if (!workflow) {
-        return { success: false, error: 'Workflow not found' };
+        return { success: false, error: "Workflow not found" };
       }
       return { success: true, workflow };
     },
@@ -396,7 +389,7 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
       return {
         success: true,
         workflowId: result.workflow?.id,
-        message: 'Workflow updated successfully',
+        message: "Workflow updated successfully",
       };
     },
 
@@ -404,7 +397,7 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
       const success = await connector.deleteWorkflow(params.id);
       return {
         success,
-        message: success ? 'Workflow deleted' : 'Failed to delete workflow',
+        message: success ? "Workflow deleted" : "Failed to delete workflow",
       };
     },
 
@@ -416,7 +409,7 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
       return {
         success: true,
         count: result.data.length,
-        workflows: result.data.map(w => ({
+        workflows: result.data.map((w) => ({
           id: w.id,
           name: w.name,
           active: w.active,
@@ -425,21 +418,11 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
       };
     },
 
-    async n8n_activate_workflow(params) {
-      const success = await connector.setWorkflowActive(params.id, params.active);
-      return {
-        success,
-        message: success 
-          ? `Workflow ${params.active ? 'activated' : 'deactivated'}`
-          : 'Failed to change workflow status',
-      };
-    },
-
     // Validation
     async n8n_validate_workflow(params) {
       const result = await core.validateWorkflow(params.workflow);
       if (!result) {
-        return { success: false, error: 'Validation not available' };
+        return { success: false, error: "Validation not available" };
       }
       return {
         valid: result.valid,
@@ -452,22 +435,13 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
     },
 
     // Execution
-    async n8n_execute_workflow(params) {
-      const execution = await connector.executeWorkflow(params.id, params.data);
-      if (!execution) {
-        return { success: false, error: 'Failed to execute workflow' };
-      }
-      return {
-        success: true,
-        executionId: execution.id,
-        status: execution.status,
-      };
-    },
-
     async n8n_get_execution(params) {
-      const execution = await connector.getExecution(params.id, params.includeData);
+      const execution = await connector.getExecution(
+        params.id,
+        params.includeData
+      );
       if (!execution) {
-        return { success: false, error: 'Execution not found' };
+        return { success: false, error: "Execution not found" };
       }
       return { success: true, execution };
     },
@@ -481,7 +455,7 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
       return {
         success: true,
         count: result.data.length,
-        executions: result.data.map(e => ({
+        executions: result.data.map((e) => ({
           id: e.id,
           workflowId: e.workflowId,
           status: e.status,
@@ -493,11 +467,17 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
 
     // Node Discovery
     async n8n_search_nodes(params) {
+      if (!catalog) {
+        return {
+          success: false,
+          error: "Node catalog not available - n8n sync may have failed",
+        };
+      }
       const nodes = catalog.searchNodes(params.query);
       return {
         success: true,
         count: nodes.length,
-        nodes: nodes.slice(0, 30).map(n => ({
+        nodes: nodes.slice(0, 30).map((n) => ({
           type: n.name,
           displayName: n.displayName,
           description: n.description?.substring(0, 150),
@@ -508,13 +488,20 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
     },
 
     async n8n_get_node_info(params) {
+      if (!catalog) {
+        return {
+          success: false,
+          error: "Node catalog not available - n8n sync may have failed",
+        };
+      }
       const node = catalog.getNode(params.nodeType);
       if (!node) {
         // Try to find similar nodes
-        const similar = catalog.searchNodes(params.nodeType.split('.').pop() || params.nodeType)
+        const similar = catalog
+          .searchNodes(params.nodeType.split(".").pop() || params.nodeType)
           .slice(0, 5)
-          .map(n => n.name);
-        
+          .map((n) => n.name);
+
         return {
           success: false,
           error: `Node type "${params.nodeType}" not found`,
@@ -537,11 +524,17 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
     },
 
     async n8n_list_trigger_nodes() {
+      if (!catalog) {
+        return {
+          success: false,
+          error: "Node catalog not available - n8n sync may have failed",
+        };
+      }
       const triggers = catalog.getTriggerNodes();
       return {
         success: true,
         count: triggers.length,
-        triggers: triggers.map(n => ({
+        triggers: triggers.map((n) => ({
           type: n.name,
           displayName: n.displayName,
           description: n.description?.substring(0, 100),
@@ -550,11 +543,17 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
     },
 
     async n8n_list_ai_nodes() {
+      if (!catalog) {
+        return {
+          success: false,
+          error: "Node catalog not available - n8n sync may have failed",
+        };
+      }
       const aiNodes = catalog.getAINodes();
       return {
         success: true,
         count: aiNodes.length,
-        nodes: aiNodes.map(n => ({
+        nodes: aiNodes.map((n) => ({
           type: n.name,
           displayName: n.displayName,
           description: n.description?.substring(0, 100),
@@ -571,11 +570,17 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
     },
 
     async n8n_resync_catalog() {
+      if (!catalog) {
+        return {
+          success: false,
+          error: "Node catalog not available - cannot resync",
+        };
+      }
       await connector.resyncCatalog();
       const stats = catalog.getStats();
       return {
         success: true,
-        message: 'Catalog resynced',
+        message: "Catalog resynced",
         nodeCount: stats.totalNodes,
         lastSync: stats.lastSyncTime,
       };
@@ -583,11 +588,13 @@ function createToolHandlers(core: CoreOrchestrator): Record<string, ToolHandler>
 
     // Credentials
     async n8n_list_credentials(params) {
-      const credentials = await connector.listCredentials({ type: params.type });
+      const credentials = await connector.listCredentials({
+        type: params.type,
+      });
       return {
         success: true,
         count: credentials.length,
-        credentials: credentials.map(c => ({
+        credentials: credentials.map((c) => ({
           id: c.id,
           name: c.name,
           type: c.type,
@@ -608,8 +615,8 @@ export class MCPInterface {
   constructor() {
     this.server = new Server(
       {
-        name: 'n8n-copilot-mcp',
-        version: '3.0.0',
+        name: "n8n-copilot-mcp",
+        version: PROJECT_VERSION,
       },
       {
         capabilities: {
@@ -626,7 +633,7 @@ export class MCPInterface {
     // Wait for core to be ready
     const core = getCore();
     if (!core.isReady()) {
-      throw new Error('Core not ready - ensure initCore() was called first');
+      throw new Error("Core not ready - ensure initCore() was called first");
     }
 
     // Create handlers
@@ -646,7 +653,7 @@ export class MCPInterface {
         return {
           content: [
             {
-              type: 'text',
+              type: "text",
               text: JSON.stringify({ error: `Unknown tool: ${name}` }),
             },
           ],
@@ -658,7 +665,7 @@ export class MCPInterface {
         return {
           content: [
             {
-              type: 'text',
+              type: "text",
               text: JSON.stringify(result, null, 2),
             },
           ],
@@ -668,7 +675,7 @@ export class MCPInterface {
         return {
           content: [
             {
-              type: 'text',
+              type: "text",
               text: JSON.stringify({ error: error.message }),
             },
           ],
@@ -680,7 +687,7 @@ export class MCPInterface {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
 
-    logger.info('[MCP] Server started');
+    logger.info("[MCP] Server started");
   }
 }
 
