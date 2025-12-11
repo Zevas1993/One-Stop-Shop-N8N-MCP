@@ -276,6 +276,52 @@ Only nodes returned by this search are guaranteed to exist.`,
       properties: {},
     },
   },
+  {
+    name: "n8n_list_core_nodes",
+    description: "List all core nodes (essential workflow building blocks like Set, If, Switch, Merge, etc.)",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "n8n_list_transform_nodes",
+    description: "List all transform nodes (data transformation like Set, Code, Function, etc.)",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "n8n_list_input_nodes",
+    description: "List all input nodes (nodes that fetch data from external sources)",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "n8n_list_output_nodes",
+    description: "List all output nodes (nodes that send data to external destinations)",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "n8n_list_nodes_by_category",
+    description: "List nodes by codex category (AI, Development, Communication, Data & Storage, etc.)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        category: {
+          type: "string",
+          description: 'Category name (e.g., "AI", "Communication", "Core Nodes", "Data & Storage", "Development")',
+        },
+      },
+      required: ["category"],
+    },
+  },
 
   // === SYSTEM ===
   {
@@ -554,6 +600,134 @@ function createToolHandlers(
         success: true,
         count: aiNodes.length,
         nodes: aiNodes.map((n) => ({
+          type: n.name,
+          displayName: n.displayName,
+          description: n.description?.substring(0, 100),
+        })),
+      };
+    },
+
+    async n8n_list_core_nodes() {
+      if (!catalog) {
+        return {
+          success: false,
+          error: "Node catalog not available - n8n sync may have failed",
+        };
+      }
+      const allNodes = catalog.getAllNodes();
+      const coreNodes = allNodes.filter((n) =>
+        n.codex?.categories?.includes("Core Nodes")
+      );
+      return {
+        success: true,
+        count: coreNodes.length,
+        nodes: coreNodes.map((n) => ({
+          type: n.name,
+          displayName: n.displayName,
+          description: n.description?.substring(0, 100),
+        })),
+      };
+    },
+
+    async n8n_list_transform_nodes() {
+      if (!catalog) {
+        return {
+          success: false,
+          error: "Node catalog not available - n8n sync may have failed",
+        };
+      }
+      const allNodes = catalog.getAllNodes();
+      const transformNodes = allNodes.filter((n) =>
+        n.group.includes("transform")
+      );
+      return {
+        success: true,
+        count: transformNodes.length,
+        nodes: transformNodes.map((n) => ({
+          type: n.name,
+          displayName: n.displayName,
+          description: n.description?.substring(0, 100),
+        })),
+      };
+    },
+
+    async n8n_list_input_nodes() {
+      if (!catalog) {
+        return {
+          success: false,
+          error: "Node catalog not available - n8n sync may have failed",
+        };
+      }
+      const allNodes = catalog.getAllNodes();
+      const inputNodes = allNodes.filter((n) =>
+        n.group.includes("input")
+      );
+      return {
+        success: true,
+        count: inputNodes.length,
+        nodes: inputNodes.map((n) => ({
+          type: n.name,
+          displayName: n.displayName,
+          description: n.description?.substring(0, 100),
+        })),
+      };
+    },
+
+    async n8n_list_output_nodes() {
+      if (!catalog) {
+        return {
+          success: false,
+          error: "Node catalog not available - n8n sync may have failed",
+        };
+      }
+      const allNodes = catalog.getAllNodes();
+      const outputNodes = allNodes.filter((n) =>
+        n.group.includes("output")
+      );
+      return {
+        success: true,
+        count: outputNodes.length,
+        nodes: outputNodes.map((n) => ({
+          type: n.name,
+          displayName: n.displayName,
+          description: n.description?.substring(0, 100),
+        })),
+      };
+    },
+
+    async n8n_list_nodes_by_category(params) {
+      if (!catalog) {
+        return {
+          success: false,
+          error: "Node catalog not available - n8n sync may have failed",
+        };
+      }
+      const allNodes = catalog.getAllNodes();
+      const categoryNodes = allNodes.filter((n) =>
+        n.codex?.categories?.some(c =>
+          c.toLowerCase() === params.category.toLowerCase()
+        )
+      );
+
+      // Get all available categories for help
+      const availableCategories = new Set<string>();
+      allNodes.forEach(n => {
+        n.codex?.categories?.forEach(c => availableCategories.add(c));
+      });
+
+      if (categoryNodes.length === 0) {
+        return {
+          success: false,
+          error: `No nodes found in category "${params.category}"`,
+          availableCategories: Array.from(availableCategories).sort(),
+        };
+      }
+
+      return {
+        success: true,
+        category: params.category,
+        count: categoryNodes.length,
+        nodes: categoryNodes.map((n) => ({
           type: n.name,
           displayName: n.displayName,
           description: n.description?.substring(0, 100),
