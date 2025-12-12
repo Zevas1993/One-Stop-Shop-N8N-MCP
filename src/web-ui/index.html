@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>n8n Workflow Assistant - Powered by Local LLM</title>
+    <title>n8n MCP Server - Setup & Configuration</title>
     <style>
         * {
             margin: 0;
@@ -37,6 +37,346 @@
             font-size: 14px;
         }
 
+        /* ==================== SETUP WIZARD STYLES ==================== */
+        .setup-wizard-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .setup-wizard {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .wizard-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            border-radius: 16px 16px 0 0;
+        }
+
+        .wizard-header h2 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .wizard-header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .progress-bar {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .progress-step {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .progress-step.active {
+            background: white;
+            transform: scale(1.2);
+        }
+
+        .progress-step.completed {
+            background: #4ade80;
+        }
+
+        .wizard-content {
+            padding: 30px;
+        }
+
+        .wizard-step {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .wizard-step.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .step-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .step-description {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group .hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+
+        .form-group input.error {
+            border-color: #ef4444;
+        }
+
+        .form-group input.success {
+            border-color: #22c55e;
+        }
+
+        .test-connection-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            transition: all 0.2s ease;
+            margin-top: 10px;
+        }
+
+        .test-connection-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .test-connection-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .connection-status.success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .connection-status.error {
+            background: #fef2f2;
+            color: #991b1b;
+        }
+
+        .connection-status.testing {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .wizard-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 30px;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+            border-radius: 0 0 16px 16px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-skip {
+            background: transparent;
+            color: #888;
+            padding: 12px 16px;
+        }
+
+        .btn-skip:hover {
+            color: #333;
+        }
+
+        /* Welcome step specific styles */
+        .welcome-features {
+            display: grid;
+            gap: 15px;
+            margin: 25px 0;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .feature-text h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .feature-text p {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        /* Completion step styles */
+        .completion-summary {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        .summary-label {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .summary-value {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+        }
+
+        .summary-value.connected {
+            color: #22c55e;
+        }
+
+        .summary-value.skipped {
+            color: #f59e0b;
+        }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ccc;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ==================== MAIN APP STYLES ==================== */
         .container {
             flex: 1;
             max-width: 1200px;
@@ -73,7 +413,7 @@
 
         .status-card {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: 20px;
         }
 
@@ -125,23 +465,12 @@
         }
 
         @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        .message.user {
-            justify-content: flex-end;
-        }
-
-        .message.assistant {
-            justify-content: flex-start;
-        }
+        .message.user { justify-content: flex-end; }
+        .message.assistant { justify-content: flex-start; }
 
         .message-content {
             max-width: 70%;
@@ -186,14 +515,8 @@
             transition: background 0.3s ease;
         }
 
-        .input-group button:hover {
-            background: #5568d3;
-        }
-
-        .input-group button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
+        .input-group button:hover { background: #5568d3; }
+        .input-group button:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .section-title {
             font-size: 14px;
@@ -221,105 +544,6 @@
             border-left-color: #667eea;
         }
 
-        .setup-form {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-
-        .form-group label {
-            font-weight: 600;
-            color: #333;
-            font-size: 13px;
-        }
-
-        .form-group input,
-        .form-group select {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 13px;
-            font-family: inherit;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .button-group {
-            display: flex;
-            gap: 10px;
-        }
-
-        .button-group button {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: background 0.2s ease;
-            font-size: 13px;
-        }
-
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #5568d3;
-        }
-
-        .btn-secondary {
-            background: #f0f0f0;
-            color: #333;
-        }
-
-        .btn-secondary:hover {
-            background: #e0e0e0;
-        }
-
-        .alert {
-            padding: 12px;
-            border-radius: 4px;
-            margin-bottom: 10px;
-            font-size: 13px;
-        }
-
-        .alert-info {
-            background: #e3f2fd;
-            color: #1565c0;
-            border-left: 4px solid #1976d2;
-        }
-
-        .alert-success {
-            background: #e8f5e9;
-            color: #2e7d32;
-            border-left: 4px solid #43a047;
-        }
-
-        .alert-warning {
-            background: #fff3e0;
-            color: #e65100;
-            border-left: 4px solid #fb8c00;
-        }
-
-        .alert-error {
-            background: #ffebee;
-            color: #c62828;
-            border-left: 4px solid #e53935;
-        }
-
         .badge {
             display: inline-block;
             padding: 4px 8px;
@@ -329,30 +553,36 @@
             margin-left: 5px;
         }
 
-        .badge-success {
-            background: #e8f5e9;
-            color: #2e7d32;
+        .badge-success { background: #e8f5e9; color: #2e7d32; }
+        .badge-warning { background: #fff3e0; color: #e65100; }
+
+        .alert {
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 13px;
         }
 
-        .badge-warning {
-            background: #fff3e0;
-            color: #e65100;
+        .alert-info { background: #e3f2fd; color: #1565c0; border-left: 4px solid #1976d2; }
+        .alert-success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #43a047; }
+        .alert-warning { background: #fff3e0; color: #e65100; border-left: 4px solid #fb8c00; }
+        .alert-error { background: #ffebee; color: #c62828; border-left: 4px solid #e53935; }
+
+        .reconfigure-btn {
+            background: #f0f0f0;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #666;
+            transition: all 0.2s ease;
+            margin-top: 10px;
         }
 
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .reconfigure-btn:hover {
+            background: #e0e0e0;
+            color: #333;
         }
 
         .footer {
@@ -365,207 +595,547 @@
         }
 
         @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-
-            .sidebar {
-                width: 100%;
-                max-height: none;
-            }
-
-            .status-card {
-                grid-template-columns: 1fr;
-            }
-
-            .message-content {
-                max-width: 90%;
-            }
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; max-height: none; }
+            .status-card { grid-template-columns: 1fr; }
+            .message-content { max-width: 90%; }
+            .setup-wizard { margin: 10px; max-height: 95vh; }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🤖 n8n Workflow Assistant</h1>
-        <p>Design and deploy n8n workflows using conversational AI</p>
-    </div>
+    <!-- ==================== SETUP WIZARD ==================== -->
+    <div class="setup-wizard-overlay" id="setupWizard" style="display: none;">
+        <div class="setup-wizard">
+            <div class="wizard-header">
+                <h2>🚀 n8n MCP Server Setup</h2>
+                <p>Let's get you connected in just a few steps</p>
+                <div class="progress-bar">
+                    <div class="progress-step active" data-step="1"></div>
+                    <div class="progress-step" data-step="2"></div>
+                    <div class="progress-step" data-step="3"></div>
+                    <div class="progress-step" data-step="4"></div>
+                </div>
+            </div>
 
-    <div class="container">
-        <div class="sidebar">
-            <div id="setupSection">
-                <div class="section-title">⚙️ Setup</div>
-                <div class="setup-form" id="setupForm" style="display: none;">
+            <div class="wizard-content">
+                <!-- Step 1: Welcome -->
+                <div class="wizard-step active" data-step="1">
+                    <div class="step-title">Welcome to n8n MCP Server!</div>
+                    <div class="step-description">
+                        This server connects AI assistants (like Claude) to your n8n instance,
+                        enabling powerful workflow automation through natural language.
+                    </div>
+                    <div class="welcome-features">
+                        <div class="feature-item">
+                            <div class="feature-icon">🔍</div>
+                            <div class="feature-text">
+                                <h4>Discover 800+ Nodes</h4>
+                                <p>Search and explore all available n8n nodes with full documentation</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">🔧</div>
+                            <div class="feature-text">
+                                <h4>Create Workflows</h4>
+                                <p>Build and deploy workflows directly from AI conversations</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">✅</div>
+                            <div class="feature-text">
+                                <h4>Validate & Test</h4>
+                                <p>Automatically validate workflows before deployment</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: n8n API Configuration -->
+                <div class="wizard-step" data-step="2">
+                    <div class="step-title">Connect to n8n</div>
+                    <div class="step-description">
+                        Enter your n8n instance details. You'll need an API key from
+                        n8n Settings → API → Create API Key.
+                    </div>
                     <div class="form-group">
                         <label>n8n API URL</label>
-                        <input type="text" id="apiUrl" placeholder="http://localhost:5678" value="http://localhost:5678">
+                        <input type="text" id="wizardApiUrl" placeholder="http://localhost:5678" value="http://host.docker.internal:5678">
+                        <div class="hint">Use <code>host.docker.internal</code> to connect to n8n running on your host machine</div>
                     </div>
                     <div class="form-group">
                         <label>API Key</label>
-                        <input type="password" id="apiKey" placeholder="Your n8n API key">
+                        <input type="password" id="wizardApiKey" placeholder="n8n_api_...">
+                        <div class="hint">Found in n8n → Settings → API → Create API Key</div>
                     </div>
-                    <div class="button-group">
-                        <button class="btn-primary" onclick="configureN8n()">Configure</button>
-                        <button class="btn-secondary" onclick="toggleSetup()">Cancel</button>
+                    <button class="test-connection-btn" onclick="testN8nConnection()">
+                        <span id="testN8nBtnText">🔌 Test Connection</span>
+                    </button>
+                    <div id="n8nConnectionStatus"></div>
+                </div>
+
+                <!-- Step 3: n8n Login (Optional) -->
+                <div class="wizard-step" data-step="3">
+                    <div class="step-title">n8n Login (Optional)</div>
+                    <div class="step-description">
+                        Providing your n8n login credentials enables access to the complete node catalog
+                        with full schema information. This step is optional.
+                    </div>
+                    <div class="form-group">
+                        <label>Email / Username</label>
+                        <input type="text" id="wizardUsername" placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="wizardPassword" placeholder="Your n8n password">
+                        <div class="hint">⚠️ MFA-enabled accounts are not supported</div>
+                    </div>
+                    <button class="test-connection-btn" onclick="testN8nLogin()">
+                        <span id="testLoginBtnText">🔐 Test Login</span>
+                    </button>
+                    <div id="loginConnectionStatus"></div>
+                </div>
+
+                <!-- Step 4: Completion -->
+                <div class="wizard-step" data-step="4">
+                    <div class="step-title">🎉 Setup Complete!</div>
+                    <div class="step-description">
+                        Your n8n MCP Server is ready to use. Here's a summary of your configuration:
+                    </div>
+                    <div class="completion-summary">
+                        <div class="summary-item">
+                            <span class="summary-label">n8n API</span>
+                            <span class="summary-value" id="summaryN8nApi">Not configured</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">n8n Login</span>
+                            <span class="summary-value" id="summaryN8nLogin">Skipped</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Node Catalog</span>
+                            <span class="summary-value" id="summaryNodeCount">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="step-description" style="margin-top: 20px;">
+                        You can now use Claude Desktop or Open WebUI to interact with your n8n workflows!
                     </div>
                 </div>
-                <button class="btn-primary" id="setupButton" onclick="toggleSetup()" style="width: 100%;">Configure n8n</button>
             </div>
 
-            <div style="margin-top: 20px;">
-                <div class="section-title">📊 System Info</div>
-                <div id="hardwareInfo" style="font-size: 12px; color: #666;">
-                    <p>Loading...</p>
-                </div>
-            </div>
-
-            <div style="margin-top: 20px;">
-                <div class="section-title">🤖 Current LLM</div>
-                <div id="llmInfo" style="font-size: 12px; color: #666;">
-                    <p>Loading...</p>
-                </div>
-            </div>
-
-            <div style="margin-top: 20px;">
-                <div class="section-title">📋 Workflows</div>
-                <div id="workflowsList">
-                    <p style="font-size: 12px; color: #999;">No workflows yet</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="main">
-            <div class="card">
-                <div class="status-card" id="statusCard">
-                    <div class="status-item">
-                        <label>Status</label>
-                        <div class="value" id="statusValue">Initializing...</div>
-                    </div>
-                    <div class="status-item">
-                        <label>Configured</label>
-                        <div class="value" id="configuredValue">Checking...</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card chat-container">
-                <h3 style="margin-bottom: 15px;">💬 Conversation</h3>
-                <div class="messages" id="messages"></div>
-                <div class="input-group">
-                    <input
-                        type="text"
-                        id="messageInput"
-                        placeholder="Describe the workflow you want to create..."
-                        onkeypress="handleKeyPress(event)"
-                    >
-                    <button onclick="sendMessage()" id="sendBtn">Send</button>
+            <div class="wizard-footer">
+                <button class="btn btn-secondary" id="wizardBackBtn" onclick="wizardBack()" style="visibility: hidden;">
+                    ← Back
+                </button>
+                <div>
+                    <button class="btn btn-skip" id="wizardSkipBtn" onclick="wizardSkip()" style="display: none;">
+                        Skip
+                    </button>
+                    <button class="btn btn-primary" id="wizardNextBtn" onclick="wizardNext()">
+                        Get Started →
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="footer">
-        <p>🚀 n8n Workflow Assistant - Powered by Local Nano LLM | © 2025</p>
+    <!-- ==================== MAIN APPLICATION ==================== -->
+    <div id="mainApp" style="display: none; flex-direction: column; min-height: 100vh;">
+        <div class="header">
+            <h1>🤖 n8n Workflow Assistant</h1>
+            <p>Design and deploy n8n workflows using conversational AI</p>
+        </div>
+
+        <div class="container">
+            <div class="sidebar">
+                <div>
+                    <div class="section-title">⚙️ Configuration</div>
+                    <div id="configStatus" style="font-size: 12px; color: #666;">
+                        <p>Loading...</p>
+                    </div>
+                    <button class="reconfigure-btn" onclick="showSetupWizard()">
+                        🔧 Reconfigure
+                    </button>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <div class="section-title">📊 System Info</div>
+                    <div id="hardwareInfo" style="font-size: 12px; color: #666;">
+                        <p>Loading...</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <div class="section-title">🤖 Nano LLM</div>
+                    <div id="llmInfo" style="font-size: 12px; color: #666;">
+                        <p>Loading...</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <div class="section-title">📋 Workflows</div>
+                    <div id="workflowsList">
+                        <p style="font-size: 12px; color: #999;">No workflows yet</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="main">
+                <div class="card">
+                    <div class="status-card" id="statusCard">
+                        <div class="status-item">
+                            <label>Status</label>
+                            <div class="value" id="statusValue">Initializing...</div>
+                        </div>
+                        <div class="status-item">
+                            <label>n8n Connected</label>
+                            <div class="value" id="n8nConnectedValue">Checking...</div>
+                        </div>
+                        <div class="status-item">
+                            <label>Nodes Available</label>
+                            <div class="value" id="nodeCountValue">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card chat-container">
+                    <h3 style="margin-bottom: 15px;">💬 Conversation</h3>
+                    <div class="messages" id="messages"></div>
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            id="messageInput"
+                            placeholder="Describe the workflow you want to create..."
+                            onkeypress="handleKeyPress(event)"
+                        >
+                        <button onclick="sendMessage()" id="sendBtn">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>🚀 n8n MCP Server v3.0.0 - Powered by Local Nano LLM | © 2025</p>
+        </div>
     </div>
 
     <script>
-        let isInitialized = false;
-        let isConfigured = false;
+        // ==================== STATE ====================
+        let currentStep = 1;
+        const totalSteps = 4;
+        let setupState = {
+            n8nApiConfigured: false,
+            n8nLoginConfigured: false,
+            n8nApiUrl: '',
+            n8nApiKey: '',
+            n8nUsername: '',
+            n8nPassword: '',
+            nodeCount: 0
+        };
 
-        // Initialize on page load
-        window.addEventListener('load', () => {
-            initializeUI();
+        // ==================== INITIALIZATION ====================
+        window.addEventListener('load', async () => {
+            try {
+                const res = await fetch('/api/setup/status');
+                const data = await res.json();
+
+                if (data.configured) {
+                    // Already configured - show main app
+                    showMainApp();
+                    initializeMainApp(data);
+                } else {
+                    // Not configured - show setup wizard
+                    showSetupWizard();
+                }
+            } catch (error) {
+                console.error('Failed to check setup status:', error);
+                // If API fails, show setup wizard
+                showSetupWizard();
+            }
         });
 
-        async function initializeUI() {
+        // ==================== WIZARD NAVIGATION ====================
+        function showSetupWizard() {
+            document.getElementById('setupWizard').style.display = 'flex';
+            document.getElementById('mainApp').style.display = 'none';
+            currentStep = 1;
+            updateWizardUI();
+        }
+
+        function showMainApp() {
+            document.getElementById('setupWizard').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'flex';
+        }
+
+        function updateWizardUI() {
+            // Update progress bar
+            document.querySelectorAll('.progress-step').forEach((step, index) => {
+                step.classList.remove('active', 'completed');
+                if (index + 1 < currentStep) {
+                    step.classList.add('completed');
+                } else if (index + 1 === currentStep) {
+                    step.classList.add('active');
+                }
+            });
+
+            // Show/hide steps
+            document.querySelectorAll('.wizard-step').forEach((step, index) => {
+                step.classList.toggle('active', index + 1 === currentStep);
+            });
+
+            // Update buttons
+            const backBtn = document.getElementById('wizardBackBtn');
+            const skipBtn = document.getElementById('wizardSkipBtn');
+            const nextBtn = document.getElementById('wizardNextBtn');
+
+            backBtn.style.visibility = currentStep > 1 ? 'visible' : 'hidden';
+
+            // Skip button only on optional steps (step 3)
+            skipBtn.style.display = currentStep === 3 ? 'inline-block' : 'none';
+
+            // Update next button text
+            if (currentStep === 1) {
+                nextBtn.textContent = 'Get Started →';
+            } else if (currentStep === 2) {
+                nextBtn.textContent = setupState.n8nApiConfigured ? 'Continue →' : 'Test & Continue →';
+                nextBtn.disabled = !setupState.n8nApiConfigured;
+            } else if (currentStep === 3) {
+                nextBtn.textContent = 'Continue →';
+                nextBtn.disabled = false;
+            } else if (currentStep === 4) {
+                nextBtn.textContent = 'Start Using MCP Server →';
+                updateCompletionSummary();
+            }
+        }
+
+        function wizardNext() {
+            if (currentStep === 2 && !setupState.n8nApiConfigured) {
+                testN8nConnection();
+                return;
+            }
+
+            if (currentStep === 4) {
+                completeSetup();
+                return;
+            }
+
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateWizardUI();
+            }
+        }
+
+        function wizardBack() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateWizardUI();
+            }
+        }
+
+        function wizardSkip() {
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateWizardUI();
+            }
+        }
+
+        // ==================== CONNECTION TESTING ====================
+        async function testN8nConnection() {
+            const apiUrl = document.getElementById('wizardApiUrl').value.trim();
+            const apiKey = document.getElementById('wizardApiKey').value.trim();
+
+            if (!apiUrl || !apiKey) {
+                showConnectionStatus('n8nConnectionStatus', 'error', 'Please enter both API URL and API Key');
+                return;
+            }
+
+            const btn = document.getElementById('testN8nBtnText');
+            btn.innerHTML = '<span class="spinner"></span> Testing...';
+
+            showConnectionStatus('n8nConnectionStatus', 'testing', 'Connecting to n8n...');
+
             try {
-                // Load setup status
-                const setupRes = await fetch('/api/local-llm/setup');
-                const setupData = await setupRes.json();
+                const res = await fetch('/api/setup/test-n8n', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiUrl, apiKey })
+                });
 
-                isConfigured = setupData.isConfigured;
-                updateStatusUI(setupData);
+                const data = await res.json();
 
-                // Load conversation history
+                if (data.success) {
+                    setupState.n8nApiConfigured = true;
+                    setupState.n8nApiUrl = apiUrl;
+                    setupState.n8nApiKey = apiKey;
+                    setupState.nodeCount = data.nodeCount || 0;
+
+                    showConnectionStatus('n8nConnectionStatus', 'success',
+                        `✓ Connected! Found ${data.nodeCount || 'many'} nodes`);
+                    document.getElementById('wizardApiUrl').classList.add('success');
+                    document.getElementById('wizardApiKey').classList.add('success');
+                } else {
+                    showConnectionStatus('n8nConnectionStatus', 'error',
+                        `✗ Connection failed: ${data.error || 'Unknown error'}`);
+                    document.getElementById('wizardApiUrl').classList.add('error');
+                }
+            } catch (error) {
+                showConnectionStatus('n8nConnectionStatus', 'error',
+                    `✗ Network error: ${error.message}`);
+            }
+
+            btn.innerHTML = '🔌 Test Connection';
+            updateWizardUI();
+        }
+
+        async function testN8nLogin() {
+            const username = document.getElementById('wizardUsername').value.trim();
+            const password = document.getElementById('wizardPassword').value.trim();
+
+            if (!username || !password) {
+                showConnectionStatus('loginConnectionStatus', 'error', 'Please enter both username and password');
+                return;
+            }
+
+            const btn = document.getElementById('testLoginBtnText');
+            btn.innerHTML = '<span class="spinner"></span> Testing...';
+
+            showConnectionStatus('loginConnectionStatus', 'testing', 'Authenticating...');
+
+            try {
+                const res = await fetch('/api/setup/test-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        apiUrl: setupState.n8nApiUrl,
+                        username,
+                        password
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    setupState.n8nLoginConfigured = true;
+                    setupState.n8nUsername = username;
+                    setupState.n8nPassword = password;
+
+                    showConnectionStatus('loginConnectionStatus', 'success',
+                        '✓ Login successful! Full node catalog access enabled');
+                } else {
+                    showConnectionStatus('loginConnectionStatus', 'error',
+                        `✗ Login failed: ${data.error || 'Invalid credentials'}`);
+                }
+            } catch (error) {
+                showConnectionStatus('loginConnectionStatus', 'error',
+                    `✗ Network error: ${error.message}`);
+            }
+
+            btn.innerHTML = '🔐 Test Login';
+        }
+
+        function showConnectionStatus(elementId, type, message) {
+            const element = document.getElementById(elementId);
+            element.className = `connection-status ${type}`;
+            element.textContent = message;
+            element.style.display = 'flex';
+        }
+
+        // ==================== SETUP COMPLETION ====================
+        function updateCompletionSummary() {
+            document.getElementById('summaryN8nApi').innerHTML = setupState.n8nApiConfigured
+                ? `<span class="connected">✓ Connected</span>`
+                : '<span>Not configured</span>';
+
+            document.getElementById('summaryN8nLogin').innerHTML = setupState.n8nLoginConfigured
+                ? `<span class="connected">✓ Configured</span>`
+                : '<span class="skipped">⊘ Skipped</span>';
+
+            document.getElementById('summaryNodeCount').textContent =
+                setupState.nodeCount > 0 ? `${setupState.nodeCount} nodes` : 'Loading...';
+        }
+
+        async function completeSetup() {
+            const nextBtn = document.getElementById('wizardNextBtn');
+            nextBtn.disabled = true;
+            nextBtn.innerHTML = '<span class="spinner"></span> Saving...';
+
+            try {
+                const res = await fetch('/api/setup/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        n8nApiUrl: setupState.n8nApiUrl,
+                        n8nApiKey: setupState.n8nApiKey,
+                        n8nUsername: setupState.n8nUsername,
+                        n8nPassword: setupState.n8nPassword
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showMainApp();
+                    initializeMainApp(data);
+                } else {
+                    alert('Failed to save configuration: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Network error: ' + error.message);
+            }
+
+            nextBtn.disabled = false;
+            nextBtn.textContent = 'Start Using MCP Server →';
+        }
+
+        // ==================== MAIN APP FUNCTIONS ====================
+        async function initializeMainApp(setupData) {
+            try {
+                // Load setup status if not provided
+                if (!setupData) {
+                    const res = await fetch('/api/setup/status');
+                    setupData = await res.json();
+                }
+
+                updateMainAppUI(setupData);
                 loadConversation();
-
-                // Load workflows
                 loadWorkflows();
-
-                isInitialized = true;
             } catch (error) {
                 console.error('Initialization error:', error);
                 addSystemMessage('⚠️ Failed to initialize. Please refresh the page.');
             }
         }
 
-        function updateStatusUI(setupData) {
+        function updateMainAppUI(data) {
             document.getElementById('statusValue').textContent = 'Ready';
-            document.getElementById('configuredValue').textContent = isConfigured ? '✅ Yes' : '❌ No';
+            document.getElementById('n8nConnectedValue').textContent = data.n8nConnected ? '✅ Yes' : '❌ No';
+            document.getElementById('nodeCountValue').textContent = data.nodeCount || '--';
+
+            // Update config status
+            document.getElementById('configStatus').innerHTML = `
+                <p><strong>n8n API:</strong> ${data.n8nConnected ? '✅ Connected' : '❌ Not connected'}</p>
+                <p><strong>URL:</strong> ${data.n8nApiUrl || 'Not set'}</p>
+            `;
 
             // Update hardware info
-            const hw = setupData.hardware;
-            document.getElementById('hardwareInfo').innerHTML = `
-                <p><strong>CPU:</strong> ${hw.cpuCores} cores</p>
-                <p><strong>RAM:</strong> ${hw.ramGbytes}GB</p>
-                <p><strong>GPU:</strong> ${hw.hasGpu ? 'Yes' : 'No'}</p>
-                <p><strong>OS:</strong> ${hw.osType}</p>
-            `;
+            if (data.hardware) {
+                const hw = data.hardware;
+                document.getElementById('hardwareInfo').innerHTML = `
+                    <p><strong>CPU:</strong> ${hw.cpuCores} cores</p>
+                    <p><strong>RAM:</strong> ${hw.ramGbytes}GB</p>
+                    <p><strong>GPU:</strong> ${hw.hasGpu ? 'Yes' : 'No'}</p>
+                    <p><strong>OS:</strong> ${hw.osType}</p>
+                `;
+            }
 
             // Update LLM info
-            const llm = setupData.selectedLLM;
-            document.getElementById('llmInfo').innerHTML = `
-                <p><strong>${llm.displayName}</strong></p>
-                <p style="font-size: 11px; color: #999;">
-                    ${llm.modelSize}<br>
-                    ${llm.speed} • ${llm.quality}
-                </p>
-            `;
-
-            // Show setup warnings if needed
-            if (setupData.systemValidation.warnings.length > 0) {
-                const warning = setupData.systemValidation.warnings[0];
-                const alert = document.createElement('div');
-                alert.className = 'alert alert-warning';
-                alert.textContent = '⚠️ ' + warning;
-                document.querySelector('.card').prepend(alert);
-            }
-        }
-
-        function toggleSetup() {
-            const form = document.getElementById('setupForm');
-            const btn = document.getElementById('setupButton');
-            form.style.display = form.style.display === 'none' ? 'flex' : 'none';
-            btn.style.display = btn.style.display === 'none' ? 'block' : 'none';
-        }
-
-        async function configureN8n() {
-            const apiUrl = document.getElementById('apiUrl').value;
-            const apiKey = document.getElementById('apiKey').value;
-
-            if (!apiUrl || !apiKey) {
-                alert('Please enter both API URL and Key');
-                return;
-            }
-
-            try {
-                const res = await fetch('/api/local-llm/configure', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ n8nApiUrl: apiUrl, n8nApiKey: apiKey })
-                });
-
-                const data = await res.json();
-
-                if (data.success) {
-                    isConfigured = true;
-                    document.getElementById('configuredValue').textContent = '✅ Yes';
-                    addSystemMessage('✅ ' + data.message);
-                    toggleSetup();
-                } else {
-                    addSystemMessage('❌ Configuration failed: ' + data.message);
-                }
-            } catch (error) {
-                addSystemMessage('❌ Error: ' + error.message);
+            if (data.selectedLLM) {
+                const llm = data.selectedLLM;
+                document.getElementById('llmInfo').innerHTML = `
+                    <p><strong>${llm.displayName || 'Nano LLM'}</strong></p>
+                    <p style="font-size: 11px; color: #999;">
+                        ${llm.modelSize || 'Auto-selected'}<br>
+                        ${llm.speed || 'Fast'} • ${llm.quality || 'Good'}
+                    </p>
+                `;
             }
         }
 
@@ -575,11 +1145,9 @@
 
             if (!message) return;
 
-            // Add user message to UI
             addMessage('user', message);
             input.value = '';
 
-            // Disable send button
             const btn = document.getElementById('sendBtn');
             btn.disabled = true;
 
@@ -619,7 +1187,7 @@
 
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.innerHTML = content; // Allow HTML formatting
+            contentDiv.innerHTML = content;
 
             messageDiv.appendChild(contentDiv);
             messages.appendChild(messageDiv);
@@ -643,9 +1211,9 @@
                 const res = await fetch('/api/local-llm/conversation');
                 const data = await res.json();
 
-                if (data.messages.length === 0) {
+                if (data.messages && data.messages.length === 0) {
                     addSystemMessage('👋 Start by telling me about your workflow idea!');
-                } else {
+                } else if (data.messages) {
                     data.messages.forEach(msg => {
                         addMessage(msg.role, msg.content);
                     });
@@ -663,7 +1231,7 @@
                 const list = document.getElementById('workflowsList');
                 list.innerHTML = '';
 
-                if (data.workflows.length === 0) {
+                if (!data.workflows || data.workflows.length === 0) {
                     list.innerHTML = '<p style="font-size: 12px; color: #999;">No workflows yet</p>';
                     return;
                 }

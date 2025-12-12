@@ -1,0 +1,54 @@
+# docker-compose.desktop.yml
+# Optimized for Docker Desktop - Pull and Run with Visual Setup Wizard
+#
+# Quick Start:
+#   1. docker compose -f docker-compose.desktop.yml up -d
+#   2. Open http://localhost:3000 in your browser
+#   3. Complete the setup wizard to configure n8n connection
+#
+# No environment variables required - all configuration is done via the web UI
+#
+version: '3.8'
+
+services:
+  n8n-mcp:
+    image: ghcr.io/zevas1993/one-stop-shop-n8n-mcp:latest
+    container_name: n8n-mcp-server
+
+    # Port mapping - Web UI and API
+    ports:
+      - "3000:3000"
+
+    # Environment - minimal config, rest via web UI
+    environment:
+      # Server mode - HTTP for web UI
+      MCP_MODE: http
+      PORT: 3000
+      NODE_ENV: production
+
+      # Logging
+      LOG_LEVEL: info
+
+    # Persistent storage for configuration and data
+    volumes:
+      - n8n-mcp-data:/app/data
+
+    # Enable connection to host machine services (n8n, Ollama)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Auto-restart on failure
+    restart: unless-stopped
+
+    # Health check for Docker Desktop status indicator
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# Named volume for persistent data
+volumes:
+  n8n-mcp-data:
+    driver: local

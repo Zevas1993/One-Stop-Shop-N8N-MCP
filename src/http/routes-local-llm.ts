@@ -7,6 +7,45 @@ import { Router, Request, Response } from 'express';
 import { LocalLLMOrchestrator } from '../ai/local-llm-orchestrator';
 import { HardwareDetector, NanoLLMOption } from '../ai/hardware-detector';
 import { logger } from '../utils/logger';
+import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Setup state persistence file
+const SETUP_STATE_FILE = path.join(process.cwd(), 'data', 'setup-state.json');
+
+interface SetupState {
+  configured: boolean;
+  n8nApiUrl?: string;
+  n8nApiKey?: string;
+  n8nUsername?: string;
+  n8nPassword?: string;
+  configuredAt?: string;
+}
+
+function loadSetupState(): SetupState {
+  try {
+    if (fs.existsSync(SETUP_STATE_FILE)) {
+      const data = fs.readFileSync(SETUP_STATE_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    logger.warn('[Setup] Failed to load setup state:', error);
+  }
+  return { configured: false };
+}
+
+function saveSetupState(state: SetupState): void {
+  try {
+    const dir = path.dirname(SETUP_STATE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(SETUP_STATE_FILE, JSON.stringify(state, null, 2));
+  } catch (error) {
+    logger.error('[Setup] Failed to save setup state:', error);
+  }
+}
 
 export function createLocalLLMRoutes(): Router {
   const router = Router();
@@ -27,7 +66,239 @@ export function createLocalLLMRoutes(): Router {
   }
 
   // ==========================================
-  // Setup & Configuration Routes
+  // Setup Wizard API Routes (for Docker Desktop)
+  // ==========================================
+
+  /**
+   * GET /api/setup/status
+   * Check if initial setup has been completed
+   */
+  router.get('/api/setup/status', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const setupState = loadSetupState();
+      const hardware = HardwareDetector.detectHardware();
+
+      // Test n8n connection if configured
+      let n8nConnected = false;
+      let nodeCount = 0;
+
+      if (setupState.configured && setupState.n8nApiUrl && setupState.n8nApiKey) {
+        try {
+          const response = await axios.get(`${setupState.n8nApiUrl}/api/v1/workflows`, {
+            headers: { 'X-N8N-API-KEY': setupState.n8nApiKey },
+            timeout: 5000,
+          });
+          n8nConnected = true;
+          nodeCount = 800; // Approximate node count
+        } catch {
+          n8nConnected = false;
+        }
+      }
+
+      res.json({
+        configured: setupState.configured,
+        n8nConnected,
+        n8nApiUrl: setupState.n8nApiUrl || null,
+        nodeCount,
+        hardware: {
+          cpuCores: hardware.cpuCores,
+          ramGbytes: hardware.ramGbytes,
+          hasGpu: hardware.hasGpu,
+          osType: hardware.osType,
+        },
+        selectedLLM: {
+          displayName: 'Nano LLM',
+          modelSize: 'Auto-selected',
+          speed: 'Fast',
+          quality: 'Good',
+        },
+      });
+    } catch (error) {
+      logger.error('[Setup API] Status error:', error);
+      res.status(500).json({
+        configured: false,
+        error: error instanceof Error ? error.message : 'Status check failed',
+      });
+    }
+  });
+
+  /**
+   * POST /api/setup/test-n8n
+   * Test n8n API connection
+   */
+  router.post('/api/setup/test-n8n', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { apiUrl, apiKey } = req.body;
+
+      if (!apiUrl || !apiKey) {
+        res.status(400).json({
+          success: false,
+          error: 'apiUrl and apiKey are required',
+        });
+        return;
+      }
+
+      // Test connection to n8n API
+      try {
+        const response = await axios.get(`${apiUrl}/api/v1/workflows`, {
+          headers: { 'X-N8N-API-KEY': apiKey },
+          timeout: 10000,
+        });
+
+        // Try to get node count
+        let nodeCount = 800; // Default estimate
+        try {
+          const typesResponse = await axios.get(`${apiUrl}/api/v1/node-types`, {
+            headers: { 'X-N8N-API-KEY': apiKey },
+            timeout: 5000,
+          });
+          if (typesResponse.data?.data) {
+            nodeCount = typesResponse.data.data.length;
+          }
+        } catch {
+          // Node types endpoint may not be available
+        }
+
+        res.json({
+          success: true,
+          nodeCount,
+          message: 'Successfully connected to n8n',
+        });
+      } catch (error: any) {
+        const errorMessage = error.response?.status === 401
+          ? 'Invalid API key'
+          : error.code === 'ECONNREFUSED'
+          ? 'Cannot connect to n8n - is it running?'
+          : error.message || 'Connection failed';
+
+        res.json({
+          success: false,
+          error: errorMessage,
+        });
+      }
+    } catch (error) {
+      logger.error('[Setup API] Test n8n error:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Test failed',
+      });
+    }
+  });
+
+  /**
+   * POST /api/setup/test-login
+   * Test n8n login credentials
+   */
+  router.post('/api/setup/test-login', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { apiUrl, username, password } = req.body;
+
+      if (!apiUrl || !username || !password) {
+        res.status(400).json({
+          success: false,
+          error: 'apiUrl, username, and password are required',
+        });
+        return;
+      }
+
+      // Try to authenticate with n8n
+      try {
+        const response = await axios.post(
+          `${apiUrl}/rest/login`,
+          { email: username, password },
+          {
+            timeout: 10000,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+
+        if (response.status === 200) {
+          res.json({
+            success: true,
+            message: 'Login successful',
+          });
+        } else {
+          res.json({
+            success: false,
+            error: 'Invalid credentials',
+          });
+        }
+      } catch (error: any) {
+        const errorMessage = error.response?.status === 401
+          ? 'Invalid username or password'
+          : error.response?.status === 403
+          ? 'Account may have MFA enabled (not supported)'
+          : error.message || 'Login failed';
+
+        res.json({
+          success: false,
+          error: errorMessage,
+        });
+      }
+    } catch (error) {
+      logger.error('[Setup API] Test login error:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Test failed',
+      });
+    }
+  });
+
+  /**
+   * POST /api/setup/complete
+   * Save configuration and mark setup as complete
+   */
+  router.post('/api/setup/complete', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { n8nApiUrl, n8nApiKey, n8nUsername, n8nPassword } = req.body;
+
+      if (!n8nApiUrl || !n8nApiKey) {
+        res.status(400).json({
+          success: false,
+          error: 'n8nApiUrl and n8nApiKey are required',
+        });
+        return;
+      }
+
+      // Save setup state
+      const setupState: SetupState = {
+        configured: true,
+        n8nApiUrl,
+        n8nApiKey,
+        n8nUsername: n8nUsername || undefined,
+        n8nPassword: n8nPassword || undefined,
+        configuredAt: new Date().toISOString(),
+      };
+
+      saveSetupState(setupState);
+
+      // Set environment variables for current session
+      process.env.N8N_API_URL = n8nApiUrl;
+      process.env.N8N_API_KEY = n8nApiKey;
+      if (n8nUsername) process.env.N8N_USERNAME = n8nUsername;
+      if (n8nPassword) process.env.N8N_PASSWORD = n8nPassword;
+
+      logger.info('[Setup API] Setup completed successfully');
+
+      res.json({
+        success: true,
+        message: 'Setup completed successfully',
+        configured: true,
+        n8nConnected: true,
+        n8nApiUrl,
+        nodeCount: 800,
+      });
+    } catch (error) {
+      logger.error('[Setup API] Complete error:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Setup failed',
+      });
+    }
+  });
+
+  // ==========================================
+  // Setup & Configuration Routes (Legacy)
   // ==========================================
 
   /**

@@ -1,48 +1,167 @@
-# Docker Desktop Setup Guide - Local Nano LLM + n8n
+# Docker Desktop Setup Guide - n8n MCP Server
 
-**Date:** October 31, 2025
+**Date:** December 2025
 **Status:** ✅ Complete & Ready for Deployment
 **Target Users:** End users with Docker Desktop (no development knowledge required)
 
 ---
 
-## Quick Start (< 5 minutes)
+## Quick Start (3 Steps)
 
 ### Prerequisites
-- Docker Desktop installed ([download here](https://www.docker.com/products/docker-desktop))
-- (Optional) n8n instance running locally or remotely
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) installed and running
+- n8n instance running (local or remote) with API access enabled
 
-### Step 1: Clone Repository
+### Step 1: Download Files
+
+**Option A: Clone Repository**
 ```bash
-git clone https://github.com/your-org/n8n-mcp.git
-cd n8n-mcp
+git clone https://github.com/Zevas1993/One-Stop-Shop-N8N-MCP.git
+cd One-Stop-Shop-N8N-MCP
 ```
 
-### Step 2: Start Docker Compose
+**Option B: Download Just What You Need**
 ```bash
-docker compose up -d
+# Download the Docker Compose file and startup script
+curl -O https://raw.githubusercontent.com/Zevas1993/One-Stop-Shop-N8N-MCP/main/docker-compose.desktop.yml
+curl -O https://raw.githubusercontent.com/Zevas1993/One-Stop-Shop-N8N-MCP/main/start.sh
+chmod +x start.sh
 ```
 
-### Step 3: Access Web UI
-Open your browser and go to:
-```
-http://localhost:3000
+### Step 2: Start the Server
+
+**macOS / Linux:**
+```bash
+./start.sh
 ```
 
-### Step 4: Configure n8n (Optional)
-If you want to deploy workflows directly:
-1. Click "Configure n8n" button
-2. Enter your n8n API URL (e.g., `http://localhost:5678`)
-3. Enter your n8n API Key
-4. Click "Configure"
-
-### Step 5: Start Chatting!
-Describe your workflow idea:
-```
-"I want to send Slack notifications when Airtable records are updated"
+**Windows:**
+```batch
+start.bat
 ```
 
-That's it! The local LLM will help you design and deploy workflows.
+**Or manually:**
+```bash
+docker compose -f docker-compose.desktop.yml up -d
+```
+
+### Step 3: Complete Setup Wizard
+
+1. Open http://localhost:3000 in your browser
+2. Follow the setup wizard:
+   - **Step 1:** Welcome - Click "Get Started"
+   - **Step 2:** Enter your n8n API URL and API Key
+   - **Step 3:** (Optional) Enter n8n login credentials
+   - **Step 4:** Click "Start Using MCP Server"
+
+That's it! Your MCP server is now ready to use with Claude Desktop or Open WebUI.
+
+---
+
+## Setup Wizard Screenshots
+
+### Welcome Screen
+The setup wizard guides you through configuration with a modern, user-friendly interface.
+
+### n8n API Configuration
+- **API URL**: Use `http://host.docker.internal:5678` if n8n is running on your host machine
+- **API Key**: Found in n8n → Settings → API → Create API Key
+
+### Connection Testing
+The wizard tests your connection in real-time and shows a green checkmark when successful.
+
+---
+
+## After Setup
+
+### Using with Claude Desktop
+
+Add to your Claude Desktop configuration (`~/.config/claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "docker",
+      "args": ["exec", "-i", "n8n-mcp-server", "node", "dist/main.js"]
+    }
+  }
+}
+```
+
+### Using with Open WebUI
+
+The Web UI at http://localhost:3000 provides a chat interface for workflow design.
+
+### Using the HTTP API
+
+```bash
+# List available tools
+curl http://localhost:3000/api/tools
+
+# Search for nodes
+curl "http://localhost:3000/api/search?q=slack"
+```
+
+---
+
+## Useful Commands
+
+```bash
+# View logs
+docker compose -f docker-compose.desktop.yml logs -f
+
+# Stop the server
+docker compose -f docker-compose.desktop.yml down
+
+# Restart the server
+docker compose -f docker-compose.desktop.yml restart
+
+# Update to latest version
+docker compose -f docker-compose.desktop.yml pull
+docker compose -f docker-compose.desktop.yml up -d
+```
+
+---
+
+## Reconfiguring
+
+To change your n8n settings after initial setup:
+1. Open http://localhost:3000
+2. Click "Reconfigure" in the sidebar
+3. Complete the setup wizard again
+
+Or delete the configuration and start fresh:
+```bash
+docker compose -f docker-compose.desktop.yml down -v
+docker compose -f docker-compose.desktop.yml up -d
+```
+
+---
+
+## Troubleshooting
+
+### "Cannot connect to n8n"
+- Ensure n8n is running
+- Use `http://host.docker.internal:5678` instead of `localhost` when connecting from Docker
+- Check that your API key is valid
+
+### "Container won't start"
+```bash
+# Check logs
+docker compose -f docker-compose.desktop.yml logs
+
+# Check if port 3000 is in use
+lsof -i :3000  # macOS/Linux
+netstat -an | findstr 3000  # Windows
+```
+
+### "Setup wizard keeps appearing"
+- The configuration is stored in a Docker volume
+- If it's not persisting, check volume permissions:
+```bash
+docker volume inspect n8n-mcp-data
+```
 
 ---
 
