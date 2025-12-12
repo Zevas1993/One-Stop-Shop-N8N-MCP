@@ -389,7 +389,7 @@ function createToolHandlers(
         name: params.name,
         nodes: params.nodes,
         connections: params.connections,
-        settings: params.settings,
+        settings: params.settings || { executionOrder: "v1" },
       });
 
       if (!result.success) {
