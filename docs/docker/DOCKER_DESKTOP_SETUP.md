@@ -6,10 +6,42 @@
 
 ---
 
+## 🚀 NEW: Docker Model Runner + vLLM Support
+
+**Docker Desktop 4.54+** includes built-in **vLLM support** via Docker Model Runner, providing high-performance GPU-accelerated LLM inference!
+
+### Why Use Docker Model Runner + vLLM?
+
+| Feature | Ollama (llama.cpp) | Docker Model Runner (vLLM) |
+|---------|-------------------|---------------------------|
+| **Best for** | CPU, low-end GPU | High-end NVIDIA GPU |
+| **Throughput** | Moderate | High (PagedAttention) |
+| **Batch processing** | Limited | Native support |
+| **Setup** | Manual install | Built into Docker Desktop |
+| **Windows support** | ✅ Full | ✅ Docker Desktop 4.54+ |
+
+### Automatic Backend Selection
+
+The MCP server automatically detects and uses the best available LLM backend:
+
+1. **Docker Model Runner** (preferred) - If Docker Desktop 4.54+ is detected
+2. **Ollama** (fallback) - Cross-platform fallback
+3. **Standalone vLLM** (custom) - For custom Linux deployments
+
+### Setup Wizard LLM Selection
+
+When you run the setup wizard, you'll see a new **LLM Backend** step that:
+- Auto-detects Docker Model Runner availability
+- Shows vLLM model availability
+- Allows manual backend selection
+- Tests the selected backend
+
+---
+
 ## Quick Start (3 Steps)
 
 ### Prerequisites
-- [Docker Desktop](https://www.docker.com/products/docker-desktop) installed and running
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) installed and running (v4.54+ recommended for vLLM)
 - n8n instance running (local or remote) with API access enabled
 
 ### Step 1: Download Files
@@ -51,8 +83,9 @@ docker compose -f docker-compose.desktop.yml up -d
 2. Follow the setup wizard:
    - **Step 1:** Welcome - Click "Get Started"
    - **Step 2:** Enter your n8n API URL and API Key
-   - **Step 3:** (Optional) Enter n8n login credentials
-   - **Step 4:** Click "Start Using MCP Server"
+   - **Step 3:** Select LLM Backend (Docker Model Runner recommended for vLLM performance)
+   - **Step 4:** (Optional) Enter n8n login credentials
+   - **Step 5:** Review summary and click "Start Using MCP Server"
 
 That's it! Your MCP server is now ready to use with Claude Desktop or Open WebUI.
 

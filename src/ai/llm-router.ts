@@ -2,8 +2,9 @@
  * Unified LLM Router
  *
  * Smart router that automatically selects the best available LLM backend:
- * 1. Ollama (PRIMARY) - Cross-platform, easy setup, works everywhere
- * 2. vLLM (FALLBACK) - High-performance for Linux/Docker with GPU
+ * 1. Docker Model Runner (PREFERRED) - Docker Desktop 4.54+ with vLLM support
+ * 2. Ollama (FALLBACK) - Cross-platform, easy setup, works everywhere
+ * 3. vLLM (CUSTOM) - High-performance for custom Linux/Docker deployments
  *
  * Features:
  * - Automatic backend detection and health monitoring
@@ -11,11 +12,16 @@
  * - Dual-model architecture (embedding + generation)
  * - Hardware-aware model selection
  * - Unified API regardless of backend
+ * - Docker Model Runner with vLLM for GPU-accelerated inference
  */
 
 import { logger } from "../utils/logger";
 import { OllamaClient, createOllamaClient } from "./ollama-client";
 import { VLLMClient, createVLLMClient } from "./vllm-client";
+import {
+  DockerModelRunnerClient,
+  createDockerModelRunnerClient,
+} from "./docker-model-runner-client";
 import {
   HardwareDetector,
   EmbeddingModelOption,
@@ -27,13 +33,18 @@ import { EventBus, getEventBus, EventTypes } from "./event-bus";
 // TYPES
 // ============================================================================
 
-export type LLMBackend = "ollama" | "vllm" | "none";
+export type LLMBackend = "docker-model-runner" | "ollama" | "vllm" | "none";
 
 export interface LLMRouterConfig {
-  // Ollama settings (primary)
+  // Docker Model Runner settings (preferred for Docker Desktop 4.54+)
+  dockerModelRunnerUrl?: string; // Auto-detect if not specified
+  dockerModelRunnerModel?: string; // Default: ai/smollm2-vllm
+  preferDockerModelRunner?: boolean; // Default: true
+
+  // Ollama settings (fallback)
   ollamaUrl?: string; // Default: http://localhost:11434
 
-  // vLLM settings (fallback for high-performance)
+  // vLLM settings (for custom deployments)
   vllmEmbeddingUrl?: string; // Default: http://localhost:8001
   vllmGenerationUrl?: string; // Default: http://localhost:8002
 
@@ -42,7 +53,7 @@ export interface LLMRouterConfig {
   generationModel?: string;
 
   // Behavior
-  preferVLLM?: boolean; // Prefer vLLM when available (default: false)
+  preferVLLM?: boolean; // Prefer standalone vLLM when available (default: false)
   autoFallback?: boolean; // Auto-switch on failure (default: true)
   healthCheckInterval?: number; // Health check interval in ms (default: 30000)
 }
@@ -78,6 +89,8 @@ export interface ChatMessage {
 export interface RouterStatus {
   initialized: boolean;
   activeBackend: LLMBackend;
+  dockerModelRunnerAvailable: boolean;
+  dockerModelRunnerVLLMEnabled: boolean;
   ollamaAvailable: boolean;
   vllmEmbeddingAvailable: boolean;
   vllmGenerationAvailable: boolean;
@@ -92,6 +105,7 @@ export interface RouterStatus {
 
 export class LLMRouter {
   private config: Required<LLMRouterConfig>;
+  private dockerModelRunnerClient: DockerModelRunnerClient | null = null;
   private ollamaClient: OllamaClient | null = null;
   private vllmEmbeddingClient: VLLMClient | null = null;
   private vllmGenerationClient: VLLMClient | null = null;
@@ -104,6 +118,8 @@ export class LLMRouter {
   private activeEmbeddingBackend: LLMBackend = "none";
   private activeGenerationBackend: LLMBackend = "none";
 
+  private dockerModelRunnerAvailable: boolean = false;
+  private dockerModelRunnerVLLMEnabled: boolean = false;
   private ollamaAvailable: boolean = false;
   private vllmEmbeddingAvailable: boolean = false;
   private vllmGenerationAvailable: boolean = false;
@@ -119,8 +135,22 @@ export class LLMRouter {
     const hardware = HardwareDetector.detectHardware();
 
     this.config = {
+      // Docker Model Runner (preferred)
+      dockerModelRunnerUrl:
+        config.dockerModelRunnerUrl ||
+        process.env.DOCKER_MODEL_RUNNER_URL ||
+        "", // Auto-detect if empty
+      dockerModelRunnerModel:
+        config.dockerModelRunnerModel ||
+        process.env.DOCKER_MODEL_RUNNER_MODEL ||
+        "ai/smollm2-vllm",
+      preferDockerModelRunner: config.preferDockerModelRunner ?? true,
+
+      // Ollama (fallback)
       ollamaUrl:
         config.ollamaUrl || process.env.OLLAMA_URL || "http://localhost:11434",
+
+      // Standalone vLLM (custom deployments)
       vllmEmbeddingUrl:
         config.vllmEmbeddingUrl ||
         process.env.VLLM_EMBEDDING_URL ||
@@ -129,8 +159,12 @@ export class LLMRouter {
         config.vllmGenerationUrl ||
         process.env.VLLM_GENERATION_URL ||
         "http://localhost:8002",
+
+      // Models
       embeddingModel: config.embeddingModel || hardware.embeddingModel,
       generationModel: config.generationModel || hardware.generationModel,
+
+      // Behavior
       preferVLLM: config.preferVLLM ?? false,
       autoFallback: config.autoFallback ?? true,
       healthCheckInterval: config.healthCheckInterval ?? 30000,
@@ -151,10 +185,12 @@ export class LLMRouter {
     );
 
     logger.info("[LLMRouter] Configured", {
+      dockerModelRunnerUrl: this.config.dockerModelRunnerUrl || "auto-detect",
+      dockerModelRunnerModel: this.config.dockerModelRunnerModel,
+      preferDockerModelRunner: this.config.preferDockerModelRunner,
       ollamaUrl: this.config.ollamaUrl,
       embeddingModel: this.embeddingModel,
       generationModel: this.generationModel,
-      preferVLLM: this.config.preferVLLM,
     });
   }
 
@@ -172,10 +208,18 @@ export class LLMRouter {
       // Get event bus for publishing LLM events
       this.eventBus = await getEventBus();
 
-      // Initialize clients
+      // Initialize Docker Model Runner client (preferred)
+      this.dockerModelRunnerClient = createDockerModelRunnerClient({
+        baseUrl: this.config.dockerModelRunnerUrl || undefined, // Auto-detect
+        model: this.config.dockerModelRunnerModel,
+      });
+
+      // Initialize Ollama client (fallback)
       this.ollamaClient = createOllamaClient({
         baseUrl: this.config.ollamaUrl,
       });
+
+      // Initialize standalone vLLM clients (custom deployments)
       this.vllmEmbeddingClient = createVLLMClient(
         "embedding",
         this.embeddingModel,
@@ -187,10 +231,10 @@ export class LLMRouter {
         this.config.vllmGenerationUrl
       );
 
-      // Check availability
+      // Check availability of all backends
       await this.checkAllBackends();
 
-      // Select active backends
+      // Select active backends based on availability and preference
       this.selectActiveBackends();
 
       // Start periodic health checks
@@ -210,13 +254,15 @@ export class LLMRouter {
       }
 
       // Pull models if using Ollama and they're not present
-      if (this.ollamaAvailable) {
+      if (this.activeGenerationBackend === "ollama" && this.ollamaAvailable) {
         await this.ensureOllamaModels();
       }
 
       logger.info("[LLMRouter] ✅ Initialized", {
         embeddingBackend: this.activeEmbeddingBackend,
         generationBackend: this.activeGenerationBackend,
+        dockerModelRunnerAvailable: this.dockerModelRunnerAvailable,
+        dockerModelRunnerVLLM: this.dockerModelRunnerVLLMEnabled,
       });
 
       return true;
@@ -260,18 +306,37 @@ export class LLMRouter {
    * Check all backend availability
    */
   private async checkAllBackends(): Promise<void> {
+    // Check Docker Model Runner first (preferred)
+    let dockerModelRunnerStatus = { available: false, vllmEnabled: false };
+    if (this.dockerModelRunnerClient) {
+      try {
+        const status = await this.dockerModelRunnerClient.getStatus();
+        dockerModelRunnerStatus = {
+          available: status.available,
+          vllmEnabled: status.vllmEnabled,
+        };
+      } catch {
+        dockerModelRunnerStatus = { available: false, vllmEnabled: false };
+      }
+    }
+
+    // Check other backends in parallel
     const checks = await Promise.all([
       this.ollamaClient?.checkHealth().catch(() => false) || false,
       this.vllmEmbeddingClient?.checkHealth().catch(() => false) || false,
       this.vllmGenerationClient?.checkHealth().catch(() => false) || false,
     ]);
 
+    this.dockerModelRunnerAvailable = dockerModelRunnerStatus.available;
+    this.dockerModelRunnerVLLMEnabled = dockerModelRunnerStatus.vllmEnabled;
     this.ollamaAvailable = checks[0];
     this.vllmEmbeddingAvailable = checks[1];
     this.vllmGenerationAvailable = checks[2];
     this.lastHealthCheck = Date.now();
 
     logger.debug("[LLMRouter] Backend availability", {
+      dockerModelRunner: this.dockerModelRunnerAvailable,
+      dockerModelRunnerVLLM: this.dockerModelRunnerVLLMEnabled,
       ollama: this.ollamaAvailable,
       vllmEmbedding: this.vllmEmbeddingAvailable,
       vllmGeneration: this.vllmGenerationAvailable,
@@ -280,29 +345,43 @@ export class LLMRouter {
 
   /**
    * Select which backends to use based on availability and preference
+   * Priority: Docker Model Runner > Ollama > Standalone vLLM
    */
   private selectActiveBackends(): void {
-    // For embeddings
-    if (this.config.preferVLLM && this.vllmEmbeddingAvailable) {
+    // For embeddings - Docker Model Runner is preferred
+    if (this.config.preferDockerModelRunner && this.dockerModelRunnerAvailable) {
+      this.activeEmbeddingBackend = "docker-model-runner";
+    } else if (this.config.preferVLLM && this.vllmEmbeddingAvailable) {
       this.activeEmbeddingBackend = "vllm";
     } else if (this.ollamaAvailable) {
       this.activeEmbeddingBackend = "ollama";
+    } else if (this.dockerModelRunnerAvailable) {
+      this.activeEmbeddingBackend = "docker-model-runner";
     } else if (this.vllmEmbeddingAvailable) {
       this.activeEmbeddingBackend = "vllm";
     } else {
       this.activeEmbeddingBackend = "none";
     }
 
-    // For generation
-    if (this.config.preferVLLM && this.vllmGenerationAvailable) {
+    // For generation - Docker Model Runner is preferred
+    if (this.config.preferDockerModelRunner && this.dockerModelRunnerAvailable) {
+      this.activeGenerationBackend = "docker-model-runner";
+    } else if (this.config.preferVLLM && this.vllmGenerationAvailable) {
       this.activeGenerationBackend = "vllm";
     } else if (this.ollamaAvailable) {
       this.activeGenerationBackend = "ollama";
+    } else if (this.dockerModelRunnerAvailable) {
+      this.activeGenerationBackend = "docker-model-runner";
     } else if (this.vllmGenerationAvailable) {
       this.activeGenerationBackend = "vllm";
     } else {
       this.activeGenerationBackend = "none";
     }
+
+    logger.info("[LLMRouter] Selected backends", {
+      embedding: this.activeEmbeddingBackend,
+      generation: this.activeGenerationBackend,
+    });
   }
 
   /**
@@ -377,7 +456,12 @@ export class LLMRouter {
     try {
       let result: GenerateResult;
 
-      if (this.activeGenerationBackend === "ollama" && this.ollamaClient) {
+      if (
+        this.activeGenerationBackend === "docker-model-runner" &&
+        this.dockerModelRunnerClient
+      ) {
+        result = await this.generateWithDockerModelRunner(prompt, options);
+      } else if (this.activeGenerationBackend === "ollama" && this.ollamaClient) {
         result = await this.generateWithOllama(prompt, options);
       } else if (
         this.activeGenerationBackend === "vllm" &&
@@ -428,6 +512,32 @@ export class LLMRouter {
 
       throw error;
     }
+  }
+
+  /**
+   * Generate with Docker Model Runner (preferred)
+   */
+  private async generateWithDockerModelRunner(
+    prompt: string,
+    options: GenerateOptions
+  ): Promise<GenerateResult> {
+    if (!this.dockerModelRunnerClient)
+      throw new Error("Docker Model Runner client not initialized");
+
+    const response = await this.dockerModelRunnerClient.generate(prompt, {
+      temperature: options.temperature,
+      maxTokens: options.maxTokens,
+      topP: options.topP,
+      stop: options.stop,
+    });
+
+    return {
+      text: response.text,
+      model: response.model,
+      backend: "docker-model-runner",
+      tokens: response.tokens,
+      latency: response.latency,
+    };
   }
 
   /**
@@ -498,26 +608,35 @@ export class LLMRouter {
       `[LLMRouter] Generation failed on ${this.activeGenerationBackend}, trying fallback...`
     );
 
-    // Try the other backend
-    if (
-      this.activeGenerationBackend === "ollama" &&
-      this.vllmGenerationAvailable &&
-      this.vllmGenerationClient
-    ) {
+    // Define fallback order based on current backend
+    const fallbackOrder: LLMBackend[] = [];
+
+    if (this.activeGenerationBackend === "docker-model-runner") {
+      // Docker Model Runner failed, try Ollama then vLLM
+      if (this.ollamaAvailable) fallbackOrder.push("ollama");
+      if (this.vllmGenerationAvailable) fallbackOrder.push("vllm");
+    } else if (this.activeGenerationBackend === "ollama") {
+      // Ollama failed, try Docker Model Runner then vLLM
+      if (this.dockerModelRunnerAvailable) fallbackOrder.push("docker-model-runner");
+      if (this.vllmGenerationAvailable) fallbackOrder.push("vllm");
+    } else if (this.activeGenerationBackend === "vllm") {
+      // vLLM failed, try Docker Model Runner then Ollama
+      if (this.dockerModelRunnerAvailable) fallbackOrder.push("docker-model-runner");
+      if (this.ollamaAvailable) fallbackOrder.push("ollama");
+    }
+
+    // Try each fallback in order
+    for (const backend of fallbackOrder) {
       try {
-        return await this.generateWithVLLM(prompt, options);
+        if (backend === "docker-model-runner" && this.dockerModelRunnerClient) {
+          return await this.generateWithDockerModelRunner(prompt, options);
+        } else if (backend === "ollama" && this.ollamaClient) {
+          return await this.generateWithOllama(prompt, options);
+        } else if (backend === "vllm" && this.vllmGenerationClient) {
+          return await this.generateWithVLLM(prompt, options);
+        }
       } catch (error) {
-        logger.warn("[LLMRouter] vLLM fallback also failed:", error);
-      }
-    } else if (
-      this.activeGenerationBackend === "vllm" &&
-      this.ollamaAvailable &&
-      this.ollamaClient
-    ) {
-      try {
-        return await this.generateWithOllama(prompt, options);
-      } catch (error) {
-        logger.warn("[LLMRouter] Ollama fallback also failed:", error);
+        logger.warn(`[LLMRouter] ${backend} fallback also failed:`, error);
       }
     }
 
@@ -538,6 +657,28 @@ export class LLMRouter {
     const startTime = Date.now();
 
     try {
+      // Docker Model Runner - native chat support
+      if (
+        this.activeGenerationBackend === "docker-model-runner" &&
+        this.dockerModelRunnerClient
+      ) {
+        const response = await this.dockerModelRunnerClient.chat(messages, {
+          temperature: options.temperature,
+          maxTokens: options.maxTokens,
+          topP: options.topP,
+          stop: options.stop,
+        });
+
+        return {
+          text: response.text,
+          model: response.model,
+          backend: "docker-model-runner",
+          tokens: response.tokens,
+          latency: response.latency,
+        };
+      }
+
+      // Ollama - native chat support
       if (this.activeGenerationBackend === "ollama" && this.ollamaClient) {
         const response = await this.ollamaClient.chat(
           this.ollamaGenerationModel,
@@ -557,11 +698,13 @@ export class LLMRouter {
           tokens: response.tokens,
           latency: response.generationTime,
         };
-      } else if (
+      }
+
+      // Standalone vLLM - build prompt from messages
+      if (
         this.activeGenerationBackend === "vllm" &&
         this.vllmGenerationClient
       ) {
-        // vLLM chat endpoint - build prompt from messages
         const prompt = messages
           .map((m) => {
             if (m.role === "system") return `System: ${m.content}`;
@@ -571,9 +714,9 @@ export class LLMRouter {
           .join("\n");
 
         return await this.generateWithVLLM(prompt, options);
-      } else {
-        throw new Error("No generation backend available");
       }
+
+      throw new Error("No generation backend available");
     } catch (error: any) {
       logger.error("[LLMRouter] Chat failed:", error.message);
       throw error;
@@ -591,6 +734,21 @@ export class LLMRouter {
     const startTime = Date.now();
 
     try {
+      // Docker Model Runner - preferred
+      if (
+        this.activeEmbeddingBackend === "docker-model-runner" &&
+        this.dockerModelRunnerClient
+      ) {
+        const response = await this.dockerModelRunnerClient.generateEmbedding(text);
+        return {
+          embedding: response.embedding,
+          model: response.model,
+          backend: "docker-model-runner",
+          latency: response.latency,
+        };
+      }
+
+      // Ollama - fallback
       if (this.activeEmbeddingBackend === "ollama" && this.ollamaClient) {
         const response = await this.ollamaClient.embed(
           this.ollamaEmbeddingModel,
@@ -602,7 +760,10 @@ export class LLMRouter {
           backend: "ollama",
           latency: response.processingTime,
         };
-      } else if (
+      }
+
+      // Standalone vLLM
+      if (
         this.activeEmbeddingBackend === "vllm" &&
         this.vllmEmbeddingClient
       ) {
@@ -613,9 +774,9 @@ export class LLMRouter {
           backend: "vllm",
           latency: response.processingTime,
         };
-      } else {
-        throw new Error("No embedding backend available");
       }
+
+      throw new Error("No embedding backend available");
     } catch (error: any) {
       // Try fallback
       if (this.config.autoFallback) {
@@ -637,40 +798,53 @@ export class LLMRouter {
       `[LLMRouter] Embedding failed on ${this.activeEmbeddingBackend}, trying fallback...`
     );
 
-    if (
-      this.activeEmbeddingBackend === "ollama" &&
-      this.vllmEmbeddingAvailable &&
-      this.vllmEmbeddingClient
-    ) {
+    // Define fallback order based on current backend
+    const fallbackOrder: LLMBackend[] = [];
+
+    if (this.activeEmbeddingBackend === "docker-model-runner") {
+      if (this.ollamaAvailable) fallbackOrder.push("ollama");
+      if (this.vllmEmbeddingAvailable) fallbackOrder.push("vllm");
+    } else if (this.activeEmbeddingBackend === "ollama") {
+      if (this.dockerModelRunnerAvailable) fallbackOrder.push("docker-model-runner");
+      if (this.vllmEmbeddingAvailable) fallbackOrder.push("vllm");
+    } else if (this.activeEmbeddingBackend === "vllm") {
+      if (this.dockerModelRunnerAvailable) fallbackOrder.push("docker-model-runner");
+      if (this.ollamaAvailable) fallbackOrder.push("ollama");
+    }
+
+    // Try each fallback
+    for (const backend of fallbackOrder) {
       try {
-        const response = await this.vllmEmbeddingClient.generateEmbedding(text);
-        return {
-          embedding: response.embedding,
-          model: response.modelId,
-          backend: "vllm",
-          latency: response.processingTime,
-        };
+        if (backend === "docker-model-runner" && this.dockerModelRunnerClient) {
+          const response = await this.dockerModelRunnerClient.generateEmbedding(text);
+          return {
+            embedding: response.embedding,
+            model: response.model,
+            backend: "docker-model-runner",
+            latency: response.latency,
+          };
+        } else if (backend === "ollama" && this.ollamaClient) {
+          const response = await this.ollamaClient.embed(
+            this.ollamaEmbeddingModel,
+            text
+          );
+          return {
+            embedding: response.embedding,
+            model: this.ollamaEmbeddingModel,
+            backend: "ollama",
+            latency: response.processingTime,
+          };
+        } else if (backend === "vllm" && this.vllmEmbeddingClient) {
+          const response = await this.vllmEmbeddingClient.generateEmbedding(text);
+          return {
+            embedding: response.embedding,
+            model: response.modelId,
+            backend: "vllm",
+            latency: response.processingTime,
+          };
+        }
       } catch (error) {
-        logger.warn("[LLMRouter] vLLM embedding fallback also failed");
-      }
-    } else if (
-      this.activeEmbeddingBackend === "vllm" &&
-      this.ollamaAvailable &&
-      this.ollamaClient
-    ) {
-      try {
-        const response = await this.ollamaClient.embed(
-          this.ollamaEmbeddingModel,
-          text
-        );
-        return {
-          embedding: response.embedding,
-          model: this.ollamaEmbeddingModel,
-          backend: "ollama",
-          latency: response.processingTime,
-        };
-      } catch (error) {
-        logger.warn("[LLMRouter] Ollama embedding fallback also failed");
+        logger.warn(`[LLMRouter] ${backend} embedding fallback also failed`);
       }
     }
 
@@ -692,20 +866,32 @@ export class LLMRouter {
    * Get router status
    */
   getStatus(): RouterStatus {
+    // Determine which model is active
+    let embeddingModel = this.embeddingModel;
+    let generationModel = this.generationModel;
+
+    if (this.activeEmbeddingBackend === "ollama") {
+      embeddingModel = this.ollamaEmbeddingModel;
+    } else if (this.activeEmbeddingBackend === "docker-model-runner") {
+      embeddingModel = this.config.dockerModelRunnerModel;
+    }
+
+    if (this.activeGenerationBackend === "ollama") {
+      generationModel = this.ollamaGenerationModel;
+    } else if (this.activeGenerationBackend === "docker-model-runner") {
+      generationModel = this.config.dockerModelRunnerModel;
+    }
+
     return {
       initialized: this.initialized,
       activeBackend: this.activeGenerationBackend, // Primary indicator
+      dockerModelRunnerAvailable: this.dockerModelRunnerAvailable,
+      dockerModelRunnerVLLMEnabled: this.dockerModelRunnerVLLMEnabled,
       ollamaAvailable: this.ollamaAvailable,
       vllmEmbeddingAvailable: this.vllmEmbeddingAvailable,
       vllmGenerationAvailable: this.vllmGenerationAvailable,
-      embeddingModel:
-        this.activeEmbeddingBackend === "ollama"
-          ? this.ollamaEmbeddingModel
-          : this.embeddingModel,
-      generationModel:
-        this.activeGenerationBackend === "ollama"
-          ? this.ollamaGenerationModel
-          : this.generationModel,
+      embeddingModel,
+      generationModel,
       lastHealthCheck: this.lastHealthCheck,
     };
   }

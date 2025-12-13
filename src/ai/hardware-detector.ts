@@ -40,6 +40,17 @@ export enum NanoLLMOption {
   LLAMA_2_13B = 'llama-2-13b',           // 13B - Better quality (16GB RAM, 8 cores)
 }
 
+/**
+ * Docker Model Runner detection result
+ */
+export interface DockerModelRunnerInfo {
+  available: boolean;
+  vllmEnabled: boolean;
+  vllmVersion?: string;
+  models: string[];
+  baseUrl?: string;
+}
+
 export interface HardwareProfile {
   cpuCores: number;
   cpuModel: string;
@@ -67,6 +78,9 @@ export interface HardwareProfile {
   // Performance estimates
   estimatedEmbeddingLatency: number; // milliseconds
   estimatedGenerationTokensPerSecond: number;
+
+  // Docker Model Runner (Docker Desktop 4.54+ with vLLM)
+  dockerModelRunner?: DockerModelRunnerInfo;
 
   // Legacy field (for backward compatibility)
   recommendedLlm?: NanoLLMOption;
@@ -734,6 +748,110 @@ export class HardwareDetector {
   /**
    * Validate if system meets minimum requirements for LLM
    */
+  /**
+   * Detect Docker Model Runner availability (async version)
+   * Docker Desktop 4.54+ includes vLLM support for high-performance inference
+   */
+  static async detectDockerModelRunner(): Promise<DockerModelRunnerInfo> {
+    // Try multiple URLs in priority order
+    const urlsToTry = [
+      process.env.DOCKER_MODEL_RUNNER_URL,
+      'http://model-runner.docker.internal',  // Inside container (Docker Desktop)
+      'http://localhost:12434',                // Host machine (Docker Desktop)
+      'http://172.17.0.1:12434',               // Host from container (Docker Engine)
+    ].filter(Boolean) as string[];
+
+    for (const baseUrl of urlsToTry) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+        const response = await fetch(`${baseUrl}/v1/models`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
+          const models = (data.data || data.models || []).map((m: any) => m.id || m.name || '');
+          const vllmModels = models.filter((m: string) =>
+            m.includes('-vllm') || m.includes('safetensors')
+          );
+
+          logger.info('[HardwareDetector] Docker Model Runner detected', {
+            baseUrl,
+            modelCount: models.length,
+            vllmModels: vllmModels.length,
+          });
+
+          return {
+            available: true,
+            vllmEnabled: vllmModels.length > 0,
+            vllmVersion: '0.12.0', // Docker Desktop 4.54+ uses vLLM 0.12.0
+            models,
+            baseUrl,
+          };
+        }
+      } catch (error) {
+        // Continue to next URL
+        logger.debug(`[HardwareDetector] Model Runner not at ${baseUrl}:`, error);
+      }
+    }
+
+    return {
+      available: false,
+      vllmEnabled: false,
+      models: [],
+    };
+  }
+
+  /**
+   * Detect Docker Model Runner (sync version - returns cached or default)
+   * Use detectDockerModelRunner() for actual async detection
+   */
+  static getDockerModelRunnerSync(): DockerModelRunnerInfo {
+    // Check environment variable as quick indicator
+    const envUrl = process.env.DOCKER_MODEL_RUNNER_URL;
+    if (envUrl) {
+      return {
+        available: true, // Assume available if configured
+        vllmEnabled: true,
+        baseUrl: envUrl,
+        models: [],
+      };
+    }
+
+    // Return default (unknown) - use async version for actual detection
+    return {
+      available: false,
+      vllmEnabled: false,
+      models: [],
+    };
+  }
+
+  /**
+   * Enhanced hardware detection with Docker Model Runner
+   * This async version includes Docker Model Runner detection
+   */
+  static async detectHardwareAsync(): Promise<HardwareProfile> {
+    // Get basic hardware profile
+    const profile = this.detectHardware();
+
+    // Detect Docker Model Runner
+    const dockerModelRunner = await this.detectDockerModelRunner();
+    profile.dockerModelRunner = dockerModelRunner;
+
+    // Update recommendation if Docker Model Runner with vLLM is available
+    if (dockerModelRunner.available && dockerModelRunner.vllmEnabled) {
+      logger.info('[HardwareDetector] Docker Model Runner with vLLM available - recommended for best performance');
+    }
+
+    return profile;
+  }
+
   static validateSystemRequirements(
     llm: NanoLLMOption,
     hardware: HardwareProfile

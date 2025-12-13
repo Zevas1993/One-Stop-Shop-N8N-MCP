@@ -6,6 +6,7 @@
 import { Router, Request, Response } from 'express';
 import { LocalLLMOrchestrator } from '../ai/local-llm-orchestrator';
 import { HardwareDetector, NanoLLMOption } from '../ai/hardware-detector';
+import { getDockerModelRunnerStatus } from '../ai/docker-model-runner-client';
 import { logger } from '../utils/logger';
 import axios from 'axios';
 import * as fs from 'fs';
@@ -293,6 +294,64 @@ export function createLocalLLMRoutes(): Router {
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Setup failed',
+      });
+    }
+  });
+
+  /**
+   * POST /api/setup/test-model-runner
+   * Test Docker Model Runner connection and vLLM availability
+   */
+  router.post('/api/setup/test-model-runner', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { baseUrl } = req.body;
+
+      logger.info('[Setup API] Testing Docker Model Runner connection...', { baseUrl });
+
+      // Get Docker Model Runner status
+      const status = await getDockerModelRunnerStatus();
+
+      if (!status.available) {
+        res.json({
+          success: false,
+          available: false,
+          vllmAvailable: false,
+          error: 'Docker Model Runner is not available. Ensure Docker Desktop 4.54+ is running with Model Runner enabled.',
+          troubleshooting: [
+            'Verify Docker Desktop is running',
+            'Update to Docker Desktop 4.54 or newer',
+            'Enable Model Runner in Docker Desktop settings',
+            'Check if port 12434 is accessible',
+          ],
+        });
+        return;
+      }
+
+      // Return success with model runner status
+      res.json({
+        success: true,
+        available: true,
+        vllmAvailable: status.vllmEnabled,
+        vllmVersion: status.vllmVersion || '0.12.0',
+        models: status.models.map((m) => ({
+          id: m.id,
+          name: m.name,
+          engine: m.engine,
+          format: m.format,
+        })),
+        modelCount: status.models.length,
+        vllmModelCount: status.models.filter((m) => m.engine === 'vllm').length,
+        recommendation: status.vllmEnabled
+          ? 'Docker Model Runner with vLLM is available and recommended for best performance.'
+          : 'Docker Model Runner is available but vLLM models are not loaded. Consider pulling a vLLM model like ai/smollm2-vllm.',
+      });
+    } catch (error) {
+      logger.error('[Setup API] Test Model Runner error:', error);
+      res.status(500).json({
+        success: false,
+        available: false,
+        vllmAvailable: false,
+        error: error instanceof Error ? error.message : 'Model Runner test failed',
       });
     }
   });

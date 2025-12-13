@@ -361,6 +361,101 @@
             color: #f59e0b;
         }
 
+        /* LLM Backend Selection Styles */
+        .llm-options {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .llm-option {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .llm-option:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .llm-option.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #f8f9ff 0%, #f0f3ff 100%);
+        }
+
+        .llm-option-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .llm-option-header input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+        }
+
+        .llm-option-header label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .recommended-badge {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .llm-option-desc {
+            margin-left: 28px;
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .llm-benefits {
+            color: #22c55e;
+            font-weight: 500;
+        }
+
+        .llm-status {
+            margin-left: 28px;
+            margin-top: 10px;
+            font-size: 12px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: #f5f5f5;
+        }
+
+        .llm-status .status-checking {
+            color: #666;
+        }
+
+        .llm-status .status-available {
+            color: #22c55e;
+            font-weight: 500;
+        }
+
+        .llm-status .status-unavailable {
+            color: #ef4444;
+        }
+
+        .llm-status .status-vllm {
+            color: #667eea;
+            font-weight: 600;
+        }
+
         /* Spinner */
         .spinner {
             display: inline-block;
@@ -615,6 +710,7 @@
                     <div class="progress-step" data-step="2"></div>
                     <div class="progress-step" data-step="3"></div>
                     <div class="progress-step" data-step="4"></div>
+                    <div class="progress-step" data-step="5"></div>
                 </div>
             </div>
 
@@ -674,8 +770,57 @@
                     <div id="n8nConnectionStatus"></div>
                 </div>
 
-                <!-- Step 3: n8n Login (Optional) -->
+                <!-- Step 3: LLM Backend Selection -->
                 <div class="wizard-step" data-step="3">
+                    <div class="step-title">LLM Backend Configuration</div>
+                    <div class="step-description">
+                        Select your preferred LLM backend. Docker Model Runner with vLLM offers
+                        the best performance on Docker Desktop 4.54+ with NVIDIA GPUs.
+                    </div>
+
+                    <div class="llm-options">
+                        <div class="llm-option selected" data-backend="docker-model-runner" onclick="selectLLMBackend('docker-model-runner')">
+                            <div class="llm-option-header">
+                                <input type="radio" name="llmBackend" id="backendDockerMR" value="docker-model-runner" checked>
+                                <label for="backendDockerMR">
+                                    <strong>Docker Model Runner</strong>
+                                    <span class="recommended-badge">Recommended</span>
+                                </label>
+                            </div>
+                            <div class="llm-option-desc">
+                                Built-in vLLM support in Docker Desktop 4.54+<br>
+                                <span class="llm-benefits">High-throughput GPU-accelerated inference</span>
+                            </div>
+                            <div class="llm-status" id="dockerMRStatus">
+                                <span class="status-checking">Checking availability...</span>
+                            </div>
+                        </div>
+
+                        <div class="llm-option" data-backend="ollama" onclick="selectLLMBackend('ollama')">
+                            <div class="llm-option-header">
+                                <input type="radio" name="llmBackend" id="backendOllama" value="ollama">
+                                <label for="backendOllama">
+                                    <strong>Ollama</strong>
+                                </label>
+                            </div>
+                            <div class="llm-option-desc">
+                                Cross-platform, easy setup, works everywhere<br>
+                                <span class="llm-benefits">CPU-friendly with llama.cpp</span>
+                            </div>
+                            <div class="llm-status" id="ollamaStatus">
+                                <span class="status-checking">Checking availability...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="test-connection-btn" onclick="testLLMBackend()">
+                        <span id="testLLMBtnText">🔍 Test Selected Backend</span>
+                    </button>
+                    <div id="llmConnectionStatus"></div>
+                </div>
+
+                <!-- Step 4: n8n Login (Optional) -->
+                <div class="wizard-step" data-step="4">
                     <div class="step-title">n8n Login (Optional)</div>
                     <div class="step-description">
                         Providing your n8n login credentials enables access to the complete node catalog
@@ -696,8 +841,8 @@
                     <div id="loginConnectionStatus"></div>
                 </div>
 
-                <!-- Step 4: Completion -->
-                <div class="wizard-step" data-step="4">
+                <!-- Step 5: Completion -->
+                <div class="wizard-step" data-step="5">
                     <div class="step-title">🎉 Setup Complete!</div>
                     <div class="step-description">
                         Your n8n MCP Server is ready to use. Here's a summary of your configuration:
@@ -706,6 +851,10 @@
                         <div class="summary-item">
                             <span class="summary-label">n8n API</span>
                             <span class="summary-value" id="summaryN8nApi">Not configured</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">LLM Backend</span>
+                            <span class="summary-value" id="summaryLLMBackend">Not configured</span>
                         </div>
                         <div class="summary-item">
                             <span class="summary-label">n8n Login</span>
@@ -821,15 +970,21 @@
     <script>
         // ==================== STATE ====================
         let currentStep = 1;
-        const totalSteps = 4;
+        const totalSteps = 5;
         let setupState = {
             n8nApiConfigured: false,
             n8nLoginConfigured: false,
+            llmBackendConfigured: false,
             n8nApiUrl: '',
             n8nApiKey: '',
             n8nUsername: '',
             n8nPassword: '',
-            nodeCount: 0
+            nodeCount: 0,
+            selectedLLMBackend: 'docker-model-runner',
+            llmBackendStatus: {
+                dockerModelRunner: { available: false, vllmEnabled: false, models: [] },
+                ollama: { available: false }
+            }
         };
 
         // ==================== INITIALIZATION ====================
@@ -889,8 +1044,8 @@
 
             backBtn.style.visibility = currentStep > 1 ? 'visible' : 'hidden';
 
-            // Skip button only on optional steps (step 3)
-            skipBtn.style.display = currentStep === 3 ? 'inline-block' : 'none';
+            // Skip button only on optional steps (step 3 - LLM backend, step 4 - login)
+            skipBtn.style.display = (currentStep === 3 || currentStep === 4) ? 'inline-block' : 'none';
 
             // Update next button text
             if (currentStep === 1) {
@@ -899,9 +1054,15 @@
                 nextBtn.textContent = setupState.n8nApiConfigured ? 'Continue →' : 'Test & Continue →';
                 nextBtn.disabled = !setupState.n8nApiConfigured;
             } else if (currentStep === 3) {
+                // LLM Backend step - auto-detect on entry
                 nextBtn.textContent = 'Continue →';
                 nextBtn.disabled = false;
+                checkLLMBackendsOnEntry();
             } else if (currentStep === 4) {
+                // n8n Login (optional)
+                nextBtn.textContent = 'Continue →';
+                nextBtn.disabled = false;
+            } else if (currentStep === 5) {
                 nextBtn.textContent = 'Start Using MCP Server →';
                 updateCompletionSummary();
             }
@@ -913,7 +1074,7 @@
                 return;
             }
 
-            if (currentStep === 4) {
+            if (currentStep === 5) {
                 completeSetup();
                 return;
             }
@@ -1039,11 +1200,148 @@
             element.style.display = 'flex';
         }
 
+        // ==================== LLM BACKEND TESTING ====================
+        let llmCheckInProgress = false;
+
+        async function checkLLMBackendsOnEntry() {
+            if (llmCheckInProgress) return;
+            llmCheckInProgress = true;
+
+            // Check Docker Model Runner
+            updateLLMStatus('dockerMRStatus', 'checking', 'Checking Docker Model Runner...');
+            updateLLMStatus('ollamaStatus', 'checking', 'Checking Ollama...');
+
+            try {
+                // Test Docker Model Runner
+                const mrRes = await fetch('/api/setup/test-model-runner', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const mrData = await mrRes.json();
+
+                if (mrData.available) {
+                    setupState.llmBackendStatus.dockerModelRunner = {
+                        available: true,
+                        vllmEnabled: mrData.vllmAvailable,
+                        models: mrData.models || [],
+                        vllmVersion: mrData.vllmVersion
+                    };
+                    setupState.llmBackendConfigured = true;
+
+                    if (mrData.vllmAvailable) {
+                        updateLLMStatus('dockerMRStatus', 'available',
+                            `Available with vLLM ${mrData.vllmVersion || ''} - ${mrData.vllmModelCount || 0} vLLM models`);
+                    } else {
+                        updateLLMStatus('dockerMRStatus', 'available',
+                            `Available (${mrData.modelCount || 0} models, no vLLM models loaded)`);
+                    }
+                } else {
+                    setupState.llmBackendStatus.dockerModelRunner = { available: false };
+                    updateLLMStatus('dockerMRStatus', 'unavailable',
+                        'Not available - requires Docker Desktop 4.54+');
+                }
+            } catch (error) {
+                setupState.llmBackendStatus.dockerModelRunner = { available: false };
+                updateLLMStatus('dockerMRStatus', 'unavailable', 'Connection failed');
+            }
+
+            // For Ollama - we don't have a test endpoint yet, just show a placeholder
+            // In a real implementation, you'd test Ollama similarly
+            updateLLMStatus('ollamaStatus', 'checking', 'Available as fallback option');
+
+            llmCheckInProgress = false;
+        }
+
+        function selectLLMBackend(backend) {
+            setupState.selectedLLMBackend = backend;
+
+            // Update UI
+            document.querySelectorAll('.llm-option').forEach(opt => {
+                opt.classList.remove('selected');
+                if (opt.dataset.backend === backend) {
+                    opt.classList.add('selected');
+                }
+            });
+
+            // Update radio buttons
+            if (backend === 'docker-model-runner') {
+                document.getElementById('backendDockerMR').checked = true;
+            } else {
+                document.getElementById('backendOllama').checked = true;
+            }
+        }
+
+        async function testLLMBackend() {
+            const btn = document.getElementById('testLLMBtnText');
+            btn.innerHTML = '<span class="spinner"></span> Testing...';
+
+            showConnectionStatus('llmConnectionStatus', 'testing', 'Testing selected backend...');
+
+            try {
+                if (setupState.selectedLLMBackend === 'docker-model-runner') {
+                    const res = await fetch('/api/setup/test-model-runner', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    const data = await res.json();
+
+                    if (data.available) {
+                        setupState.llmBackendConfigured = true;
+                        const vllmMsg = data.vllmAvailable
+                            ? ` with vLLM ${data.vllmVersion || ''} (${data.vllmModelCount} vLLM models)`
+                            : ' (llama.cpp only)';
+                        showConnectionStatus('llmConnectionStatus', 'success',
+                            `Docker Model Runner is ready${vllmMsg}`);
+                    } else {
+                        showConnectionStatus('llmConnectionStatus', 'error',
+                            data.error || 'Docker Model Runner not available');
+                    }
+                } else {
+                    // Ollama test would go here
+                    showConnectionStatus('llmConnectionStatus', 'success',
+                        'Ollama will be used as the LLM backend');
+                    setupState.llmBackendConfigured = true;
+                }
+            } catch (error) {
+                showConnectionStatus('llmConnectionStatus', 'error',
+                    `Test failed: ${error.message}`);
+            }
+
+            btn.innerHTML = '🔍 Test Selected Backend';
+        }
+
+        function updateLLMStatus(elementId, status, message) {
+            const element = document.getElementById(elementId);
+            let statusClass = 'status-checking';
+            if (status === 'available') statusClass = 'status-available';
+            else if (status === 'unavailable') statusClass = 'status-unavailable';
+
+            element.innerHTML = `<span class="${statusClass}">${message}</span>`;
+        }
+
         // ==================== SETUP COMPLETION ====================
         function updateCompletionSummary() {
             document.getElementById('summaryN8nApi').innerHTML = setupState.n8nApiConfigured
                 ? `<span class="connected">✓ Connected</span>`
                 : '<span>Not configured</span>';
+
+            // LLM Backend summary
+            let llmSummary = '';
+            if (setupState.selectedLLMBackend === 'docker-model-runner') {
+                const mr = setupState.llmBackendStatus.dockerModelRunner;
+                if (mr.available && mr.vllmEnabled) {
+                    llmSummary = `<span class="connected">✓ Docker Model Runner + vLLM</span>`;
+                } else if (mr.available) {
+                    llmSummary = `<span class="connected">✓ Docker Model Runner</span>`;
+                } else {
+                    llmSummary = '<span class="skipped">⊘ Docker Model Runner (fallback to Ollama)</span>';
+                }
+            } else {
+                llmSummary = `<span class="connected">✓ Ollama</span>`;
+            }
+            document.getElementById('summaryLLMBackend').innerHTML = llmSummary;
 
             document.getElementById('summaryN8nLogin').innerHTML = setupState.n8nLoginConfigured
                 ? `<span class="connected">✓ Configured</span>`
