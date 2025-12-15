@@ -53,6 +53,9 @@ RUN --mount=type=cache,target=/root/.npm \
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
 
+# Copy public directory for web UI (setup wizard, chat interface)
+COPY public ./public
+
 # Copy data directory if exists (for pre-built databases)
 COPY --chown=node:node data* ./data/
 
@@ -65,12 +68,12 @@ USER node
 # Environment defaults
 ENV NODE_ENV=production
 ENV MCP_MODE=stdio
-ENV PORT=3001
+ENV PORT=3000
 ENV N8N_API_URL=http://localhost:5678
 ENV OLLAMA_URL=http://localhost:11434
 
 # Expose HTTP port (only used in HTTP mode)
-EXPOSE 3001
+EXPOSE 3000
 
 # Health check for HTTP mode
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

@@ -30,9 +30,7 @@ try {
   // Ignore errors if .env doesn't exist
 }
 
-import express from "express";
-import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+// Note: express, helmet, rateLimit moved to SingleSessionHTTPServer
 import { logger } from "./utils/logger";
 import { initCore, getCore } from "./core";
 import {
@@ -40,14 +38,10 @@ import {
   getAISystemStatus,
   shutdownAISystem,
   getLLMRouter,
-  getKnowledgeAgent,
 } from "./ai";
 import { startMCPInterface } from "./interfaces/mcp-interface";
-import {
-  createOpenWebUIRouter,
-  generateOpenWebUIPipeline,
-} from "./interfaces/openwebui-interface";
 import { NodeFilter } from "./core/node-filter";
+import { SingleSessionHTTPServer } from "./http-server-single-session";
 
 // Initialize NodeFilter early to load configuration
 try {
@@ -95,241 +89,6 @@ function getConfig(): ServerConfig {
     enableDryRun: process.env.ENABLE_DRY_RUN !== "false",
     enableLearning: process.env.ENABLE_LEARNING !== "false",
   };
-}
-
-// ============================================================================
-// HTTP SERVER
-// ============================================================================
-
-async function startHttpServer(config: ServerConfig): Promise<void> {
-  const app = express();
-
-  // Security middleware
-  app.use(
-    helmet({
-      contentSecurityPolicy: false, // Allow Open WebUI integration
-    })
-  );
-
-  // Rate limiting
-  app.use(
-    rateLimit({
-      windowMs: 60 * 1000, // 1 minute
-      max: 100, // 100 requests per minute
-      message: { error: "Too many requests, please try again later" },
-    })
-  );
-
-  // Body parsing
-  app.use(express.json({ limit: "10mb" }));
-
-  // Authentication middleware (if AUTH_TOKEN is set)
-  if (config.authToken) {
-    app.use((req, res, next) => {
-      // Skip auth for health check and Open WebUI manifest
-      if (req.path === "/health" || req.path === "/openwebui/manifest") {
-        return next();
-      }
-
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "Missing authorization header" });
-      }
-
-      const token = authHeader.substring(7);
-      if (token !== config.authToken) {
-        return res.status(403).json({ error: "Invalid token" });
-      }
-
-      next();
-    });
-  }
-
-  // Health check endpoint
-  app.get("/health", (req, res) => {
-    try {
-      const core = getCore();
-      const aiStatus = getAISystemStatus();
-
-      res.json({
-        status: "ok",
-        ready: core.isReady(),
-        ...core.getStatus(),
-        ai: aiStatus,
-      });
-    } catch (error: any) {
-      res.json({
-        status: "error",
-        ready: false,
-        error: error.message,
-      });
-    }
-  });
-
-  // Mount Open WebUI routes
-  app.use("/openwebui", createOpenWebUIRouter());
-
-  // API endpoints for direct access
-  app.post("/api/workflow", async (req, res) => {
-    try {
-      const core = getCore();
-      const result = await core.createWorkflow(req.body);
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/workflow/:id", async (req, res) => {
-    try {
-      const core = getCore();
-      const workflow = await core.getWorkflow(req.params.id);
-      if (!workflow) {
-        return res.status(404).json({ error: "Workflow not found" });
-      }
-      res.json(workflow);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/validate", async (req, res) => {
-    try {
-      const core = getCore();
-      const result = await core.validateWorkflow(req.body);
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/nodes/search", async (req, res) => {
-    try {
-      const core = getCore();
-      const query = (req.query.q as string) || "";
-      const nodes = core.searchNodes(query);
-      res.json({
-        count: nodes.length,
-        nodes: nodes.slice(0, 50).map((n) => ({
-          type: n.name,
-          displayName: n.displayName,
-          description: n.description?.substring(0, 150),
-        })),
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/status", (req, res) => {
-    try {
-      const core = getCore();
-      const aiStatus = getAISystemStatus();
-      res.json({
-        core: core.getStatus(),
-        ai: aiStatus,
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // LLM endpoints
-  app.post("/api/llm/generate", async (req, res) => {
-    try {
-      const llmRouter = getLLMRouter();
-      if (!llmRouter.isAvailable()) {
-        return res.status(503).json({ error: "LLM not available" });
-      }
-
-      const result = await llmRouter.generate(req.body.prompt, {
-        temperature: req.body.temperature,
-        maxTokens: req.body.maxTokens,
-        system: req.body.system,
-      });
-
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/llm/chat", async (req, res) => {
-    try {
-      const llmRouter = getLLMRouter();
-      if (!llmRouter.isAvailable()) {
-        return res.status(503).json({ error: "LLM not available" });
-      }
-
-      const result = await llmRouter.chat(req.body.messages, {
-        temperature: req.body.temperature,
-        maxTokens: req.body.maxTokens,
-      });
-
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/llm/embed", async (req, res) => {
-    try {
-      const llmRouter = getLLMRouter();
-      if (!llmRouter.isAvailable()) {
-        return res.status(503).json({ error: "LLM not available" });
-      }
-
-      const result = await llmRouter.embed(req.body.text);
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Knowledge endpoints
-  app.post("/api/knowledge/search", async (req, res) => {
-    try {
-      const agent = getKnowledgeAgent();
-      const results = await agent.search({
-        query: req.body.query,
-        category: req.body.category,
-        type: req.body.type,
-        limit: req.body.limit,
-      });
-      res.json({ results });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/knowledge/status", async (req, res) => {
-    try {
-      const agent = getKnowledgeAgent();
-      res.json(agent.getStatus());
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Generate Open WebUI pipeline code
-  app.get("/api/openwebui-pipeline", (req, res) => {
-    const serverUrl = `http://localhost:${config.port}`;
-    const pipeline = generateOpenWebUIPipeline(serverUrl);
-    res.type("text/plain").send(pipeline);
-  });
-
-  // Start server
-  app.listen(config.port, () => {
-    logger.info(`[HTTP] Server running on http://localhost:${config.port}`);
-    logger.info(
-      `[HTTP] Open WebUI integration: http://localhost:${config.port}/openwebui`
-    );
-    logger.info(`[HTTP] Health check: http://localhost:${config.port}/health`);
-
-    if (!config.authToken) {
-      logger.warn("[HTTP] ⚠️  No AUTH_TOKEN set - server is unprotected!");
-    }
-  });
 }
 
 // ============================================================================
@@ -464,7 +223,12 @@ Return JSON: { "valid": true/false, "issues": [{"severity": "warning", "message"
 
   // Start appropriate server
   if (config.mode === "http") {
-    await startHttpServer(config);
+    // Use SingleSessionHTTPServer for full functionality including:
+    // - Setup wizard and API endpoints
+    // - Static file serving (public/index.html)
+    // - MCP protocol over HTTP
+    const httpServer = new SingleSessionHTTPServer();
+    await httpServer.start();
   } else {
     // MCP mode (stdio)
     await startMCPInterface();

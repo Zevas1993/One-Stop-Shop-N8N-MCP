@@ -1,142 +1,1551 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>n8n MCP Orchestrator</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; color: #333; }
-    .container { display: flex; width: 100%; height: 100vh; }
-    .sidebar { width: 280px; background: white; border-right: 1px solid #e0e0e0; padding: 20px; overflow-y: auto; }
-    .logo { font-size: 18px; font-weight: 700; margin-bottom: 20px; color: #667eea; }
-    .section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; color: #999; margin-bottom: 12px; margin-top: 20px; }
-    .status-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 8px 12px; border-radius: 6px; background: #f5f5f5; font-size: 13px; }
-    .indicator { width: 10px; height: 10px; border-radius: 50%; background: #10b981; box-shadow: 0 0 6px #10b98180; }
-    .metric { padding: 12px; background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-radius: 6px; border-left: 3px solid #667eea; margin-bottom: 8px; }
-    .metric-value { font-size: 16px; font-weight: 600; color: #667eea; }
-    .main { flex: 1; display: flex; flex-direction: column; background: #f9f9f9; }
-    .header { background: white; padding: 20px 30px; border-bottom: 1px solid #e0e0e0; }
-    .header h1 { font-size: 20px; margin-bottom: 4px; }
-    .header p { font-size: 13px; color: #999; }
-    .chat { flex: 1; overflow-y: auto; padding: 20px 30px; display: flex; flex-direction: column; gap: 12px; }
-    .message { display: flex; margin-bottom: 12px; }
-    .message.user { justify-content: flex-end; }
-    .message.assistant { justify-content: flex-start; }
-    .message-content { max-width: 70%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
-    .message.user .message-content { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-bottom-right-radius: 4px; }
-    .message.assistant .message-content { background: white; color: #333; border: 1px solid #e0e0e0; border-bottom-left-radius: 4px; }
-    .message.system .message-content { background: #f0f9ff; color: #1e40af; border-left: 3px solid #3b82f6; max-width: 100%; }
-    .input-area { background: white; padding: 20px 30px; border-top: 1px solid #e0e0e0; }
-    .input-group { display: flex; gap: 10px; }
-    .input-field { flex: 1; padding: 12px 16px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; resize: none; }
-    .input-field:focus { border-color: #667eea; outline: none; }
-    .send-btn { padding: 12px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
-    .send-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>n8n MCP Server - Setup & Configuration</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .header h1 {
+            margin-bottom: 5px;
+            font-size: 28px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        /* ==================== SETUP WIZARD STYLES ==================== */
+        .setup-wizard-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .setup-wizard {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .wizard-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            border-radius: 16px 16px 0 0;
+        }
+
+        .wizard-header h2 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .wizard-header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .progress-bar {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .progress-step {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .progress-step.active {
+            background: white;
+            transform: scale(1.2);
+        }
+
+        .progress-step.completed {
+            background: #4ade80;
+        }
+
+        .wizard-content {
+            padding: 30px;
+        }
+
+        .wizard-step {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .wizard-step.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .step-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .step-description {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group .hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+
+        .form-group input.error {
+            border-color: #ef4444;
+        }
+
+        .form-group input.success {
+            border-color: #22c55e;
+        }
+
+        .test-connection-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            transition: all 0.2s ease;
+            margin-top: 10px;
+        }
+
+        .test-connection-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .test-connection-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .connection-status.success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .connection-status.error {
+            background: #fef2f2;
+            color: #991b1b;
+        }
+
+        .connection-status.testing {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .wizard-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 30px;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+            border-radius: 0 0 16px 16px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-skip {
+            background: transparent;
+            color: #888;
+            padding: 12px 16px;
+        }
+
+        .btn-skip:hover {
+            color: #333;
+        }
+
+        /* Welcome step specific styles */
+        .welcome-features {
+            display: grid;
+            gap: 15px;
+            margin: 25px 0;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .feature-text h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .feature-text p {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        /* Completion step styles */
+        .completion-summary {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        .summary-label {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .summary-value {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+        }
+
+        .summary-value.connected {
+            color: #22c55e;
+        }
+
+        .summary-value.skipped {
+            color: #f59e0b;
+        }
+
+        /* LLM Backend Selection Styles */
+        .llm-options {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .llm-option {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .llm-option:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .llm-option.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #f8f9ff 0%, #f0f3ff 100%);
+        }
+
+        .llm-option-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .llm-option-header input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+        }
+
+        .llm-option-header label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .recommended-badge {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .llm-option-desc {
+            margin-left: 28px;
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .llm-benefits {
+            color: #22c55e;
+            font-weight: 500;
+        }
+
+        .llm-status {
+            margin-left: 28px;
+            margin-top: 10px;
+            font-size: 12px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: #f5f5f5;
+        }
+
+        .llm-status .status-checking {
+            color: #666;
+        }
+
+        .llm-status .status-available {
+            color: #22c55e;
+            font-weight: 500;
+        }
+
+        .llm-status .status-unavailable {
+            color: #ef4444;
+        }
+
+        .llm-status .status-vllm {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ccc;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ==================== MAIN APP STYLES ==================== */
+        .container {
+            flex: 1;
+            max-width: 1200px;
+            width: 100%;
+            margin: 20px auto;
+            padding: 0 20px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+            max-height: 600px;
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-card {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+
+        .status-item {
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+
+        .status-item label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .status-item .value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 400px;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid #eee;
+            padding: 15px;
+            border-radius: 6px;
+            background: #fafafa;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 10px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user { justify-content: flex-end; }
+        .message.assistant { justify-content: flex-start; }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 6px;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+
+        .user .message-content {
+            background: #667eea;
+            color: white;
+        }
+
+        .assistant .message-content {
+            background: #e9e9e9;
+            color: #333;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .input-group button {
+            padding: 12px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .input-group button:hover { background: #5568d3; }
+        .input-group button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 8px;
+        }
+
+        .workflow-item {
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            font-size: 13px;
+            border-left: 3px solid transparent;
+        }
+
+        .workflow-item:hover {
+            background: #e8e8e8;
+            border-left-color: #667eea;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+
+        .badge-success { background: #e8f5e9; color: #2e7d32; }
+        .badge-warning { background: #fff3e0; color: #e65100; }
+
+        .alert {
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .alert-info { background: #e3f2fd; color: #1565c0; border-left: 4px solid #1976d2; }
+        .alert-success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #43a047; }
+        .alert-warning { background: #fff3e0; color: #e65100; border-left: 4px solid #fb8c00; }
+        .alert-error { background: #ffebee; color: #c62828; border-left: 4px solid #e53935; }
+
+        .reconfigure-btn {
+            background: #f0f0f0;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #666;
+            transition: all 0.2s ease;
+            margin-top: 10px;
+        }
+
+        .reconfigure-btn:hover {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .footer {
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-size: 12px;
+            margin-top: auto;
+        }
+
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; max-height: none; }
+            .status-card { grid-template-columns: 1fr; }
+            .message-content { max-width: 90%; }
+            .setup-wizard { margin: 10px; max-height: 95vh; }
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div class="sidebar">
-      <div class="logo">⚙️ n8n MCP</div>
+    <!-- ==================== SETUP WIZARD ==================== -->
+    <div class="setup-wizard-overlay" id="setupWizard" style="display: none;">
+        <div class="setup-wizard">
+            <div class="wizard-header">
+                <h2>n8n MCP Server Setup</h2>
+                <p>Let's get you connected in just a few steps</p>
+                <div class="progress-bar">
+                    <div class="progress-step active" data-step="1"></div>
+                    <div class="progress-step" data-step="2"></div>
+                    <div class="progress-step" data-step="3"></div>
+                    <div class="progress-step" data-step="4"></div>
+                    <div class="progress-step" data-step="5"></div>
+                </div>
+            </div>
 
-      <div class="section-title">System Status</div>
-      <div class="status-item"><div class="indicator"></div>Server</div>
-      <div class="status-item"><div class="indicator"></div>GraphRAG</div>
-      <div class="status-item"><div class="indicator"></div>Nano LLM</div>
+            <div class="wizard-content">
+                <!-- Step 1: Welcome -->
+                <div class="wizard-step active" data-step="1">
+                    <div class="step-title">Welcome to n8n MCP Server!</div>
+                    <div class="step-description">
+                        This server connects AI assistants (like Claude) to your n8n instance,
+                        enabling powerful workflow automation through natural language.
+                    </div>
+                    <div class="welcome-features">
+                        <div class="feature-item">
+                            <div class="feature-icon">&#128269;</div>
+                            <div class="feature-text">
+                                <h4>Discover 800+ Nodes</h4>
+                                <p>Search and explore all available n8n nodes with full documentation</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">&#128295;</div>
+                            <div class="feature-text">
+                                <h4>Create Workflows</h4>
+                                <p>Build and deploy workflows directly from AI conversations</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">&#9989;</div>
+                            <div class="feature-text">
+                                <h4>Validate & Test</h4>
+                                <p>Automatically validate workflows before deployment</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-      <div class="section-title">Metrics</div>
-      <div class="metric">
-        <div>Workflows: <span class="metric-value" id="m1">0</span></div>
-      </div>
-      <div class="metric">
-        <div>Success Rate: <span class="metric-value" id="m2">0%</span></div>
-      </div>
-      <div class="metric">
-        <div>Graph Nodes: <span class="metric-value">525</span></div>
-      </div>
+                <!-- Step 2: n8n API Configuration -->
+                <div class="wizard-step" data-step="2">
+                    <div class="step-title">Connect to n8n</div>
+                    <div class="step-description">
+                        Enter your n8n instance details. You'll need an API key from
+                        n8n Settings > API > Create API Key.
+                    </div>
+                    <div class="form-group">
+                        <label>n8n API URL</label>
+                        <input type="text" id="wizardApiUrl" placeholder="http://localhost:5678" value="http://host.docker.internal:5678">
+                        <div class="hint">Use <code>host.docker.internal</code> to connect to n8n running on your host machine</div>
+                    </div>
+                    <div class="form-group">
+                        <label>API Key</label>
+                        <input type="password" id="wizardApiKey" placeholder="n8n_api_...">
+                        <div class="hint">Found in n8n > Settings > API > Create API Key</div>
+                    </div>
+                    <button class="test-connection-btn" onclick="testN8nConnection()">
+                        <span id="testN8nBtnText">&#128268; Test Connection</span>
+                    </button>
+                    <div id="n8nConnectionStatus"></div>
+                </div>
+
+                <!-- Step 3: LLM Backend Selection -->
+                <div class="wizard-step" data-step="3">
+                    <div class="step-title">LLM Backend Configuration</div>
+                    <div class="step-description">
+                        Select your preferred LLM backend. Docker Model Runner with vLLM offers
+                        the best performance on Docker Desktop 4.54+ with NVIDIA GPUs.
+                    </div>
+
+                    <div class="llm-options">
+                        <div class="llm-option selected" data-backend="docker-model-runner" onclick="selectLLMBackend('docker-model-runner')">
+                            <div class="llm-option-header">
+                                <input type="radio" name="llmBackend" id="backendDockerMR" value="docker-model-runner" checked>
+                                <label for="backendDockerMR">
+                                    <strong>Docker Model Runner</strong>
+                                    <span class="recommended-badge">Recommended</span>
+                                </label>
+                            </div>
+                            <div class="llm-option-desc">
+                                Built-in vLLM support in Docker Desktop 4.54+<br>
+                                <span class="llm-benefits">High-throughput GPU-accelerated inference</span>
+                            </div>
+                            <div class="llm-status" id="dockerMRStatus">
+                                <span class="status-checking">Checking availability...</span>
+                            </div>
+                        </div>
+
+                        <div class="llm-option" data-backend="ollama" onclick="selectLLMBackend('ollama')">
+                            <div class="llm-option-header">
+                                <input type="radio" name="llmBackend" id="backendOllama" value="ollama">
+                                <label for="backendOllama">
+                                    <strong>Ollama</strong>
+                                </label>
+                            </div>
+                            <div class="llm-option-desc">
+                                Cross-platform, easy setup, works everywhere<br>
+                                <span class="llm-benefits">CPU-friendly with llama.cpp</span>
+                            </div>
+                            <div class="llm-status" id="ollamaStatus">
+                                <span class="status-checking">Checking availability...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="test-connection-btn" onclick="testLLMBackend()">
+                        <span id="testLLMBtnText">&#128269; Test Selected Backend</span>
+                    </button>
+                    <div id="llmConnectionStatus"></div>
+                </div>
+
+                <!-- Step 4: n8n Login (Optional) -->
+                <div class="wizard-step" data-step="4">
+                    <div class="step-title">n8n Login (Optional)</div>
+                    <div class="step-description">
+                        Providing your n8n login credentials enables access to the complete node catalog
+                        with full schema information. This step is optional.
+                    </div>
+                    <div class="form-group">
+                        <label>Email / Username</label>
+                        <input type="text" id="wizardUsername" placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="wizardPassword" placeholder="Your n8n password">
+                        <div class="hint">&#9888;&#65039; MFA-enabled accounts are not supported</div>
+                    </div>
+                    <button class="test-connection-btn" onclick="testN8nLogin()">
+                        <span id="testLoginBtnText">&#128274; Test Login</span>
+                    </button>
+                    <div id="loginConnectionStatus"></div>
+                </div>
+
+                <!-- Step 5: Completion -->
+                <div class="wizard-step" data-step="5">
+                    <div class="step-title">&#127881; Setup Complete!</div>
+                    <div class="step-description">
+                        Your n8n MCP Server is ready to use. Here's a summary of your configuration:
+                    </div>
+                    <div class="completion-summary">
+                        <div class="summary-item">
+                            <span class="summary-label">n8n API</span>
+                            <span class="summary-value" id="summaryN8nApi">Not configured</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">LLM Backend</span>
+                            <span class="summary-value" id="summaryLLMBackend">Not configured</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">n8n Login</span>
+                            <span class="summary-value" id="summaryN8nLogin">Skipped</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Node Catalog</span>
+                            <span class="summary-value" id="summaryNodeCount">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="step-description" style="margin-top: 20px;">
+                        You can now use Claude Desktop or Open WebUI to interact with your n8n workflows!
+                    </div>
+                </div>
+            </div>
+
+            <div class="wizard-footer">
+                <button class="btn btn-secondary" id="wizardBackBtn" onclick="wizardBack()" style="visibility: hidden;">
+                    &#8592; Back
+                </button>
+                <div>
+                    <button class="btn btn-skip" id="wizardSkipBtn" onclick="wizardSkip()" style="display: none;">
+                        Skip
+                    </button>
+                    <button class="btn btn-primary" id="wizardNextBtn" onclick="wizardNext()">
+                        Get Started &#8594;
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="main">
-      <div class="header">
-        <h1>n8n Workflow Orchestrator</h1>
-        <p>Generate workflows using natural language with GraphRAG + Nano LLM</p>
-      </div>
-
-      <div class="chat" id="chat">
-        <div class="message system">
-          <div class="message-content">Welcome to n8n MCP Orchestrator! Describe your workflow in natural language and I'll generate it for you.</div>
+    <!-- ==================== MAIN APPLICATION ==================== -->
+    <div id="mainApp" style="display: none; flex-direction: column; min-height: 100vh;">
+        <div class="header">
+            <h1>&#129302; n8n Workflow Assistant</h1>
+            <p>Design and deploy n8n workflows using conversational AI</p>
         </div>
-      </div>
 
-      <div class="input-area">
-        <div class="input-group">
-          <textarea class="input-field" id="inp" placeholder="Describe the workflow you want..." rows="2"></textarea>
-          <button class="send-btn" onclick="sendMsg()">Send</button>
+        <div class="container">
+            <div class="sidebar">
+                <div>
+                    <div class="section-title">&#9881;&#65039; Configuration</div>
+                    <div id="configStatus" style="font-size: 12px; color: #666;">
+                        <p>Loading...</p>
+                    </div>
+                    <button class="reconfigure-btn" onclick="showSetupWizard()">
+                        &#128295; Reconfigure
+                    </button>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <div class="section-title">&#128202; System Info</div>
+                    <div id="hardwareInfo" style="font-size: 12px; color: #666;">
+                        <p>Loading...</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <div class="section-title">&#129302; Nano LLM</div>
+                    <div id="llmInfo" style="font-size: 12px; color: #666;">
+                        <p>Loading...</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <div class="section-title">&#128203; Workflows</div>
+                    <div id="workflowsList">
+                        <p style="font-size: 12px; color: #999;">No workflows yet</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="main">
+                <div class="card">
+                    <div class="status-card" id="statusCard">
+                        <div class="status-item">
+                            <label>Status</label>
+                            <div class="value" id="statusValue">Initializing...</div>
+                        </div>
+                        <div class="status-item">
+                            <label>n8n Connected</label>
+                            <div class="value" id="n8nConnectedValue">Checking...</div>
+                        </div>
+                        <div class="status-item">
+                            <label>Nodes Available</label>
+                            <div class="value" id="nodeCountValue">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card chat-container">
+                    <h3 style="margin-bottom: 15px;">&#128172; Conversation</h3>
+                    <div class="messages" id="messages"></div>
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            id="messageInput"
+                            placeholder="Describe the workflow you want to create..."
+                            onkeypress="handleKeyPress(event)"
+                        >
+                        <button onclick="sendMessage()" id="sendBtn">Send</button>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
+
+        <div class="footer">
+            <p>&#128640; n8n MCP Server v3.0.0 - Powered by Local Nano LLM | &copy; 2025</p>
+        </div>
     </div>
-  </div>
 
-  <script>
-    function sendMsg() {
-      const msg = document.getElementById("inp").value.trim();
-      if (!msg) return;
+    <script>
+        // ==================== STATE ====================
+        let currentStep = 1;
+        const totalSteps = 5;
+        let setupState = {
+            n8nApiConfigured: false,
+            n8nLoginConfigured: false,
+            llmBackendConfigured: false,
+            n8nApiUrl: '',
+            n8nApiKey: '',
+            n8nUsername: '',
+            n8nPassword: '',
+            nodeCount: 0,
+            selectedLLMBackend: 'docker-model-runner',
+            llmBackendStatus: {
+                dockerModelRunner: { available: false, vllmEnabled: false, models: [] },
+                ollama: { available: false }
+            }
+        };
 
-      const chatEl = document.getElementById("chat");
+        // ==================== INITIALIZATION ====================
+        window.addEventListener('load', async () => {
+            try {
+                const res = await fetch('/api/setup/status');
+                const data = await res.json();
 
-      // User message
-      const userDiv = document.createElement("div");
-      userDiv.className = "message user";
-      userDiv.innerHTML = '<div class="message-content">' + msg + '</div>';
-      chatEl.appendChild(userDiv);
-      chatEl.scrollTop = chatEl.scrollHeight;
-
-      document.getElementById("inp").value = "";
-
-      // Send request
-      fetch("/api/orchestrate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goal: msg, context: { userMessage: msg } })
-      })
-      .then(r => r.json())
-      .then(data => {
-        const respDiv = document.createElement("div");
-        respDiv.className = "message assistant";
-        respDiv.innerHTML = '<div class="message-content">✅ Workflow: ' + data.workflow.name +
-                           '<br>Pattern: ' + data.pattern +
-                           '<br>Time: ' + data.executionTime.toFixed(2) + 's</div>';
-        chatEl.appendChild(respDiv);
-        chatEl.scrollTop = chatEl.scrollHeight;
-
-        // Update metrics
-        fetch("/api/metrics").then(r => r.json()).then(m => {
-          document.getElementById("m1").textContent = m.workflowsGenerated;
-          document.getElementById("m2").textContent = Math.round(m.successRate) + "%";
+                if (data.configured) {
+                    // Already configured - show main app
+                    showMainApp();
+                    initializeMainApp(data);
+                } else {
+                    // Not configured - show setup wizard
+                    showSetupWizard();
+                }
+            } catch (error) {
+                console.error('Failed to check setup status:', error);
+                // If API fails, show setup wizard
+                showSetupWizard();
+            }
         });
-      })
-      .catch(e => {
-        const errDiv = document.createElement("div");
-        errDiv.className = "message assistant";
-        errDiv.innerHTML = '<div class="message-content">❌ Error: ' + e.message + '</div>';
-        chatEl.appendChild(errDiv);
-      });
-    }
 
-    // Send on Enter
-    document.getElementById("inp").addEventListener("keydown", e => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendMsg();
-      }
-    });
+        // ==================== WIZARD NAVIGATION ====================
+        function showSetupWizard() {
+            document.getElementById('setupWizard').style.display = 'flex';
+            document.getElementById('mainApp').style.display = 'none';
+            currentStep = 1;
+            updateWizardUI();
+        }
 
-    // Load initial metrics
-    fetch("/api/metrics").then(r => r.json()).then(m => {
-      document.getElementById("m1").textContent = m.workflowsGenerated;
-      document.getElementById("m2").textContent = Math.round(m.successRate) + "%";
-    });
-  </script>
+        function showMainApp() {
+            document.getElementById('setupWizard').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'flex';
+        }
+
+        function updateWizardUI() {
+            // Update progress bar
+            document.querySelectorAll('.progress-step').forEach((step, index) => {
+                step.classList.remove('active', 'completed');
+                if (index + 1 < currentStep) {
+                    step.classList.add('completed');
+                } else if (index + 1 === currentStep) {
+                    step.classList.add('active');
+                }
+            });
+
+            // Show/hide steps
+            document.querySelectorAll('.wizard-step').forEach((step, index) => {
+                step.classList.toggle('active', index + 1 === currentStep);
+            });
+
+            // Update buttons
+            const backBtn = document.getElementById('wizardBackBtn');
+            const skipBtn = document.getElementById('wizardSkipBtn');
+            const nextBtn = document.getElementById('wizardNextBtn');
+
+            backBtn.style.visibility = currentStep > 1 ? 'visible' : 'hidden';
+
+            // Skip button only on optional steps (step 3 - LLM backend, step 4 - login)
+            skipBtn.style.display = (currentStep === 3 || currentStep === 4) ? 'inline-block' : 'none';
+
+            // Update next button text
+            if (currentStep === 1) {
+                nextBtn.textContent = 'Get Started \u2192';
+            } else if (currentStep === 2) {
+                nextBtn.textContent = setupState.n8nApiConfigured ? 'Continue \u2192' : 'Test & Continue \u2192';
+                nextBtn.disabled = !setupState.n8nApiConfigured;
+            } else if (currentStep === 3) {
+                // LLM Backend step - auto-detect on entry
+                nextBtn.textContent = 'Continue \u2192';
+                nextBtn.disabled = false;
+                checkLLMBackendsOnEntry();
+            } else if (currentStep === 4) {
+                // n8n Login (optional)
+                nextBtn.textContent = 'Continue \u2192';
+                nextBtn.disabled = false;
+            } else if (currentStep === 5) {
+                nextBtn.textContent = 'Start Using MCP Server \u2192';
+                updateCompletionSummary();
+            }
+        }
+
+        function wizardNext() {
+            if (currentStep === 2 && !setupState.n8nApiConfigured) {
+                testN8nConnection();
+                return;
+            }
+
+            if (currentStep === 5) {
+                completeSetup();
+                return;
+            }
+
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateWizardUI();
+            }
+        }
+
+        function wizardBack() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateWizardUI();
+            }
+        }
+
+        function wizardSkip() {
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateWizardUI();
+            }
+        }
+
+        // ==================== CONNECTION TESTING ====================
+        async function testN8nConnection() {
+            const apiUrl = document.getElementById('wizardApiUrl').value.trim();
+            const apiKey = document.getElementById('wizardApiKey').value.trim();
+
+            if (!apiUrl || !apiKey) {
+                showConnectionStatus('n8nConnectionStatus', 'error', 'Please enter both API URL and API Key');
+                return;
+            }
+
+            const btn = document.getElementById('testN8nBtnText');
+            btn.innerHTML = '<span class="spinner"></span> Testing...';
+
+            showConnectionStatus('n8nConnectionStatus', 'testing', 'Connecting to n8n...');
+
+            try {
+                const res = await fetch('/api/setup/test-n8n', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiUrl, apiKey })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    setupState.n8nApiConfigured = true;
+                    setupState.n8nApiUrl = apiUrl;
+                    setupState.n8nApiKey = apiKey;
+                    setupState.nodeCount = data.nodeCount || 0;
+
+                    showConnectionStatus('n8nConnectionStatus', 'success',
+                        '\u2713 Connected! Found ' + (data.nodeCount || 'many') + ' nodes');
+                    document.getElementById('wizardApiUrl').classList.add('success');
+                    document.getElementById('wizardApiKey').classList.add('success');
+                } else {
+                    showConnectionStatus('n8nConnectionStatus', 'error',
+                        '\u2717 Connection failed: ' + (data.error || 'Unknown error'));
+                    document.getElementById('wizardApiUrl').classList.add('error');
+                }
+            } catch (error) {
+                showConnectionStatus('n8nConnectionStatus', 'error',
+                    '\u2717 Network error: ' + error.message);
+            }
+
+            btn.innerHTML = '\u{1F50C} Test Connection';
+            updateWizardUI();
+        }
+
+        async function testN8nLogin() {
+            const username = document.getElementById('wizardUsername').value.trim();
+            const password = document.getElementById('wizardPassword').value.trim();
+
+            if (!username || !password) {
+                showConnectionStatus('loginConnectionStatus', 'error', 'Please enter both username and password');
+                return;
+            }
+
+            const btn = document.getElementById('testLoginBtnText');
+            btn.innerHTML = '<span class="spinner"></span> Testing...';
+
+            showConnectionStatus('loginConnectionStatus', 'testing', 'Authenticating...');
+
+            try {
+                const res = await fetch('/api/setup/test-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        apiUrl: setupState.n8nApiUrl,
+                        username,
+                        password
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    setupState.n8nLoginConfigured = true;
+                    setupState.n8nUsername = username;
+                    setupState.n8nPassword = password;
+
+                    showConnectionStatus('loginConnectionStatus', 'success',
+                        '\u2713 Login successful! Full node catalog access enabled');
+                } else {
+                    showConnectionStatus('loginConnectionStatus', 'error',
+                        '\u2717 Login failed: ' + (data.error || 'Invalid credentials'));
+                }
+            } catch (error) {
+                showConnectionStatus('loginConnectionStatus', 'error',
+                    '\u2717 Network error: ' + error.message);
+            }
+
+            btn.innerHTML = '\u{1F510} Test Login';
+        }
+
+        function showConnectionStatus(elementId, type, message) {
+            const element = document.getElementById(elementId);
+            element.className = 'connection-status ' + type;
+            element.textContent = message;
+            element.style.display = 'flex';
+        }
+
+        // ==================== LLM BACKEND TESTING ====================
+        let llmCheckInProgress = false;
+
+        async function checkLLMBackendsOnEntry() {
+            if (llmCheckInProgress) return;
+            llmCheckInProgress = true;
+
+            // Check Docker Model Runner
+            updateLLMStatus('dockerMRStatus', 'checking', 'Checking Docker Model Runner...');
+            updateLLMStatus('ollamaStatus', 'checking', 'Checking Ollama...');
+
+            try {
+                // Test Docker Model Runner
+                const mrRes = await fetch('/api/setup/test-model-runner', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const mrData = await mrRes.json();
+
+                if (mrData.available) {
+                    setupState.llmBackendStatus.dockerModelRunner = {
+                        available: true,
+                        vllmEnabled: mrData.vllmAvailable,
+                        models: mrData.models || [],
+                        vllmVersion: mrData.vllmVersion
+                    };
+                    setupState.llmBackendConfigured = true;
+
+                    if (mrData.vllmAvailable) {
+                        updateLLMStatus('dockerMRStatus', 'available',
+                            'Available with vLLM ' + (mrData.vllmVersion || '') + ' - ' + (mrData.vllmModelCount || 0) + ' vLLM models');
+                    } else {
+                        updateLLMStatus('dockerMRStatus', 'available',
+                            'Available (' + (mrData.modelCount || 0) + ' models, no vLLM models loaded)');
+                    }
+                } else {
+                    setupState.llmBackendStatus.dockerModelRunner = { available: false };
+                    updateLLMStatus('dockerMRStatus', 'unavailable',
+                        'Not available - requires Docker Desktop 4.54+');
+                }
+            } catch (error) {
+                setupState.llmBackendStatus.dockerModelRunner = { available: false };
+                updateLLMStatus('dockerMRStatus', 'unavailable', 'Connection failed');
+            }
+
+            // For Ollama - we don't have a test endpoint yet, just show a placeholder
+            updateLLMStatus('ollamaStatus', 'checking', 'Available as fallback option');
+
+            llmCheckInProgress = false;
+        }
+
+        function selectLLMBackend(backend) {
+            setupState.selectedLLMBackend = backend;
+
+            // Update UI
+            document.querySelectorAll('.llm-option').forEach(function(opt) {
+                opt.classList.remove('selected');
+                if (opt.dataset.backend === backend) {
+                    opt.classList.add('selected');
+                }
+            });
+
+            // Update radio buttons
+            if (backend === 'docker-model-runner') {
+                document.getElementById('backendDockerMR').checked = true;
+            } else {
+                document.getElementById('backendOllama').checked = true;
+            }
+        }
+
+        async function testLLMBackend() {
+            const btn = document.getElementById('testLLMBtnText');
+            btn.innerHTML = '<span class="spinner"></span> Testing...';
+
+            showConnectionStatus('llmConnectionStatus', 'testing', 'Testing selected backend...');
+
+            try {
+                if (setupState.selectedLLMBackend === 'docker-model-runner') {
+                    const res = await fetch('/api/setup/test-model-runner', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    const data = await res.json();
+
+                    if (data.available) {
+                        setupState.llmBackendConfigured = true;
+                        var vllmMsg = data.vllmAvailable
+                            ? ' with vLLM ' + (data.vllmVersion || '') + ' (' + data.vllmModelCount + ' vLLM models)'
+                            : ' (llama.cpp only)';
+                        showConnectionStatus('llmConnectionStatus', 'success',
+                            'Docker Model Runner is ready' + vllmMsg);
+                    } else {
+                        showConnectionStatus('llmConnectionStatus', 'error',
+                            data.error || 'Docker Model Runner not available');
+                    }
+                } else {
+                    // Ollama test would go here
+                    showConnectionStatus('llmConnectionStatus', 'success',
+                        'Ollama will be used as the LLM backend');
+                    setupState.llmBackendConfigured = true;
+                }
+            } catch (error) {
+                showConnectionStatus('llmConnectionStatus', 'error',
+                    'Test failed: ' + error.message);
+            }
+
+            btn.innerHTML = '\u{1F50D} Test Selected Backend';
+        }
+
+        function updateLLMStatus(elementId, status, message) {
+            var element = document.getElementById(elementId);
+            var statusClass = 'status-checking';
+            if (status === 'available') statusClass = 'status-available';
+            else if (status === 'unavailable') statusClass = 'status-unavailable';
+
+            element.innerHTML = '<span class="' + statusClass + '">' + message + '</span>';
+        }
+
+        // ==================== SETUP COMPLETION ====================
+        function updateCompletionSummary() {
+            document.getElementById('summaryN8nApi').innerHTML = setupState.n8nApiConfigured
+                ? '<span class="connected">\u2713 Connected</span>'
+                : '<span>Not configured</span>';
+
+            // LLM Backend summary
+            var llmSummary = '';
+            if (setupState.selectedLLMBackend === 'docker-model-runner') {
+                var mr = setupState.llmBackendStatus.dockerModelRunner;
+                if (mr.available && mr.vllmEnabled) {
+                    llmSummary = '<span class="connected">\u2713 Docker Model Runner + vLLM</span>';
+                } else if (mr.available) {
+                    llmSummary = '<span class="connected">\u2713 Docker Model Runner</span>';
+                } else {
+                    llmSummary = '<span class="skipped">\u2298 Docker Model Runner (fallback to Ollama)</span>';
+                }
+            } else {
+                llmSummary = '<span class="connected">\u2713 Ollama</span>';
+            }
+            document.getElementById('summaryLLMBackend').innerHTML = llmSummary;
+
+            document.getElementById('summaryN8nLogin').innerHTML = setupState.n8nLoginConfigured
+                ? '<span class="connected">\u2713 Configured</span>'
+                : '<span class="skipped">\u2298 Skipped</span>';
+
+            document.getElementById('summaryNodeCount').textContent =
+                setupState.nodeCount > 0 ? setupState.nodeCount + ' nodes' : 'Loading...';
+        }
+
+        async function completeSetup() {
+            var nextBtn = document.getElementById('wizardNextBtn');
+            nextBtn.disabled = true;
+            nextBtn.innerHTML = '<span class="spinner"></span> Saving...';
+
+            try {
+                var res = await fetch('/api/setup/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        n8nApiUrl: setupState.n8nApiUrl,
+                        n8nApiKey: setupState.n8nApiKey,
+                        n8nUsername: setupState.n8nUsername,
+                        n8nPassword: setupState.n8nPassword
+                    })
+                });
+
+                var data = await res.json();
+
+                if (data.success) {
+                    showMainApp();
+                    initializeMainApp(data);
+                } else {
+                    alert('Failed to save configuration: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Network error: ' + error.message);
+            }
+
+            nextBtn.disabled = false;
+            nextBtn.textContent = 'Start Using MCP Server \u2192';
+        }
+
+        // ==================== MAIN APP FUNCTIONS ====================
+        async function initializeMainApp(setupData) {
+            try {
+                // Load setup status if not provided
+                if (!setupData) {
+                    var res = await fetch('/api/setup/status');
+                    setupData = await res.json();
+                }
+
+                updateMainAppUI(setupData);
+                loadConversation();
+                loadWorkflows();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                addSystemMessage('\u26A0\uFE0F Failed to initialize. Please refresh the page.');
+            }
+        }
+
+        function updateMainAppUI(data) {
+            document.getElementById('statusValue').textContent = 'Ready';
+            document.getElementById('n8nConnectedValue').textContent = data.n8nConnected ? '\u2705 Yes' : '\u274C No';
+            document.getElementById('nodeCountValue').textContent = data.nodeCount || '--';
+
+            // Update config status
+            document.getElementById('configStatus').innerHTML =
+                '<p><strong>n8n API:</strong> ' + (data.n8nConnected ? '\u2705 Connected' : '\u274C Not connected') + '</p>' +
+                '<p><strong>URL:</strong> ' + (data.n8nApiUrl || 'Not set') + '</p>';
+
+            // Update hardware info
+            if (data.hardware) {
+                var hw = data.hardware;
+                document.getElementById('hardwareInfo').innerHTML =
+                    '<p><strong>CPU:</strong> ' + hw.cpuCores + ' cores</p>' +
+                    '<p><strong>RAM:</strong> ' + hw.ramGbytes + 'GB</p>' +
+                    '<p><strong>GPU:</strong> ' + (hw.hasGpu ? 'Yes' : 'No') + '</p>' +
+                    '<p><strong>OS:</strong> ' + hw.osType + '</p>';
+            }
+
+            // Update LLM info
+            if (data.selectedLLM) {
+                var llm = data.selectedLLM;
+                document.getElementById('llmInfo').innerHTML =
+                    '<p><strong>' + (llm.displayName || 'Nano LLM') + '</strong></p>' +
+                    '<p style="font-size: 11px; color: #999;">' +
+                        (llm.modelSize || 'Auto-selected') + '<br>' +
+                        (llm.speed || 'Fast') + ' \u2022 ' + (llm.quality || 'Good') +
+                    '</p>';
+            }
+        }
+
+        async function sendMessage() {
+            var input = document.getElementById('messageInput');
+            var message = input.value.trim();
+
+            if (!message) return;
+
+            addMessage('user', message);
+            input.value = '';
+
+            var btn = document.getElementById('sendBtn');
+            btn.disabled = true;
+
+            try {
+                var res = await fetch('/api/local-llm/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+                var data = await res.json();
+
+                if (data.success) {
+                    addMessage('assistant', data.message);
+                } else {
+                    addSystemMessage('\u274C Error: ' + data.error);
+                }
+            } catch (error) {
+                addSystemMessage('\u274C Network error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                input.focus();
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function addMessage(role, content) {
+            var messages = document.getElementById('messages');
+            var messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + role;
+
+            var contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = content;
+
+            messageDiv.appendChild(contentDiv);
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function addSystemMessage(content) {
+            var messages = document.getElementById('messages');
+            var messageDiv = document.createElement('div');
+            messageDiv.style.textAlign = 'center';
+            messageDiv.style.fontSize = '12px';
+            messageDiv.style.color = '#999';
+            messageDiv.style.marginBottom = '10px';
+            messageDiv.textContent = content;
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        async function loadConversation() {
+            try {
+                var res = await fetch('/api/local-llm/conversation');
+                var data = await res.json();
+
+                if (data.messages && data.messages.length === 0) {
+                    addSystemMessage('\u{1F44B} Start by telling me about your workflow idea!');
+                } else if (data.messages) {
+                    data.messages.forEach(function(msg) {
+                        addMessage(msg.role, msg.content);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load conversation:', error);
+            }
+        }
+
+        async function loadWorkflows() {
+            try {
+                var res = await fetch('/api/local-llm/workflows');
+                var data = await res.json();
+
+                var list = document.getElementById('workflowsList');
+                list.innerHTML = '';
+
+                if (!data.workflows || data.workflows.length === 0) {
+                    list.innerHTML = '<p style="font-size: 12px; color: #999;">No workflows yet</p>';
+                    return;
+                }
+
+                data.workflows.forEach(function(workflow) {
+                    var item = document.createElement('div');
+                    item.className = 'workflow-item';
+                    var statusBadge = workflow.isDeployed ? '\u2705 Deployed' : '\u{1F4CB} Ready';
+                    item.innerHTML =
+                        '<strong>' + workflow.id.substring(0, 15) + '...</strong>' +
+                        '<span class="badge badge-' + (workflow.isDeployed ? 'success' : 'warning') + '">' + statusBadge + '</span>' +
+                        '<div style="font-size: 11px; color: #999; margin-top: 5px;">' +
+                            workflow.nodeCount + ' nodes \u2022 ' + new Date(workflow.generatedAt).toLocaleDateString() +
+                        '</div>';
+                    list.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Failed to load workflows:', error);
+            }
+        }
+    </script>
 </body>
 </html>

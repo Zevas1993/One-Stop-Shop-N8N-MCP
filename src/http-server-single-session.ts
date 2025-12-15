@@ -12,6 +12,7 @@ import { ConsoleManager } from "./utils/console-manager";
 import { logger } from "./utils/logger";
 import { PROJECT_VERSION } from "./utils/version";
 import { GraphRAGLearningService } from "./services/graphrag-learning-service";
+import { createLocalLLMRoutes } from "./http/routes-local-llm";
 import dotenv from "dotenv";
 
 dotenv.config({ override: true });
@@ -234,6 +235,9 @@ export class SingleSessionHTTPServer {
 
     // JSON body parser for API endpoints only
     app.use(express.json({ limit: "10mb" }));
+
+    // Mount setup wizard and local LLM routes (includes /api/setup/* endpoints)
+    app.use(createLocalLLMRoutes());
 
     // Health check endpoint (no body parsing needed for GET)
     app.get("/health", (req, res) => {
