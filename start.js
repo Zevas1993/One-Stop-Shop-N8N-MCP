@@ -468,6 +468,24 @@ async function main() {
   if (args.includes('--setup') || args.includes('-s')) {
     process.exit(await runSetup());
   }
+
+  if (args.includes('--setup-kapa')) {
+    // Run the kapa.ai OAuth setup script
+    const kapaSetupPath = path.join(__dirname, 'dist', 'kapa-auth-setup.js');
+    if (!fs.existsSync(kapaSetupPath)) {
+      logError('kapa-auth-setup.js not found in dist/');
+      logInfo('Build first: npx swc src/kapa-auth-setup.ts -o dist/kapa-auth-setup.js -C jsc.parser.syntax=typescript -C jsc.target=es2020 -C module.type=commonjs');
+      process.exit(1);
+    }
+    loadEnvFile();
+    const child = spawn('node', [kapaSetupPath], {
+      stdio: 'inherit',
+      env: process.env,
+      cwd: __dirname
+    });
+    child.on('exit', (code) => process.exit(code || 0));
+    return;
+  }
   
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
@@ -481,6 +499,7 @@ ${colors.cyan}Options:${colors.reset}
   --port=PORT    Set HTTP port (default: 3001)
   --check, -c    Run diagnostics
   --setup, -s    Interactive setup wizard
+  --setup-kapa   Set up kapa.ai docs authentication (Google OAuth)
   --help, -h     Show this help
 
 ${colors.cyan}Examples:${colors.reset}

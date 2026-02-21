@@ -100,7 +100,7 @@ class Logger {
 
       if (this.enableConsole) {
         // In MCP Stdio mode, EVERYTHING must go to stderr to avoid breaking JSON-RPC on stdout
-        const isMcpStdio = process.env.MCP_MODE === "stdio";
+        const isMcpStdio = process.env.MCP_MODE !== "http";
 
         if (isMcpStdio) {
           console.error(formattedMessage);

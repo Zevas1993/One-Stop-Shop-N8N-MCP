@@ -21,6 +21,10 @@ secrets.json
 credentials.json
 api-keys.json
 
+# kapa.ai OAuth tokens (contains access/refresh tokens)
+.kapa-tokens.json
+.kapa-client.json
+
 # Build outputs
 dist/
 build/

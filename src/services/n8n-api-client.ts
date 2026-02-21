@@ -496,6 +496,70 @@ export class N8nApiClient {
     }
   }
 
+  // Node Type Discovery (live from n8n instance)
+  // Note: n8n does not expose node types via the public /api/v1 REST API.
+  // However, newer versions expose them via the internal /rest/node-types endpoint.
+  // This method tries that endpoint and returns null if unavailable.
+  async getInstalledNodeTypes(includeProperties = false): Promise<any[] | null> {
+    try {
+      // Try the internal n8n endpoint (not the /api/v1 path)
+      const baseWithoutApi = this.baseUrl.replace(/\/api\/v1$/, '').replace(/\/$/, '');
+      const axios = (await import('axios')).default;
+      const config = (await import('../config/n8n-api')).getN8nApiConfig();
+      if (!config) return null;
+
+      const response = await axios.get(
+        `${baseWithoutApi}/rest/node-types`,
+        {
+          params: { includeProperties },
+          headers: {
+            'X-N8N-API-KEY': config.apiKey,
+          },
+          timeout: 15000,
+        }
+      );
+      const data = response.data;
+      // Response may be an array or { data: [...] }
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.data)) return data.data;
+      return null;
+    } catch (error) {
+      // Endpoint not available on this n8n version - return null for graceful fallback
+      logger.debug('getInstalledNodeTypes: /rest/node-types not available (expected on older n8n versions)');
+      return null;
+    }
+  }
+
+  // Fetch node list from npm registry for a specific n8n version
+  // This gives the authoritative list of built-in nodes for that version
+  async fetchBuiltinNodeTypesFromNpm(n8nVersion: string): Promise<string[] | null> {
+    try {
+      const axios = (await import('axios')).default;
+      // Fetch n8n-nodes-base package metadata for the specific version
+      const response = await axios.get(
+        `https://registry.npmjs.org/n8n-nodes-base/${n8nVersion}`,
+        { timeout: 10000 }
+      );
+      const pkg = response.data;
+      const nodeFiles: string[] = pkg?.n8n?.nodes || [];
+      // Extract clean node type names from file paths
+      // e.g. "dist/nodes/Slack/Slack.node.js" → "n8n-nodes-base.slack"
+      const nodeTypes = nodeFiles
+        .map((filePath: string) => {
+          const match = filePath.match(/nodes\/.*?\/(\w+)\.node\.js$/);
+          if (match) {
+            return `n8n-nodes-base.${match[1].charAt(0).toLowerCase() + match[1].slice(1)}`;
+          }
+          return null;
+        })
+        .filter(Boolean) as string[];
+      return nodeTypes;
+    } catch (error) {
+      logger.debug(`fetchBuiltinNodeTypesFromNpm: Could not fetch for version ${n8nVersion}`);
+      return null;
+    }
+  }
+
   /**
    * Issue #2: Retry Logic for Transient Failures
    * Handles error responses with exponential backoff retry logic.

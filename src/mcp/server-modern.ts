@@ -3,6 +3,8 @@ import {
   ResourceTemplate,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { z } from "zod";
 
 import { isN8nApiConfigured, getN8nApiConfig } from "../config/n8n-api";
@@ -58,6 +60,11 @@ export class UnifiedMCPServer {
   private optimizationService: GraphOptimizationService;
   private toolHandlers = new Map<string, (args: any) => Promise<any>>();
   private toolDefinitions: any[] = [];
+
+  // Kapa.ai MCP client for n8n docs proxy
+  private kapaClient: Client | null = null;
+  private kapaConnecting: Promise<Client> | null = null;
+  private kapaTools: Array<{ name: string; description?: string }> | null = null;
 
   // n8n Configuration validation (Issue #1: Early configuration detection)
   private n8nConfigured: boolean = false;
@@ -181,11 +188,12 @@ export class UnifiedMCPServer {
     // 1. Node Discovery
     this.server.tool(
       "node_discovery",
-      "Find, search, and analyze n8n nodes",
+      "Find, search, and analyze n8n nodes. Use list_installed to see what nodes are in the connected n8n instance.",
       {
         action: z.enum([
           "search",
           "list",
+          "list_installed",
           "get_info",
           "get_documentation",
           "search_properties",
@@ -198,6 +206,8 @@ export class UnifiedMCPServer {
         limit: z.number().optional(),
         nodeType: z.string().optional(),
         includeDocumentation: z.boolean().optional(),
+        includeDetails: z.boolean().optional().describe("Include full node details in list_installed (slower)"),
+        detectCommunity: z.boolean().optional().describe("Scan workflows to detect installed community nodes (list_installed)"),
       },
       async (args) => {
         await this.ensureInitialized();
@@ -216,6 +226,15 @@ export class UnifiedMCPServer {
                   package: pkg,
                   limit,
                 })
+              );
+            case "list_installed":
+              // Live discovery of nodes installed in the connected n8n instance
+              // Returns built-in nodes (from /rest/node-types or SQLite DB) + community nodes (from workflow scan)
+              return this.formatResponse(
+                await n8nHandlers.handleListInstalledNodes(
+                  { includeDetails: args.includeDetails, detectCommunity: args.detectCommunity },
+                  this.initManager.getRepository()
+                )
               );
             case "get_info":
               if (!nodeType) throw new Error("nodeType required");
@@ -328,11 +347,16 @@ export class UnifiedMCPServer {
         action: z.enum([
           "create",
           "get",
+          "get_details",
+          "get_structure",
+          "get_minimal",
           "update",
           "list",
           "search",
           "validate",
           "clean",
+          "activate",
+          "duplicate",
         ]),
         workflow: z.any().optional(),
         id: z.string().optional(),
@@ -341,6 +365,8 @@ export class UnifiedMCPServer {
         query: z.string().optional(),
         format: z.enum(["full", "simplified"]).optional(),
         autoFix: z.boolean().optional(),
+        active: z.boolean().optional(),
+        newName: z.string().optional(),
         mode: z
           .enum([
             "full",
@@ -398,6 +424,21 @@ export class UnifiedMCPServer {
               return this.formatResponse(
                 await n8nHandlers.handleGetWorkflow({ id })
               );
+            case "get_details":
+              if (!id) throw new Error("id required");
+              return this.formatResponse(
+                await n8nHandlers.handleGetWorkflowDetails({ id })
+              );
+            case "get_structure":
+              if (!id) throw new Error("id required");
+              return this.formatResponse(
+                await n8nHandlers.handleGetWorkflowStructure({ id })
+              );
+            case "get_minimal":
+              if (!id) throw new Error("id required");
+              return this.formatResponse(
+                await n8nHandlers.handleGetWorkflowMinimal({ id })
+              );
             case "update":
               if (!id || !changes) throw new Error("id and changes required");
               await this.ensureInitialized();
@@ -424,6 +465,17 @@ export class UnifiedMCPServer {
                 success: true,
                 data: { workflows: filtered, total: filtered.length },
               });
+            case "activate":
+              if (!id) throw new Error("id required");
+              if (args.active === undefined) throw new Error("active (boolean) required");
+              return this.formatResponse(
+                await n8nHandlers.handleActivateWorkflow({ id, active: args.active })
+              );
+            case "duplicate":
+              if (!id) throw new Error("id required");
+              return this.formatResponse(
+                await n8nHandlers.handleDuplicateWorkflow({ id, newName: args.newName })
+              );
             case "clean":
               if (!id) throw new Error("id required");
               await this.ensureInitialized();
@@ -501,14 +553,17 @@ export class UnifiedMCPServer {
       "Execute and monitor workflows (Requires API)",
       {
         action: z.enum([
+          "run",
           "trigger",
           "get",
           "list",
           "delete",
+          "stop",
           "retry",
           "monitor_running",
           "list_mcp",
         ]),
+        workflowId: z.string().optional(),
         webhookUrl: z.string().optional(),
         httpMethod: z.string().optional(),
         data: z.any().optional(),
@@ -517,7 +572,6 @@ export class UnifiedMCPServer {
         filters: z.any().optional(),
         waitForResponse: z.boolean().optional(),
         loadWorkflow: z.boolean().optional(),
-        workflowId: z.string().optional(),
         includeStats: z.boolean().optional(),
         limit: z.number().optional(),
       },
@@ -541,6 +595,12 @@ export class UnifiedMCPServer {
 
         try {
           switch (action) {
+            case "run":
+              // Direct API execution — runs a workflow by ID without needing a webhook URL
+              if (!workflowId && !id) throw new Error("workflowId required");
+              return this.formatResponse(
+                await n8nHandlers.handleRunWorkflow({ id: workflowId || id, data })
+              );
             case "trigger":
               if (!webhookUrl) throw new Error("webhookUrl required");
               return this.formatResponse(
@@ -568,6 +628,12 @@ export class UnifiedMCPServer {
               if (!id) throw new Error("id required");
               return this.formatResponse(
                 await n8nHandlers.handleDeleteExecution({ id })
+              );
+            case "stop":
+              // Cancel a running execution
+              if (!id) throw new Error("id (execution id) required");
+              return this.formatResponse(
+                await n8nHandlers.handleStopExecution({ id })
               );
             case "retry":
               if (!id) throw new Error("id required");
@@ -1126,6 +1192,183 @@ export class UnifiedMCPServer {
         }
       }
     );
+
+    // ═══════════════════════════════════════════════════════════════════
+    // NEW TOOLS: Tags, Variables, Source Control
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Tags Manager — organize workflows with tags
+    this.server.tool(
+      "tags_manager",
+      "Manage n8n workflow tags (Requires API). Tags help organize and filter workflows.",
+      {
+        action: z.enum(["list", "create", "update", "delete"]),
+        id: z.string().optional().describe("Tag ID (for update/delete)"),
+        name: z.string().optional().describe("Tag name (for create/update)"),
+        limit: z.number().optional(),
+        cursor: z.string().optional(),
+      },
+      async (args) => {
+        this.ensureN8nConfigured();
+        const { action, id, name, limit, cursor } = args as any;
+        try {
+          switch (action) {
+            case "list":
+              return this.formatResponse(
+                await n8nHandlers.handleListTags({ limit, cursor })
+              );
+            case "create":
+              if (!name) throw new Error("name required");
+              return this.formatResponse(
+                await n8nHandlers.handleCreateTag({ name })
+              );
+            case "update":
+              if (!id || !name) throw new Error("id and name required");
+              return this.formatResponse(
+                await n8nHandlers.handleUpdateTag({ id, name })
+              );
+            case "delete":
+              if (!id) throw new Error("id required");
+              return this.formatResponse(
+                await n8nHandlers.handleDeleteTag({ id })
+              );
+            default:
+              throw new Error(`Unknown action: ${action}`);
+          }
+        } catch (error) {
+          return this.formatErrorResponse(error, "tags_manager");
+        }
+      }
+    );
+
+    // Variables Manager — manage instance-level variables ($vars.*)
+    this.server.tool(
+      "variables_manager",
+      "Manage n8n instance-level variables accessible in all workflows via $vars.variableName (Requires API)",
+      {
+        action: z.enum(["list", "create", "update", "delete"]),
+        id: z.string().optional().describe("Variable ID (for update/delete)"),
+        key: z.string().optional().describe("Variable key/name (for create)"),
+        value: z.string().optional().describe("Variable value (for create/update)"),
+        type: z.enum(["string", "number", "boolean", "secret"]).optional().describe("Variable type (for create)"),
+      },
+      async (args) => {
+        this.ensureN8nConfigured();
+        const { action, id, key, value, type } = args as any;
+        try {
+          switch (action) {
+            case "list":
+              return this.formatResponse(
+                await n8nHandlers.handleGetVariables({})
+              );
+            case "create":
+              if (!key || value === undefined) throw new Error("key and value required");
+              return this.formatResponse(
+                await n8nHandlers.handleCreateVariable({ key, value, type })
+              );
+            case "update":
+              if (!id || value === undefined) throw new Error("id and value required");
+              return this.formatResponse(
+                await n8nHandlers.handleUpdateVariable({ id, value })
+              );
+            case "delete":
+              if (!id) throw new Error("id required");
+              return this.formatResponse(
+                await n8nHandlers.handleDeleteVariable({ id })
+              );
+            default:
+              throw new Error(`Unknown action: ${action}`);
+          }
+        } catch (error) {
+          return this.formatErrorResponse(error, "variables_manager");
+        }
+      }
+    );
+
+    // Source Control — Git integration for n8n Enterprise
+    this.server.tool(
+      "source_control",
+      "Manage n8n Git source control integration (Enterprise feature — requires Git configured in n8n settings)",
+      {
+        action: z.enum(["status", "pull", "push"]),
+        force: z.boolean().optional().describe("Force pull even if there are conflicts (for pull)"),
+        message: z.string().optional().describe("Commit message (for push)"),
+        fileNames: z.array(z.string()).optional().describe("Specific files to push (for push, omit for all)"),
+      },
+      async (args) => {
+        this.ensureN8nConfigured();
+        const { action, force, message, fileNames } = args as any;
+        try {
+          switch (action) {
+            case "status":
+              return this.formatResponse(
+                await n8nHandlers.handleGetSourceControlStatus({})
+              );
+            case "pull":
+              return this.formatResponse(
+                await n8nHandlers.handlePullSourceControl({ force })
+              );
+            case "push":
+              if (!message) throw new Error("message (commit message) required for push");
+              return this.formatResponse(
+                await n8nHandlers.handlePushSourceControl({ message, fileNames })
+              );
+            default:
+              throw new Error(`Unknown action: ${action}`);
+          }
+        } catch (error) {
+          return this.formatErrorResponse(error, "source_control");
+        }
+      }
+    );
+
+    // ═══════════════════════════════════════════════════════════════
+    // n8n DOCS (kapa.ai proxy) - Search & ask official n8n documentation
+    // ═══════════════════════════════════════════════════════════════
+    this.server.tool(
+      "n8n_docs",
+      "Search and ask questions about official n8n documentation via kapa.ai. Use action 'search' to find relevant docs, or 'ask' to get an AI-generated answer from n8n's knowledge base. No API key required.",
+      {
+        action: z.enum(["search", "ask"]).describe("'search' to find relevant documentation, 'ask' to get an AI-generated answer"),
+        query: z.string().describe("The search query or question about n8n"),
+      },
+      async (args: { action: string; query: string }) => {
+        try {
+          const client = await this.getKapaClient();
+
+          // Use cached tool list or re-fetch
+          if (!this.kapaTools) {
+            const { tools } = await client.listTools();
+            this.kapaTools = tools.map(t => ({ name: t.name, description: t.description }));
+          }
+
+          // Find the matching kapa.ai tool for the requested action
+          const toolName = this.kapaTools.find(t =>
+            t.name.toLowerCase().includes(args.action.toLowerCase())
+          )?.name;
+
+          if (!toolName) {
+            return this.formatResponse({
+              success: false,
+              error: `No matching kapa.ai tool for action '${args.action}'. Available tools: ${this.kapaTools.map(t => t.name).join(", ")}`,
+            });
+          }
+
+          const result = await client.callTool({
+            name: toolName,
+            arguments: { query: args.query },
+          });
+
+          return { content: result.content as any };
+        } catch (error: any) {
+          // Reset client on errors so next call reconnects
+          this.kapaClient = null;
+          this.kapaConnecting = null;
+          this.kapaTools = null;
+          return this.formatErrorResponse(error, "n8n_docs");
+        }
+      }
+    );
   }
 
   private setupResources() {
@@ -1239,6 +1482,42 @@ export class UnifiedMCPServer {
       );
       this.n8nConfigured = false;
     }
+  }
+
+  /**
+   * Lazy-connect to kapa.ai MCP server for n8n docs proxy.
+   * Reuses connection; auto-reconnects on failure.
+   */
+  private async getKapaClient(): Promise<Client> {
+    if (this.kapaClient) return this.kapaClient;
+    if (this.kapaConnecting) return this.kapaConnecting;
+
+    this.kapaConnecting = (async () => {
+      const client = new Client({ name: "n8n-mcp-kapa-proxy", version: PROJECT_VERSION });
+      const transport = new SSEClientTransport(new URL("https://n8n.mcp.kapa.ai/mcp"));
+
+      transport.onclose = () => {
+        this.kapaClient = null;
+        this.kapaTools = null;
+      };
+      transport.onerror = () => {
+        this.kapaClient = null;
+        this.kapaTools = null;
+      };
+
+      await client.connect(transport);
+      this.kapaClient = client;
+      this.kapaConnecting = null;
+
+      // Cache available tools
+      const { tools } = await client.listTools();
+      this.kapaTools = tools.map(t => ({ name: t.name, description: t.description }));
+      logger.info(`Connected to kapa.ai MCP. Available tools: ${this.kapaTools.map(t => t.name).join(", ")}`);
+
+      return client;
+    })();
+
+    return this.kapaConnecting;
   }
 
   /**

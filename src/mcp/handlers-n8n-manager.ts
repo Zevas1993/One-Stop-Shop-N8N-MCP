@@ -1828,7 +1828,408 @@ export async function handleDeleteCredential(
   }
 }
 
-// Workflow Recovery Handler
+// ============================================================
+// TAG MANAGEMENT HANDLERS
+// ============================================================
+
+export async function handleListTags(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const input = z.object({
+      limit: z.number().optional(),
+      cursor: z.string().optional(),
+    }).parse(args || {});
+
+    const response = await client.listTags(input);
+    return {
+      success: true,
+      data: response,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+export async function handleCreateTag(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const { name } = z.object({ name: z.string() }).parse(args);
+    const tag = await client.createTag({ name });
+    return { success: true, data: tag, message: `Tag "${tag.name}" created successfully` };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+export async function handleUpdateTag(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const { id, name } = z.object({ id: z.string(), name: z.string() }).parse(args);
+    const tag = await client.updateTag(id, { name });
+    return { success: true, data: tag, message: `Tag updated successfully` };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+export async function handleDeleteTag(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const { id } = z.object({ id: z.string() }).parse(args);
+    await client.deleteTag(id);
+    return { success: true, message: `Tag ${id} deleted successfully` };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+// ============================================================
+// VARIABLE MANAGEMENT HANDLERS
+// ============================================================
+
+export async function handleGetVariables(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const variables = await client.getVariables();
+    return {
+      success: true,
+      data: {
+        variables,
+        total: variables.length,
+        note: 'These are instance-level variables accessible in all workflows via $vars.variableName',
+      },
+    };
+  } catch (error) {
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+export async function handleCreateVariable(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const input = z.object({
+      key: z.string(),
+      value: z.string(),
+      type: z.enum(['string', 'number', 'boolean', 'secret']).optional(),
+    }).parse(args);
+
+    const variable = await client.createVariable(input as any);
+    return {
+      success: true,
+      data: variable,
+      message: `Variable "${input.key}" created. Access in workflows via $vars.${input.key}`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+export async function handleUpdateVariable(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const input = z.object({
+      id: z.string(),
+      key: z.string().optional(),
+      value: z.string(),
+    }).parse(args);
+    const { id, ...updateData } = input;
+    const variable = await client.updateVariable(id, updateData as any);
+    return { success: true, data: variable, message: `Variable updated successfully` };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+export async function handleDeleteVariable(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const { id } = z.object({ id: z.string() }).parse(args);
+    await client.deleteVariable(id);
+    return { success: true, message: `Variable ${id} deleted successfully` };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+// ============================================================
+// SOURCE CONTROL HANDLERS (Enterprise)
+// ============================================================
+
+export async function handleGetSourceControlStatus(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const status = await client.getSourceControlStatus();
+    return { success: true, data: status };
+  } catch (error) {
+    if (error instanceof N8nApiError) {
+      return {
+        success: false,
+        error: getUserFriendlyErrorMessage(error),
+        code: error.code,
+        details: { note: 'Source control requires n8n Enterprise with Git integration configured' },
+      };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+export async function handlePullSourceControl(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const { force } = z.object({ force: z.boolean().optional() }).parse(args || {});
+    const result = await client.pullSourceControl(force || false);
+    return { success: true, data: result, message: 'Source control pull completed' };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+export async function handlePushSourceControl(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const input = z.object({
+      message: z.string(),
+      fileNames: z.array(z.string()).optional(),
+    }).parse(args);
+    const result = await client.pushSourceControl(input.message, input.fileNames);
+    return { success: true, data: result, message: 'Source control push completed' };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+// ============================================================
+// WORKFLOW DUPLICATE HANDLER
+// ============================================================
+
+export async function handleDuplicateWorkflow(args: unknown): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const input = z.object({
+      id: z.string(),
+      newName: z.string().optional(),
+    }).parse(args);
+
+    // Fetch the original workflow
+    const original = await client.getWorkflow(input.id);
+
+    // Strip all system-managed fields that n8n manages automatically
+    const systemFields = [
+      'id', 'createdAt', 'updatedAt', 'versionId', 'active',
+      'tags', 'triggerCount', 'shared', 'isArchived',
+    ];
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(original as any)) {
+      if (!systemFields.includes(key)) {
+        cleaned[key] = value;
+      }
+    }
+
+    // Set the new name
+    cleaned.name = input.newName || `${original.name} (Copy)`;
+
+    // Create the duplicate (inactive by default)
+    const duplicate = await client.createWorkflow(cleaned as any);
+
+    return {
+      success: true,
+      data: {
+        original: { id: original.id, name: original.name },
+        duplicate: { id: duplicate.id, name: duplicate.name },
+      },
+      message: `Workflow duplicated successfully. New workflow: "${duplicate.name}" (ID: ${duplicate.id})`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+// ============================================================
+// LIVE NODE DISCOVERY HANDLER
+// ============================================================
+
+/**
+ * Discover what nodes are actually installed in the connected n8n instance.
+ * Uses a 3-step strategy:
+ * 1. Try n8n's internal /rest/node-types endpoint (most authoritative)
+ * 2. Fall back to local SQLite database (built from n8n-nodes-base npm package)
+ * 3. Scan existing workflows to find community nodes not in the built-in catalog
+ */
+export async function handleListInstalledNodes(
+  args: unknown,
+  repository: any
+): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const input = z.object({
+      includeDetails: z.boolean().optional(),
+      detectCommunity: z.boolean().optional(),
+    }).parse(args || {});
+
+    const result: any = {
+      strategy_used: [] as string[],
+      n8n_version: null as string | null,
+      builtin_nodes: [] as any[],
+      community_nodes: [] as string[],
+      total_builtin: 0,
+      total_community: 0,
+    };
+
+    // Step 0: Get n8n version from health check
+    try {
+      const health = await client.healthCheck();
+      result.n8n_version = (health as any).n8nVersion || null;
+    } catch {
+      result.n8n_version = null;
+    }
+
+    // Step 1: Try live /rest/node-types endpoint
+    const liveNodes = await client.getInstalledNodeTypes(input.includeDetails || false);
+    if (liveNodes && liveNodes.length > 0) {
+      result.strategy_used.push('live_api (/rest/node-types)');
+      result.builtin_nodes = liveNodes.map((n: any) => ({
+        type: n.name || n.type || n,
+        displayName: n.displayName || n.name || n,
+        category: n.group?.[0] || 'unknown',
+        isAI: (n.group || []).includes('transform') || (n.codex?.categories || []).includes('AI'),
+        isTrigger: (n.group || []).includes('trigger'),
+      }));
+      result.total_builtin = result.builtin_nodes.length;
+    } else {
+      // Step 2: Fall back to local SQLite database
+      result.strategy_used.push('local_database (SQLite)');
+      try {
+        const dbNodes = await repository.getAllNodes();
+        result.builtin_nodes = (dbNodes || []).map((n: any) => ({
+          type: n.nodeType || n.type,
+          displayName: n.displayName || n.name,
+          category: n.category || 'unknown',
+          isAI: (n.category || '').toLowerCase().includes('ai') ||
+                (n.nodeType || '').includes('langchain'),
+          isTrigger: (n.nodeType || '').toLowerCase().includes('trigger'),
+        }));
+        result.total_builtin = result.builtin_nodes.length;
+        result.db_version = await repository.getDbVersion?.() || 'unknown';
+        result.db_note = result.n8n_version && result.db_version !== result.n8n_version
+          ? `⚠️ DB built for n8n ${result.db_version}, connected instance is ${result.n8n_version}. Run node_discovery resync to update.`
+          : '✅ Database appears current';
+      } catch (dbError) {
+        result.strategy_used.push('database_error');
+        result.db_error = dbError instanceof Error ? dbError.message : String(dbError);
+      }
+    }
+
+    // Step 3: Community node detection via workflow scan (optional, default off for speed)
+    if (input.detectCommunity !== false) {
+      try {
+        const builtinTypes = new Set(result.builtin_nodes.map((n: any) => n.type));
+        const workflows = await client.listWorkflows({ limit: 100 });
+        const communityTypes = new Set<string>();
+
+        for (const wf of workflows.data || []) {
+          const full = await client.getWorkflow(wf.id!);
+          for (const node of full.nodes || []) {
+            if (node.type && !builtinTypes.has(node.type) &&
+                !node.type.startsWith('n8n-nodes-base.') &&
+                !node.type.startsWith('@n8n/') &&
+                node.type !== 'n8n-nodes-langchain') {
+              communityTypes.add(node.type);
+            }
+          }
+        }
+
+        result.community_nodes = Array.from(communityTypes);
+        result.total_community = result.community_nodes.length;
+        if (result.community_nodes.length > 0) {
+          result.strategy_used.push('workflow_scan (community nodes detected)');
+        }
+      } catch (scanError) {
+        result.community_scan_error = scanError instanceof Error ? scanError.message : String(scanError);
+      }
+    }
+
+    return {
+      success: true,
+      data: result,
+      message: `Found ${result.total_builtin} built-in nodes and ${result.total_community} community nodes in n8n ${result.n8n_version || 'unknown version'}`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', details: { errors: error.errors } };
+    }
+    if (error instanceof N8nApiError) {
+      return { success: false, error: getUserFriendlyErrorMessage(error), code: error.code };
+    }
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
+  }
+}
+
+// ============================================================
+// WORKFLOW RECOVERY HANDLER
+// ============================================================
 
 /**
  * Clean a broken workflow by removing system-managed fields that prevent updates.

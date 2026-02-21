@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "command": "node",
+      "args": ["dist/main.js"],
+      "cwd": "c:\\Users\\Chris Boyd\\Documents\\MCP-Servers\\One-Stop-Shop-N8N-MCP"
+    }
+  }
+}

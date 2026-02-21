@@ -51,6 +51,8 @@
     "@n8n/n8n-nodes-langchain": "1.120.2",
     "@octokit/rest": "^22.0.0",
     "@playwright/test": "^1.53.2",
+    "@swc/cli": "^0.8.0",
+    "@swc/core": "^1.15.11",
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.3",
     "@types/jest": "^29.5.14",

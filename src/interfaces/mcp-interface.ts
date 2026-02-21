@@ -13,6 +13,10 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
+import type { OAuthTokens, OAuthClientMetadata, OAuthClientInformationMixed } from "@modelcontextprotocol/sdk/shared/auth.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -21,6 +25,92 @@ import {
 import { logger } from "../utils/logger";
 import { PROJECT_VERSION } from "../utils/version";
 import { getCore, CoreOrchestrator, isCoreReady } from "../core";
+import * as fs from "fs";
+import * as path from "path";
+
+// ============================================================================
+// KAPA.AI OAUTH PROVIDER
+// ============================================================================
+
+const KAPA_TOKENS_FILE = path.join(process.cwd(), ".kapa-tokens.json");
+const KAPA_CLIENT_FILE = path.join(process.cwd(), ".kapa-client.json");
+const KAPA_REDIRECT_URL = "http://localhost:9876/callback";
+
+/**
+ * OAuth provider for kapa.ai authentication.
+ * At runtime (headless), tokens must already be cached from setup.
+ * During setup, redirectToAuthorization opens the browser.
+ */
+class KapaOAuthProvider implements OAuthClientProvider {
+  private _codeVerifier: string = "";
+  private _isSetupMode: boolean;
+
+  constructor(isSetupMode: boolean = false) {
+    this._isSetupMode = isSetupMode;
+  }
+
+  get redirectUrl(): string {
+    return KAPA_REDIRECT_URL;
+  }
+
+  get clientMetadata(): OAuthClientMetadata {
+    return {
+      redirect_uris: [new URL(KAPA_REDIRECT_URL)],
+      client_name: "n8n-mcp-copilot",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    } as OAuthClientMetadata;
+  }
+
+  async clientInformation(): Promise<OAuthClientInformationMixed | undefined> {
+    try {
+      if (fs.existsSync(KAPA_CLIENT_FILE)) {
+        return JSON.parse(fs.readFileSync(KAPA_CLIENT_FILE, "utf-8"));
+      }
+    } catch {
+      // No saved client info
+    }
+    return undefined;
+  }
+
+  async saveClientInformation(info: OAuthClientInformationMixed): Promise<void> {
+    fs.writeFileSync(KAPA_CLIENT_FILE, JSON.stringify(info, null, 2));
+  }
+
+  async tokens(): Promise<OAuthTokens | undefined> {
+    try {
+      if (fs.existsSync(KAPA_TOKENS_FILE)) {
+        return JSON.parse(fs.readFileSync(KAPA_TOKENS_FILE, "utf-8"));
+      }
+    } catch {
+      // No saved tokens
+    }
+    return undefined;
+  }
+
+  async saveTokens(tokens: OAuthTokens): Promise<void> {
+    fs.writeFileSync(KAPA_TOKENS_FILE, JSON.stringify(tokens, null, 2));
+  }
+
+  async redirectToAuthorization(authorizationUrl: URL): Promise<void> {
+    if (!this._isSetupMode) {
+      throw new Error(
+        "kapa.ai authentication required. Run 'node start.js --setup-kapa' to authenticate."
+      );
+    }
+    // In setup mode, this is handled by the setup script
+    throw new Error(`REDIRECT:${authorizationUrl.toString()}`);
+  }
+
+  async saveCodeVerifier(codeVerifier: string): Promise<void> {
+    this._codeVerifier = codeVerifier;
+  }
+
+  async codeVerifier(): Promise<string> {
+    return this._codeVerifier;
+  }
+}
 
 // ============================================================================
 // MCP TOOL DEFINITIONS
@@ -340,6 +430,29 @@ Only nodes returned by this search are guaranteed to exist.`,
     inputSchema: {
       type: "object",
       properties: {},
+    },
+  },
+
+  // === DOCUMENTATION (kapa.ai proxy) ===
+  {
+    name: "n8n_docs",
+    description:
+      "Search and ask questions about official n8n documentation via kapa.ai. Use 'search' for keyword lookups, 'ask' for natural language questions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["search", "ask"],
+          description:
+            "'search' for keyword-based doc search, 'ask' for natural language questions",
+        },
+        query: {
+          type: "string",
+          description: "The search query or question about n8n",
+        },
+      },
+      required: ["action", "query"],
     },
   },
 
@@ -785,6 +898,58 @@ function createToolHandlers(
 export class MCPInterface {
   private server: Server;
   private handlers: Record<string, ToolHandler> = {};
+  private kapaClient: Client | null = null;
+  private kapaConnecting: Promise<Client> | null = null;
+  private kapaTools: Array<{ name: string; description?: string }> | null =
+    null;
+
+  private async getKapaClient(): Promise<Client> {
+    if (this.kapaClient) return this.kapaClient;
+    if (this.kapaConnecting) return this.kapaConnecting;
+
+    // Check if tokens exist before attempting connection
+    if (!fs.existsSync(KAPA_TOKENS_FILE)) {
+      throw new Error(
+        "kapa.ai not authenticated. Run 'node start.js --setup-kapa' to set up authentication."
+      );
+    }
+
+    this.kapaConnecting = (async () => {
+      const authProvider = new KapaOAuthProvider(false);
+      const client = new Client({
+        name: "n8n-mcp-kapa-proxy",
+        version: PROJECT_VERSION,
+      });
+      const transport = new StreamableHTTPClientTransport(
+        new URL("https://n8n.mcp.kapa.ai/"),
+        { authProvider }
+      );
+      transport.onclose = () => {
+        this.kapaClient = null;
+        this.kapaTools = null;
+      };
+      transport.onerror = (err) => {
+        logger.error("[Kapa] Transport error:", err);
+        this.kapaClient = null;
+        this.kapaTools = null;
+      };
+      await client.connect(transport);
+      this.kapaClient = client;
+      this.kapaConnecting = null;
+
+      const { tools } = await client.listTools();
+      this.kapaTools = tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+      }));
+      logger.info(
+        `[Kapa] Connected. Tools: ${this.kapaTools.map((t) => t.name).join(", ")}`
+      );
+      return client;
+    })();
+
+    return this.kapaConnecting;
+  }
 
   constructor() {
     this.server = new Server(
@@ -812,6 +977,68 @@ export class MCPInterface {
 
     // Create handlers
     this.handlers = createToolHandlers(core);
+
+    // Add n8n_docs handler (kapa.ai proxy)
+    this.handlers["n8n_docs"] = async (params: {
+      action: string;
+      query: string;
+    }) => {
+      try {
+        const client = await this.getKapaClient();
+        if (!this.kapaTools) {
+          const { tools } = await client.listTools();
+          this.kapaTools = tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+          }));
+        }
+
+        // kapa.ai has a single tool (search_n8n_knowledge_sources) that handles
+        // both keyword searches and natural language questions
+        const toolName = this.kapaTools[0]?.name;
+
+        if (!toolName) {
+          return {
+            error: `No kapa.ai tool matching '${params.action}'. Available: ${this.kapaTools.map((t) => t.name).join(", ")}`,
+          };
+        }
+
+        const result = await client.callTool({
+          name: toolName,
+          arguments: { query: params.query },
+        });
+
+        // Extract text content from MCP response
+        if (result.content && Array.isArray(result.content)) {
+          const texts = (result.content as Array<{ type: string; text?: string }>)
+            .filter((c) => c.type === "text" && c.text)
+            .map((c) => c.text);
+          return { result: texts.join("\n") };
+        }
+        return { result: result.content };
+      } catch (error: any) {
+        this.kapaClient = null;
+        this.kapaConnecting = null;
+        this.kapaTools = null;
+        logger.error("[Kapa] Error:", error);
+
+        // Detect auth-related errors
+        const msg = error.message || "";
+        if (msg.includes("not authenticated") || msg.includes("setup-kapa")) {
+          return {
+            error: msg,
+            hint: "Run 'node start.js --setup-kapa' to authenticate with Google for kapa.ai docs access.",
+          };
+        }
+        if (msg.includes("Unauthorized") || msg.includes("401") || msg.includes("token")) {
+          return {
+            error: `Authentication expired: ${msg}`,
+            hint: "Run 'node start.js --setup-kapa' to re-authenticate.",
+          };
+        }
+        return { error: `n8n_docs failed: ${msg}` };
+      }
+    };
 
     // Register tool list handler
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
