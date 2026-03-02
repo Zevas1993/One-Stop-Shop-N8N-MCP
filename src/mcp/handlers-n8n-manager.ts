@@ -73,6 +73,55 @@ function ensureApiConfigured(): N8nApiClient {
   return client;
 }
 
+/**
+ * Check if credentials referenced by workflow nodes actually exist on the n8n instance.
+ * Returns an array of warning strings (empty if all credentials found or check fails silently).
+ */
+async function checkCredentialExistence(
+  client: N8nApiClient,
+  nodes: any[]
+): Promise<string[]> {
+  const warnings: string[] = [];
+  try {
+    // Collect all credential type references from nodes
+    const referencedCreds: Record<string, string[]> = {}; // credType -> nodeNames[]
+    for (const node of nodes) {
+      if (node.credentials && typeof node.credentials === "object") {
+        for (const credType of Object.keys(node.credentials)) {
+          if (!referencedCreds[credType]) {
+            referencedCreds[credType] = [];
+          }
+          referencedCreds[credType].push(node.name || node.type);
+        }
+      }
+    }
+
+    const credTypes = Object.keys(referencedCreds);
+    if (credTypes.length === 0) return warnings;
+
+    // Fetch available credentials from n8n instance
+    const available = await client.listCredentials();
+    const availableList = Array.isArray(available) ? available : (available as any)?.data || [];
+    const availableTypes: Record<string, boolean> = {};
+    for (const c of availableList) {
+      if ((c as any).type) availableTypes[(c as any).type] = true;
+    }
+
+    // Check each referenced credential type
+    for (const credType of credTypes) {
+      if (!availableTypes[credType]) {
+        warnings.push(
+          `- Credential type "${credType}" (used by: ${referencedCreds[credType].join(", ")}) not found on n8n instance. Nodes will fail at runtime until this credential is configured.`
+        );
+      }
+    }
+  } catch (err) {
+    // Silently ignore — credential check is non-blocking
+    logger.debug("[checkCredentialExistence] Failed to check credentials", err);
+  }
+  return warnings;
+}
+
 // Zod schemas for input validation
 const createWorkflowSchema = z.object({
   name: z.string(),
@@ -387,6 +436,9 @@ export async function handleCreateWorkflow(
       );
     }
 
+    // Credential existence check (non-blocking — warns but doesn't prevent creation)
+    const credentialWarnings = await checkCredentialExistence(client, (workflowInput as any).nodes || []);
+
     // Issue #4: Validation-Execution Gap - Validation has been completed above
     // All nodes, connections, and expressions have been validated against live n8n
     // This API call proceeds with confidence that the workflow is valid
@@ -403,10 +455,14 @@ export async function handleCreateWorkflow(
       );
     }
 
+    const credWarningMsg = credentialWarnings.length > 0
+      ? `\n\n⚠️ Credential warnings:\n${credentialWarnings.join("\n")}`
+      : "";
+
     return {
       success: true,
       data: workflow,
-      message: `Workflow "${workflow.name}" created successfully with ID: ${workflow.id}`,
+      message: `Workflow "${workflow.name}" created successfully with ID: ${workflow.id}${credWarningMsg}`,
     };
   } catch (error) {
     // PHASE 2 INTEGRATION: Record error for agent feedback
@@ -862,6 +918,10 @@ export async function handleUpdateWorkflow(
       }
     }
 
+    // Credential existence check (non-blocking — warns but doesn't prevent update)
+    const nodesForCredCheck = (fullWorkflow as any)?.nodes || (updateData as any)?.nodes || [];
+    const credentialWarnings = await checkCredentialExistence(client, nodesForCredCheck);
+
     // Issue #4: Validation-Execution Gap - Validation complete, proceeding with update
     // Workflow has been merged with current state and validated against live n8n
     // API call proceeds with high confidence in workflow validity
@@ -875,10 +935,14 @@ export async function handleUpdateWorkflow(
 
     const workflow = await client.updateWorkflow(id, workflowToSend);
 
+    const credWarningMsg = credentialWarnings.length > 0
+      ? `\n\n⚠️ Credential warnings:\n${credentialWarnings.join("\n")}`
+      : "";
+
     return {
       success: true,
       data: workflow,
-      message: `Workflow "${workflow.name}" updated successfully`,
+      message: `Workflow "${workflow.name}" updated successfully${credWarningMsg}`,
     };
   } catch (error) {
     if (error instanceof z.ZodError) {

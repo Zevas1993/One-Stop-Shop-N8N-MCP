@@ -28,7 +28,8 @@ async function main() {
   console.error(`[DEBUG] Starting Unified MCP Server.`);
 
   try {
-    const { createUnifiedMCPServer } = await import("./server-modern");
+    const mod = await import("./server-modern.js");
+    const { createUnifiedMCPServer } = (mod as any).default || mod;
     const server = await createUnifiedMCPServer();
     await server.run();
   } catch (error) {

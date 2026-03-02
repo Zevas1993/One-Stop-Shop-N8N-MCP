@@ -1,0 +1,996 @@
+{
+  "name": "FLEET Advisor v3",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "title": "FLEET Advisor",
+          "subtitle": "Vehicle Rental Pricing & Profitability",
+          "loadPreviousSession": "manually"
+        }
+      },
+      "id": "e5ce0e3f3b464ebda8a6b417",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        400
+      ],
+      "webhookId": "e645a76139a54af88f8c30d4"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fleet-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "6209a84f3a9e41c79f883149",
+      "name": "Webhook Intake",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        400,
+        800
+      ],
+      "webhookId": "1291240a92d946d49dc365d3"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "8c717b59acd1474185aae29b",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        400,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body || $json;\nconst errors = [];\n\nif (!input.type || !['trip', 'expense', 'vehicle'].includes(input.type)) {\n  errors.push('type must be: trip, expense, or vehicle');\n}\nif (!input.host_id) errors.push('host_id is required');\nif (!input.data) errors.push('data object is required');\n\nif (input.type === 'trip') {\n  if (!input.data.vehicle_id) errors.push('data.vehicle_id required');\n  if (!input.data.trip_start) errors.push('data.trip_start required');\n  if (!input.data.trip_end) errors.push('data.trip_end required');\n  if (!input.data.daily_rate || input.data.daily_rate <= 0) errors.push('data.daily_rate must be positive');\n}\n\nif (input.type === 'expense') {\n  if (!input.data.vehicle_id) errors.push('data.vehicle_id required');\n  if (!input.data.amount || input.data.amount <= 0) errors.push('data.amount must be positive');\n  if (!input.data.category) errors.push('data.category required');\n}\n\nif (errors.length > 0) {\n  return [{ json: { valid: false, errors } }];\n}\n\n// Calculate derived fields for trips\nif (input.type === 'trip') {\n  const start = new Date(input.data.trip_start);\n  const end = new Date(input.data.trip_end);\n  const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));\n  input.data.days = days;\n  input.data.gross_revenue = (days * input.data.daily_rate).toFixed(2);\n}\n\nreturn [{ json: { valid: true, ...input } }];",
+        "options": {}
+      },
+      "id": "42499339bca74e55aef767b2",
+      "name": "Validate Intake",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.valid }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "valid"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.valid }}",
+                    "rightValue": false,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "invalid"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a0207da3bb8d44efa502096a",
+      "name": "Route Intake",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        960,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "61dde1f1359f474ead368d6f",
+      "name": "Write to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1220,
+        720
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CONFIGURE_ME",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        },
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, type: $json.type, message: 'Data recorded successfully' }) }}"
+      },
+      "id": "bc7f253b2440473dbb7184d8",
+      "name": "Webhook Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1480,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 400
+        },
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, errors: $json.errors }) }}"
+      },
+      "id": "de65a43702674fbfb3c53536",
+      "name": "Webhook Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1220,
+        920
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ new Date().getDay() }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "0522de84d3464f5a81584718",
+      "name": "Is Monday?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        700,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "options": {
+          "outputFormatting": true
+        }
+      },
+      "id": "026a39b182b7436895f515cc",
+      "name": "Read All Data",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        1100
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CONFIGURE_ME",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n// Expect data from multiple sheet reads merged\nconst vehicles = items.filter(i => i.json['Vehicle ID'] && i.json['Make']);\nconst trips = items.filter(i => i.json['Trip Start'] && i.json['Daily Rate']);\nconst expenses = items.filter(i => i.json['Category'] && i.json['Amount']);\nconst now = new Date();\nconst monthStart = new Date(now.getFullYear(), now.getMonth(), 1);\n\nconst dashboard = vehicles.filter(v => v.json.Active === 'TRUE').map(vehicle => {\n  const vid = vehicle.json['Vehicle ID'];\n  const monthTrips = trips.filter(t => t.json['Vehicle ID'] === vid && new Date(t.json['Trip Start']) >= monthStart);\n  const monthExpenses = expenses.filter(e => e.json['Vehicle ID'] === vid && new Date(e.json['Date']) >= monthStart);\n\n  const revenue = monthTrips.reduce((s, t) => s + (Number(t.json['Gross Revenue']) || 0), 0);\n  const platformFees = monthTrips.reduce((s, t) => s + (Number(t.json['Platform Fees']) || 0), 0);\n  const varCosts = monthExpenses.reduce((s, e) => s + (Number(e.json['Amount']) || 0), 0);\n  const fixedCosts = (Number(vehicle.json['Monthly Insurance']) || 0) + (Number(vehicle.json['Monthly Parking']) || 0) + (Number(vehicle.json['Monthly Loan']) || 0);\n  const totalCosts = varCosts + fixedCosts;\n  const netProfit = revenue - platformFees - totalCosts;\n  const daysBooked = monthTrips.reduce((s, t) => s + (Number(t.json['Days']) || 0), 0);\n\n  return {\n    json: {\n      'Vehicle': vehicle.json.Make + ' ' + vehicle.json.Model + ' ' + vehicle.json.Year,\n      'This Month Revenue': revenue.toFixed(2),\n      'This Month Costs': totalCosts.toFixed(2),\n      'Net Profit': netProfit.toFixed(2),\n      'Profit Margin %': revenue > 0 ? ((netProfit / revenue) * 100).toFixed(1) : '0.0',\n      'Days Booked': daysBooked,\n      'Utilization %': ((daysBooked / 30) * 100).toFixed(1),\n      'Last Updated': now.toISOString()\n    }\n  };\n});\n\nreturn dashboard.length > 0 ? dashboard : [{ json: { message: 'No active vehicles found' } }];",
+        "options": {}
+      },
+      "id": "f51b8c44d58a483e99a586f2",
+      "name": "Calculate Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        1100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Dashboard"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "93877d53deee444da75b6ff0",
+      "name": "Update Dashboard",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1480,
+        1100
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CONFIGURE_ME",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst vehicles = items.filter(i => i.json['Vehicle ID'] && i.json['Make']);\nconst trips = items.filter(i => i.json['Trip Start'] && i.json['Daily Rate']);\nconst expenses = items.filter(i => i.json['Category'] && i.json['Amount']);\nconst now = new Date();\nconst weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\n\nlet report = 'FLEET Weekly Report - ' + now.toISOString().slice(0, 10) + '\\n\\n';\n\nconst activeVehicles = vehicles.filter(v => v.json.Active === 'TRUE');\nlet totalRevenue = 0, totalCosts = 0;\n\nactiveVehicles.forEach(v => {\n  const vid = v.json['Vehicle ID'];\n  const weekTrips = trips.filter(t => t.json['Vehicle ID'] === vid && new Date(t.json['Trip Start']) >= weekAgo);\n  const weekExpenses = expenses.filter(e => e.json['Vehicle ID'] === vid && new Date(e.json['Date']) >= weekAgo);\n\n  const rev = weekTrips.reduce((s, t) => s + (Number(t.json['Net Revenue']) || 0), 0);\n  const costs = weekExpenses.reduce((s, e) => s + (Number(e.json['Amount']) || 0), 0);\n  const days = weekTrips.reduce((s, t) => s + (Number(t.json['Days']) || 0), 0);\n\n  totalRevenue += rev;\n  totalCosts += costs;\n\n  report += v.json.Make + ' ' + v.json.Model + ' ' + v.json.Year + ' (' + vid + '):\\n';\n  report += '  Revenue: $' + rev.toFixed(2) + ' | Costs: $' + costs.toFixed(2) + ' | Profit: $' + (rev - costs).toFixed(2) + '\\n';\n  report += '  Days booked: ' + days + '/7 (' + ((days/7)*100).toFixed(0) + '% utilization)\\n\\n';\n});\n\nreport += 'FLEET TOTAL: Revenue $' + totalRevenue.toFixed(2) + ' | Costs $' + totalCosts.toFixed(2) + ' | Net $' + (totalRevenue - totalCosts).toFixed(2) + '\\n';\n\nreturn [{ json: { report, generated: now.toISOString() } }];",
+        "options": {}
+      },
+      "id": "dacb2327f7b640d59b8f0a3b",
+      "name": "Weekly Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are FLEET Advisor — an AI-powered vehicle rental pricing and profitability assistant for peer-to-peer car rental hosts.\n\n## Your Role\nYou help hosts on ANY platform (Turo, Getaround, HyreCar, etc.) manage their rental fleet by:\n- Tracking vehicles, trips, and expenses in Google Sheets\n- Calculating break-even rates, monthly P&L, ROI, and depreciation\n- Analyzing market positioning and seasonal pricing adjustments\n- Providing fleet-wide performance comparisons\n- Decoding VINs, looking up vehicle specs, checking gas prices and weather\n\n## Google Sheets Structure\nThe host's spreadsheet has 5 tabs:\n1. **Vehicles** — Vehicle ID, Make, Model, Year, City, State, Purchase Price, Monthly Insurance, Monthly Parking, Monthly Loan, Platform Fee %, Protection Plan %, Min Daily Rate, Active\n2. **Trips** — Vehicle ID, Trip Start, Trip End, Days, Daily Rate, Gross Revenue, Platform Fees, Protection Cost, Net Revenue, Miles Driven, Platform, Notes\n3. **Expenses** — Vehicle ID, Date, Category, Amount, Description, Vendor\n4. **Market Comps** — Vehicle ID, Comp Make/Model, Comp Year, Comp Daily Rate, Source, Date Checked\n5. **Dashboard** — Auto-updated metrics (refreshed daily by schedule)\n\n## Multi-Host Support\nEach host has their own Google Sheets spreadsheet. When starting a conversation:\n- The spreadsheet is already linked to the Google Sheets Tool\n- Each host gets a unique session via the sessionId from Chat Trigger\n- Never mix data between hosts\n\n## Data Validation\nALWAYS use the Data Validator tool before writing to Google Sheets:\n- validate_vehicle before adding a vehicle\n- validate_expense before logging an expense\n- validate_trip before logging a trip\n- dedup_check before adding a trip (check for duplicates)\nIf validation fails, tell the host what needs to be fixed.\n\n## Financial Formulas\n\n### Break-Even Daily Rate\nMVR = (monthly_fixed_costs / target_days + variable_cost_per_day + depreciation_per_day) / host_receive_percentage\nWhere host_receive_percentage = 1 - platform_fee_pct - protection_plan_pct\n\n### Monthly P&L\nNet = Gross Revenue - Platform Fees - Protection Costs - Variable Costs - Fixed Costs\n\n### ROI\nAnnual ROI = (Annual Net Profit / Purchase Price) × 100\n\n### Depreciation\nIRS standard: $0.33/mile for depreciation component\nStandard mileage rate: $0.70/mile (total vehicle costs)\n\n## Seasonal Pricing\nUse the Market Analyzer's seasonal_adjustment task to factor in:\n- Summer (Jun-Aug): peak season, +20-25% rates\n- Winter (Dec-Feb): off-season, -15% rates (except Dec holidays +15%)\n- Holiday weekends: +30% premium\n- Spring/Fall: normal rates\n\n## Fleet-Wide Analysis\nWhen asked about overall fleet performance, use the fleet_comparison task to:\n- Rank vehicles by profitability\n- Identify underperformers\n- Suggest which vehicles to keep/sell\n- Calculate fleet-wide ROI\n\n## Webhook Intake\nHosts can also send data via the webhook API at /webhook/fleet-intake.\nThe webhook handles validation and writes directly to sheets.\nIf a host mentions \"API\" or \"automation\", explain the webhook format:\nPOST /webhook/fleet-intake with JSON body: { \"type\": \"trip|expense|vehicle\", \"host_id\": \"HOST001\", \"data\": {...} }\n\n## Conversation Style\n- Be concise but thorough with financial analysis\n- Always show your math when calculating rates or P&L\n- Use the Think tool for complex multi-step calculations\n- Proactively suggest optimizations when you see underperforming vehicles\n- When a host adds their first vehicle, walk them through the full setup",
+          "maxIterations": 15
+        },
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}"
+      },
+      "id": "3dfe84a81e95487a9a8740b5",
+      "name": "FLEET Advisor",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        780,
+        400
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "4a786d3c37a3496b9f0504cd",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        620,
+        620
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "CONFIGURE_ME",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionKey": "fleet-{{ $json.sessionId }}-{{ $now.format('yyyy-MM-dd') }}",
+        "tableName": "n8n_chat_histories",
+        "contextWindowLength": 20
+      },
+      "id": "1b85409d39b14d3090272c15",
+      "name": "Postgres Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        800,
+        620
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "CONFIGURE_ME",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "64e5aecc57f14ab88f58648d",
+      "name": "Think Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        400,
+        620
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "fdddd8adafb54d2c9e8fdde6",
+      "name": "Calculator Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [
+        480,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Read and write data in the host's Google Sheets spreadsheet. Use this to query vehicle data, log trips and expenses, and read dashboard metrics. Available tabs: Vehicles, Trips, Expenses, Market Comps, Dashboard."
+      },
+      "id": "0ea85e63dfde4ab38590657e",
+      "name": "Google Sheets Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolGoogleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        560,
+        740
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CONFIGURE_ME",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "financial_calculator",
+        "description": "Financial calculations for vehicle rental fleet. Pass JSON: {\"task\": \"break_even|monthly_pnl|pricing_recommendation|roi|depreciation|fuel_cost_estimate\", \"data\": {...}}. break_even: needs insurance, parking, loan_payment, target_days, platform_fee_pct, purchase_price. monthly_pnl: needs trips[], expenses[], insurance, parking, loan_payment. pricing_recommendation: needs break_even_rate, market_avg_rate, current_utilization. roi: needs purchase_price, monthly_net_profit. depreciation: needs purchase_price, annual_miles. fuel_cost_estimate: needs mpg, miles_per_trip, gas_price_per_gallon.",
+        "jsCode": "try {\n  const { task, data } = JSON.parse(query);\n\n  if (task === 'break_even') {\n    const monthly_fixed = (Number(data.insurance) || 0) + (Number(data.parking) || 0) + (Number(data.loan_payment) || 0);\n    const target_days = Number(data.target_days) || 20;\n    const variable_per_day = (Number(data.gas_per_day) || 5) + (Number(data.cleaning_per_trip) || 15) / (Number(data.avg_trip_days) || 3);\n    const depreciation_per_day = (Number(data.purchase_price) || 25000) * 0.15 / 365;\n    const platform_fee = Number(data.platform_fee_pct) || 25;\n    const protection = Number(data.protection_plan_pct) || 0;\n    const host_pct = (100 - platform_fee - protection) / 100;\n    const daily_cost = (monthly_fixed / target_days) + variable_per_day + depreciation_per_day;\n    const min_rate = daily_cost / host_pct;\n    return JSON.stringify({\n      monthly_fixed_costs: monthly_fixed.toFixed(2),\n      daily_fixed_portion: (monthly_fixed / target_days).toFixed(2),\n      variable_per_day: variable_per_day.toFixed(2),\n      depreciation_per_day: depreciation_per_day.toFixed(2),\n      total_daily_cost: daily_cost.toFixed(2),\n      host_receive_pct: (host_pct * 100).toFixed(1) + '%',\n      minimum_daily_rate: Math.ceil(min_rate),\n      recommended_rate: Math.ceil(min_rate * 1.2),\n      explanation: 'Min rate covers all costs. Recommended adds 20% profit margin.'\n    });\n  }\n\n  if (task === 'monthly_pnl') {\n    const trips = data.trips || [];\n    const expenses = data.expenses || [];\n    const fixed = (Number(data.insurance) || 0) + (Number(data.parking) || 0) + (Number(data.loan_payment) || 0);\n    const gross = trips.reduce((s, t) => s + (Number(t.gross_revenue) || Number(t.daily_rate) * Number(t.days) || 0), 0);\n    const platformFees = trips.reduce((s, t) => s + (Number(t.platform_fees) || gross * (Number(data.platform_fee_pct) || 25) / 100 / trips.length), 0);\n    const protection = trips.reduce((s, t) => s + (Number(t.protection_cost) || 0), 0);\n    const variable = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);\n    const totalDays = trips.reduce((s, t) => s + (Number(t.days) || 0), 0);\n    const net = gross - platformFees - protection - variable - fixed;\n    return JSON.stringify({\n      gross_revenue: gross.toFixed(2),\n      platform_fees: platformFees.toFixed(2),\n      protection_costs: protection.toFixed(2),\n      variable_costs: variable.toFixed(2),\n      fixed_costs: fixed.toFixed(2),\n      net_profit: net.toFixed(2),\n      profit_margin: gross > 0 ? ((net / gross) * 100).toFixed(1) + '%' : '0%',\n      days_booked: totalDays,\n      utilization: ((totalDays / 30) * 100).toFixed(1) + '%',\n      avg_daily_net: totalDays > 0 ? (net / totalDays).toFixed(2) : '0'\n    });\n  }\n\n  if (task === 'pricing_recommendation') {\n    const breakEven = Number(data.break_even_rate) || 40;\n    const marketAvg = Number(data.market_avg_rate) || 60;\n    const utilization = Number(data.current_utilization) || 50;\n    let recommended = marketAvg;\n    if (utilization < 40) recommended = Math.max(breakEven, marketAvg * 0.85);\n    else if (utilization < 60) recommended = marketAvg * 0.95;\n    else if (utilization > 80) recommended = marketAvg * 1.15;\n    else if (utilization > 90) recommended = marketAvg * 1.25;\n    return JSON.stringify({\n      break_even_rate: breakEven,\n      market_average: marketAvg,\n      current_utilization: utilization + '%',\n      recommended_rate: Math.ceil(recommended),\n      strategy: utilization < 40 ? 'LOWER rate to increase bookings' : utilization > 80 ? 'RAISE rate to maximize revenue' : 'HOLD rate near market average',\n      daily_profit_at_recommended: (recommended * (1 - (Number(data.platform_fee_pct) || 25) / 100) - breakEven).toFixed(2)\n    });\n  }\n\n  if (task === 'roi') {\n    const purchase = Number(data.purchase_price) || 25000;\n    const monthlyNet = Number(data.monthly_net_profit) || 500;\n    const annualNet = monthlyNet * 12;\n    const roi = (annualNet / purchase) * 100;\n    const paybackMonths = monthlyNet > 0 ? Math.ceil(purchase / monthlyNet) : 999;\n    return JSON.stringify({\n      purchase_price: purchase,\n      monthly_net_profit: monthlyNet.toFixed(2),\n      annual_net_profit: annualNet.toFixed(2),\n      annual_roi: roi.toFixed(1) + '%',\n      payback_months: paybackMonths,\n      payback_years: (paybackMonths / 12).toFixed(1),\n      verdict: roi > 20 ? 'Excellent investment' : roi > 10 ? 'Good investment' : roi > 5 ? 'Marginal - consider alternatives' : 'Poor ROI - reconsider'\n    });\n  }\n\n  if (task === 'depreciation') {\n    const purchase = Number(data.purchase_price) || 25000;\n    const miles = Number(data.annual_miles) || 15000;\n    const irsPerMile = 0.33;\n    const annualDep = miles * irsPerMile;\n    const monthlyDep = annualDep / 12;\n    const dailyDep = annualDep / 365;\n    return JSON.stringify({\n      purchase_price: purchase,\n      annual_miles: miles,\n      irs_rate_per_mile: irsPerMile,\n      annual_depreciation: annualDep.toFixed(2),\n      monthly_depreciation: monthlyDep.toFixed(2),\n      daily_depreciation: dailyDep.toFixed(2),\n      years_to_zero: (purchase / annualDep).toFixed(1)\n    });\n  }\n\n  if (task === 'fuel_cost_estimate') {\n    const mpg = Number(data.mpg) || 28;\n    const milesPerTrip = Number(data.miles_per_trip) || 100;\n    const gasPrice = Number(data.gas_price_per_gallon) || 3.50;\n    const gallonsUsed = milesPerTrip / mpg;\n    const fuelCost = gallonsUsed * gasPrice;\n    return JSON.stringify({\n      mpg: mpg,\n      miles_per_trip: milesPerTrip,\n      gas_price: gasPrice.toFixed(2),\n      gallons_used: gallonsUsed.toFixed(2),\n      fuel_cost_per_trip: fuelCost.toFixed(2),\n      cost_per_mile: (fuelCost / milesPerTrip).toFixed(3)\n    });\n  }\n\n  return JSON.stringify({ error: 'Unknown task. Available: break_even, monthly_pnl, pricing_recommendation, roi, depreciation, fuel_cost_estimate' });\n} catch (e) {\n  return 'Error: ' + e.message;\n}"
+      },
+      "id": "20cbc2efbb3b46dd87159aa3",
+      "name": "Financial Calculator",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        640,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "name": "market_analyzer",
+        "description": "Market analysis and seasonal pricing for vehicle rentals. Pass JSON: {\"task\": \"market_analysis|seasonal_adjustment|fleet_comparison\", \"data\": {...}}. market_analysis: needs competitor_rates[] and optionally my_rate. seasonal_adjustment: needs base_rate, month (1-12), optionally is_holiday_weekend. fleet_comparison: needs vehicles[] with id, name, monthly_revenue, monthly_costs, days_booked, purchase_price.",
+        "jsCode": "try {\n  const { task, data } = JSON.parse(query);\n\n  if (task === 'market_analysis') {\n    const rates = (data.competitor_rates || []).map(Number).filter(r => r > 0);\n    if (rates.length === 0) return JSON.stringify({ error: 'No competitor rates provided' });\n    const sorted = [...rates].sort((a, b) => a - b);\n    const avg = rates.reduce((a, b) => a + b, 0) / rates.length;\n    const median = sorted.length % 2 === 0\n      ? (sorted[sorted.length/2 - 1] + sorted[sorted.length/2]) / 2\n      : sorted[Math.floor(sorted.length/2)];\n    const myRate = Number(data.my_rate) || 0;\n    const percentile = myRate > 0 ? (sorted.filter(r => r <= myRate).length / sorted.length * 100) : 0;\n    return JSON.stringify({\n      sample_size: rates.length,\n      average: avg.toFixed(2),\n      median: median.toFixed(2),\n      min: sorted[0].toFixed(2),\n      max: sorted[sorted.length - 1].toFixed(2),\n      std_dev: Math.sqrt(rates.reduce((s, r) => s + Math.pow(r - avg, 2), 0) / rates.length).toFixed(2),\n      my_rate: myRate.toFixed(2),\n      my_percentile: percentile.toFixed(0) + 'th',\n      position: myRate < avg * 0.85 ? 'significantly_below_market'\n        : myRate < avg * 0.95 ? 'below_market'\n        : myRate < avg * 1.05 ? 'at_market'\n        : myRate < avg * 1.15 ? 'above_market'\n        : 'significantly_above_market'\n    });\n  }\n\n  if (task === 'seasonal_adjustment') {\n    const base = Number(data.base_rate) || 50;\n    const month = Number(data.month) || new Date().getMonth() + 1;\n    const isHoliday = data.is_holiday_weekend || false;\n    const seasonal = {1:0.85, 2:0.85, 3:0.95, 4:1.0, 5:1.1, 6:1.2, 7:1.25, 8:1.2, 9:1.05, 10:1.0, 11:0.95, 12:1.15};\n    const multiplier = seasonal[month] || 1.0;\n    const holidayBoost = isHoliday ? 1.3 : 1.0;\n    const adjusted = base * multiplier * holidayBoost;\n    return JSON.stringify({\n      base_rate: base.toFixed(2),\n      month: month,\n      seasonal_multiplier: multiplier,\n      holiday_boost: holidayBoost,\n      adjusted_rate: Math.ceil(adjusted),\n      explanation: (multiplier > 1 ? 'Peak' : multiplier < 1 ? 'Off' : 'Normal') + ' season (' + multiplier + 'x)' + (isHoliday ? ' + holiday weekend (1.3x)' : '')\n    });\n  }\n\n  if (task === 'fleet_comparison') {\n    const vehicles = data.vehicles || [];\n    if (vehicles.length === 0) return JSON.stringify({ error: 'No vehicles provided' });\n    const ranked = vehicles.map(v => {\n      const profit = (Number(v.monthly_revenue) || 0) - (Number(v.monthly_costs) || 0);\n      const margin = v.monthly_revenue > 0 ? (profit / v.monthly_revenue * 100) : 0;\n      const utilization = (Number(v.days_booked) || 0) / 30 * 100;\n      const annualROI = v.purchase_price > 0 ? (profit * 12 / v.purchase_price * 100) : 0;\n      return { ...v, profit: profit.toFixed(2), margin: margin.toFixed(1), utilization: utilization.toFixed(1), annual_roi: annualROI.toFixed(1) };\n    }).sort((a, b) => Number(b.profit) - Number(a.profit));\n    return JSON.stringify({\n      fleet_size: vehicles.length,\n      total_revenue: vehicles.reduce((s, v) => s + (Number(v.monthly_revenue) || 0), 0).toFixed(2),\n      total_costs: vehicles.reduce((s, v) => s + (Number(v.monthly_costs) || 0), 0).toFixed(2),\n      total_profit: ranked.reduce((s, v) => s + Number(v.profit), 0).toFixed(2),\n      best_performer: ranked[0]?.id || 'none',\n      worst_performer: ranked[ranked.length - 1]?.id || 'none',\n      vehicles_ranked: ranked\n    });\n  }\n\n  return JSON.stringify({ error: 'Unknown task. Available: market_analysis, seasonal_adjustment, fleet_comparison' });\n} catch (e) {\n  return 'Error: ' + e.message;\n}"
+      },
+      "id": "dd8816e964a94fa9a67df5a9",
+      "name": "Market Analyzer",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        720,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "name": "data_validator",
+        "description": "Validate data before writing to Google Sheets. Pass JSON: {\"task\": \"validate_vehicle|validate_expense|validate_trip|dedup_check\", \"data\": {...}}. validate_vehicle: needs make, model, year, city, state. validate_expense: needs vehicle_id, amount, category. validate_trip: needs vehicle_id, trip_start, trip_end, daily_rate. dedup_check: needs existing_trips[] and new_trip.",
+        "jsCode": "try {\n  const { task, data } = JSON.parse(query);\n\n  if (task === 'validate_vehicle') {\n    const errors = [];\n    if (!data.make || data.make.length < 2) errors.push('make is required');\n    if (!data.model || data.model.length < 1) errors.push('model is required');\n    if (!data.year || data.year < 1990 || data.year > 2027) errors.push('year must be 1990-2027');\n    if (!data.city) errors.push('city is required');\n    if (!data.state || data.state.length !== 2) errors.push('state must be 2-letter abbreviation');\n    if (data.purchase_price && data.purchase_price < 0) errors.push('purchase_price cannot be negative');\n    if (data.platform_fee_pct && (data.platform_fee_pct < 0 || data.platform_fee_pct > 100)) errors.push('platform_fee_pct must be 0-100');\n    if (data.protection_plan_pct && (data.protection_plan_pct < 0 || data.protection_plan_pct > 100)) errors.push('protection_plan_pct must be 0-100');\n    return JSON.stringify({ valid: errors.length === 0, errors, data });\n  }\n\n  if (task === 'validate_expense') {\n    const errors = [];\n    const validCategories = ['gas', 'repair', 'maintenance', 'cleaning', 'insurance', 'parking', 'registration', 'toll', 'ticket', 'other'];\n    if (!data.vehicle_id) errors.push('vehicle_id required');\n    if (!data.amount || data.amount <= 0) errors.push('amount must be positive');\n    if (!data.category || !validCategories.includes(data.category.toLowerCase())) {\n      errors.push('category must be one of: ' + validCategories.join(', '));\n    }\n    if (data.date) {\n      const d = new Date(data.date);\n      if (isNaN(d.getTime())) errors.push('date format invalid (use YYYY-MM-DD)');\n    }\n    return JSON.stringify({ valid: errors.length === 0, errors, data });\n  }\n\n  if (task === 'validate_trip') {\n    const errors = [];\n    if (!data.vehicle_id) errors.push('vehicle_id required');\n    if (!data.trip_start) errors.push('trip_start required (YYYY-MM-DD)');\n    if (!data.trip_end) errors.push('trip_end required (YYYY-MM-DD)');\n    if (!data.daily_rate || data.daily_rate <= 0) errors.push('daily_rate must be positive');\n    if (data.trip_start && data.trip_end) {\n      const start = new Date(data.trip_start);\n      const end = new Date(data.trip_end);\n      if (end <= start) errors.push('trip_end must be after trip_start');\n      const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));\n      if (days > 90) errors.push('trip cannot exceed 90 days');\n    }\n    if (data.miles_driven && data.miles_driven < 0) errors.push('miles_driven cannot be negative');\n    return JSON.stringify({ valid: errors.length === 0, errors, data });\n  }\n\n  if (task === 'dedup_check') {\n    const existing = data.existing_trips || [];\n    const nt = data.new_trip || {};\n    const isDuplicate = existing.some(t =>\n      t.vehicle_id === nt.vehicle_id &&\n      t.trip_start === nt.trip_start &&\n      t.trip_end === nt.trip_end\n    );\n    return JSON.stringify({ is_duplicate: isDuplicate, new_trip: nt });\n  }\n\n  return JSON.stringify({ error: 'Unknown task. Available: validate_vehicle, validate_expense, validate_trip, dedup_check' });\n} catch (e) {\n  return 'Error: ' + e.message;\n}"
+      },
+      "id": "01e6441d0df4499ba94e21d2",
+      "name": "Data Validator",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        800,
+        920
+      ]
+    },
+    {
+      "parameters": {
+        "name": "vin_decoder",
+        "description": "Decode a Vehicle Identification Number (VIN) using the free NHTSA API. Returns make, model, year, engine, body type, and more. Pass the 17-character VIN as the query.",
+        "method": "GET",
+        "url": "=https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/{{ encodeURIComponent($fromAI('vin', 'The 17-character VIN to decode', 'string')) }}?format=json",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "vin",
+              "description": "The 17-character VIN to decode",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "88009c810b7c42009edda621",
+      "name": "VIN Decoder",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        980
+      ]
+    },
+    {
+      "parameters": {
+        "name": "vehicle_models",
+        "description": "Look up vehicle models by make name using the free NHTSA API. Returns all models for a given manufacturer. Pass the make name (e.g., 'Honda', 'Toyota') as the query.",
+        "method": "GET",
+        "url": "=https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMake/{{ encodeURIComponent($fromAI('make', 'The vehicle make/manufacturer name', 'string')) }}?format=json",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "make",
+              "description": "The vehicle make/manufacturer name",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5c03c4a596844f2dad403e24",
+      "name": "Vehicle Models",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "name": "gas_prices",
+        "description": "Get current gas prices by US state using CollectAPI. Pass the 2-letter state abbreviation (e.g., 'TX', 'CA') as the query. Returns regular, midgrade, premium, and diesel prices.",
+        "method": "GET",
+        "url": "=https://api.collectapi.com/gasPrice/stateUsaPrice?state={{ $fromAI('state', 'US state 2-letter code', 'string') }}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "state",
+              "description": "US state 2-letter abbreviation (e.g., TX, CA)",
+              "type": "string"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "authorization",
+              "value": "apikey {{ $credentials.httpHeaderAuth.value }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "54122bafcaac4d02b6bb89fc",
+      "name": "Gas Prices",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1040,
+        1040
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_ME",
+          "name": "CollectAPI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "weather_forecast",
+        "description": "Get 7-day weather forecast using the free Open-Meteo API. Pass latitude and longitude. Useful for demand-based pricing (bad weather = lower demand). Returns daily temperature highs/lows and precipitation.",
+        "method": "GET",
+        "url": "=https://api.open-meteo.com/v1/forecast?latitude={{ $fromAI('latitude', 'Latitude of the city', 'string') }}&longitude={{ $fromAI('longitude', 'Longitude of the city', 'string') }}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&timezone=auto",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "latitude",
+              "description": "Latitude of the city (e.g., 32.78 for Dallas)",
+              "type": "string"
+            },
+            {
+              "name": "longitude",
+              "description": "Longitude of the city (e.g., -96.80 for Dallas)",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8b1a1af92d634a1fb9be7a72",
+      "name": "Weather Forecast",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "276387357ced4a269db46e8a",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fa2b4616967b434eb619a0f8",
+              "name": "output",
+              "value": "I encountered an issue processing your request. Could you please try rephrasing or providing more details?",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "8f1f1eff50f6468cb4c908e2",
+      "name": "Try Again",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        500
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "bfa7f1c63fa7461d876044dd",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        400,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const error = $json;\nconst timestamp = new Date().toISOString();\nconst errorInfo = {\n  timestamp,\n  workflow: 'FLEET Advisor v3',\n  error_message: error.message || 'Unknown error',\n  error_type: error.name || 'Error',\n  node: error.node || 'unknown',\n  execution_id: error.execution?.id || 'unknown'\n};\nreturn [{ json: errorInfo }];",
+        "options": {}
+      },
+      "id": "6bd6677a7b04422cbe6cf1bb",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## FLEET Advisor v3\n**Vehicle Rental Pricing & Profitability Assistant**\n\n### Architecture\n- 3 Entry Points: Chat, Webhook API, Schedule\n- AI Agent (GPT-4o) with 10 tools\n- Multi-host support (per-session spreadsheets)\n\n### Entry Points\n1. **Chat Trigger** — Host conversation\n2. **Webhook** — POST /webhook/fleet-intake\n3. **Schedule** — Daily dashboard + weekly reports\n\n### Setup Required\n1. Create Google Sheet with tabs: Vehicles, Trips, Expenses, Market Comps, Dashboard\n2. Configure credentials: OpenAI, Google Sheets, Postgres, CollectAPI\n3. Link spreadsheet in Google Sheets Tool\n4. Set Postgres connection for chat memory",
+        "width": 420,
+        "height": 380
+      },
+      "id": "c24291583fca4bb081a2e511",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Agent Tools (10)\n\n### Code Tools\n- **Financial Calculator** — break_even, monthly_pnl, pricing_rec, roi, depreciation, fuel_cost\n- **Market Analyzer** — market_analysis, seasonal_adjustment, fleet_comparison\n- **Data Validator** — validate_vehicle, validate_expense, validate_trip, dedup_check\n\n### API Tools (HTTP)\n- **VIN Decoder** — NHTSA free API\n- **Vehicle Models** — NHTSA make/model lookup\n- **Gas Prices** — CollectAPI (needs API key)\n- **Weather Forecast** — Open-Meteo free API\n\n### Built-in\n- **Think Tool** — Structured reasoning\n- **Calculator** — Quick math\n- **Google Sheets** — Read/write all tabs",
+        "width": 380,
+        "height": 360
+      },
+      "id": "19488f5ea2974e85aa8a571c",
+      "name": "Note: Tools",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Webhook API\n**POST /webhook/fleet-intake**\n\n### Payload\n```json\n{\n  \"type\": \"trip|expense|vehicle\",\n  \"host_id\": \"HOST001\",\n  \"data\": {\n    \"vehicle_id\": \"V001\",\n    \"trip_start\": \"2026-02-20\",\n    \"trip_end\": \"2026-02-23\",\n    \"daily_rate\": 65\n  }\n}\n```\n\n### Responses\n- **200**: { success: true, type, message }\n- **400**: { success: false, errors[] }\n\n### Supported Types\n- **trip**: vehicle_id, trip_start, trip_end, daily_rate, miles_driven, notes\n- **expense**: vehicle_id, amount, category, date, description\n- **vehicle**: make, model, year, city, state, purchase_price",
+        "width": 380,
+        "height": 420
+      },
+      "id": "8c0af88ac77d43fe99def354",
+      "name": "Note: Webhook API",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        860
+      ]
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FLEET Advisor": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Try Again",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Intake": {
+      "main": [
+        [
+          {
+            "node": "Validate Intake",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Intake": {
+      "main": [
+        [
+          {
+            "node": "Route Intake",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Intake": {
+      "main": [
+        [
+          {
+            "node": "Write to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write to Sheets": {
+      "main": [
+        [
+          {
+            "node": "Webhook Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Is Monday?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Monday?": {
+      "main": [
+        [
+          {
+            "node": "Read All Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read All Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Metrics": {
+      "main": [
+        [
+          {
+            "node": "Update Dashboard",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculator Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Financial Calculator": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Market Analyzer": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Validator": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VIN Decoder": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vehicle Models": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gas Prices": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weather Forecast": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

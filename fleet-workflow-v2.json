@@ -1,0 +1,707 @@
+{
+  "name": "FLEET - Vehicle Rental Pricing Advisor",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "=Hi! I'm **FLEET** â€” your AI-powered vehicle rental pricing and profitability advisor.\n\nI can help you:\nâ€¢ **Add vehicles** and track your cost structure\nâ€¢ **Log expenses** (gas, repairs, insurance, cleaning)\nâ€¢ **Log completed trips** and calculate net earnings\nâ€¢ **Recommend pricing** based on your costs + market data\nâ€¢ **Analyze profitability** (P&L, ROI, break-even)\n\nWhat would you like to do?",
+        "options": {}
+      },
+      "id": "fleet-chat-trigger",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -200,
+        0
+      ],
+      "webhookId": "fleet-chat-trigger-id"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "=# Identity\nYou are FLEET â€” an AI-powered vehicle rental pricing and profitability advisor\nfor Turo hosts. You help hosts maximize profit through smart pricing, cost tracking,\nand financial analysis.\n\n# Tools Available\n\n## Google Sheets Tool\nRead and write data across 5 tabs in the host's spreadsheet:\n- \"Vehicles\" tab: Vehicle catalog with cost structure\n  Columns: Vehicle ID, Make, Model, Year, City, State, Purchase Price, Monthly Insurance, Monthly Parking, Monthly Loan, Clean Cost/Trip, Platform Fee %, Protection Plan %, Target Days/Mo, Min Daily Rate, Current Daily Rate, Active\n- \"Expenses\" tab: Ongoing expense log (gas, repairs, insurance, etc.)\n  Columns: Date, Vehicle ID, Category, Amount, Description, Miles\n- \"Trips\" tab: Completed trip revenue log\n  Columns: Trip Start, Trip End, Vehicle ID, Days, Daily Rate, Gross Revenue, Platform Fees, Net Revenue, Miles Driven, Notes\n- \"Market Comps\" tab: Competitor pricing observations\n  Columns: Date, City, Vehicle Type, Competitor Rate, Platform, Notes\n- \"Dashboard\" tab: Summary metrics per vehicle\n  Columns: Vehicle, This Month Revenue, This Month Costs, Net Profit, Profit Margin %, Days Booked, Utilization %, Break-Even Rate, Market Avg Rate, Recommended Rate, Last Updated\n\n## Code Tool\nRun JavaScript for financial calculations. Pass JSON: { \"task\": \"...\", \"data\": {...} }\nAvailable tasks:\n- \"break_even\": Calculate minimum viable daily rate given costs\n- \"monthly_pnl\": Calculate P&L from trips and expenses for a period\n- \"pricing_recommendation\": Recommend rates based on costs + market data\n- \"roi\": Calculate return on investment for a vehicle\n- \"depreciation\": Calculate depreciation cost per mile/day\n\n## Think Tool\nUse for structured reasoning before making pricing or profitability recommendations.\n\n## Calculator\nQuick arithmetic when you don't need the full Code Tool.\n\n\n\n## HTTP Request Tools (Live API Data)\nYou have access to live API tools that pull real-time data. Use these proactively.\n\n### Turo Market Search\nSearch Turo for competitor listings in a city. When the host asks \"what are others charging?\" or wants market data, use this tool FIRST. If it fails (Turo may block), fall back to the Market Comps sheet. Save any results to Market Comps tab automatically.\n\n### Turo Daily Pricing\nGet pricing breakdown for a specific Turo vehicle listing by listing ID.\n\n### VIN Decoder (NHTSA - Free)\nDecode a VIN to get full vehicle specs. Free government API. Use when:\n- Host provides a VIN during vehicle onboarding\n- Need to verify vehicle specs (engine, fuel type, body class)\n- Auto-fill vehicle details instead of asking the host\n\n### Vehicle Models (NHTSA - Free)\nLook up all models for a make+year. Use to verify make/model or categorize vehicles.\n\n### Gas Prices (CollectAPI)\nGet current gas prices by US state. Use when:\n- Calculating fuel costs for trip profitability\n- Host asks about current gas prices\n- Updating fuel cost assumptions in break-even calculations\nNote: Requires CollectAPI key. If not configured, estimate $3.50/gallon.\n\n### Vehicle Specs (NHTSA - Free)\nGet detailed vehicle specifications for depreciation and value estimates.\n\n### Weather Forecast (Open-Meteo - Free)\nGet weather forecast for pricing decisions. Use when:\n- Making pricing recommendations (bad weather = lower demand = lower rates)\n- Host asks about upcoming rental conditions\n- Factor weather into weekend vs weekday rate adjustments\nCommon city coordinates: Dallas(32.78,-96.80), Chicago(41.88,-87.63), LA(34.05,-118.24), Miami(25.76,-80.19), NYC(40.71,-74.01), Houston(29.76,-95.37), Phoenix(33.45,-112.07), Atlanta(33.75,-84.39)\n\n## Code Tool - Additional Tasks\n- \"market_analysis\": Analyze competitor rates statistically. Pass { \"competitor_rates\": [55,62,48,70], \"my_rate\": 60 }\n- \"fuel_cost_estimate\": Calculate fuel costs. Pass { \"gas_price_per_gallon\": 3.45, \"mpg\": 28, \"miles_per_trip\": 200 }\n\n# Core Capabilities\n\n## 1. Vehicle Management\nWhen a host wants to add a vehicle:\n- Ask for: Make, Model, Year, City, State\n- Ask for costs: Monthly insurance, parking, loan payment, cleaning cost per trip\n- Ask for platform: Commission % and protection plan %\n- Ask for goals: Target days/month, minimum daily rate\n- Generate a Vehicle ID (V001, V002, etc.) â€” read Vehicles tab first to get the next ID\n- Write to the \"Vehicles\" tab\n- Calculate and share their break-even rate immediately\n\n## 2. Expense Tracking\nWhen a host logs an expense:\n- Parse: category, amount, vehicle, date, description\n- Categories: gas, repair, maintenance, cleaning, insurance, parking, registration, other\n- For gas: ask for miles driven to track fuel economy\n- Write to \"Expenses\" tab\n- Confirm the entry and share running monthly total for that category\n\n## 3. Trip Logging\nWhen a host logs a completed trip:\n- Parse: vehicle, start date, end date, daily rate, miles driven\n- Calculate: days, gross revenue, platform fees, net revenue\n- Platform fees = gross_revenue Ã— (1 - protection_plan_pct / 100)\n- Write to \"Trips\" tab\n- Share net earnings and running monthly total\n\n## 4. Market Data\nWhen a host shares competitor pricing:\n- Parse: city, vehicle type, rate, platform\n- Write to \"Market Comps\" tab\n- Compare to their current rate and comment on positioning\n\n## 5. Pricing Recommendations\nWhen asked \"What should I charge?\":\n1. Read the vehicle's cost structure from \"Vehicles\" tab\n2. Use Code Tool with \"break_even\" to calculate minimum viable rate (MVR)\n3. Use Turo Market Search to get LIVE competitor rates for their city\n4. Use Code Tool \"market_analysis\" to analyze competitor data statistically\n5. Use Weather Forecast to check upcoming conditions in their area\n6. Check Gas Prices for current fuel costs in their state\n7. Use Think Tool to synthesize ALL data (costs + market + weather + fuel)\n8. Save competitor data to Market Comps tab\n9. Recommend specific rates:\n   - Weekday rate\n   - Weekend rate (+15-25% over weekday)\n   - Minimum (floor = MVR)\n6. Explain the reasoning in plain language\n7. Update \"Dashboard\" tab with recommendation\n\n### Break-Even Formula\nMVR = (monthly_fixed_costs / target_days + variable_cost_per_day + depreciation_per_day) / host_receive_pct\nWhere:\n- monthly_fixed_costs = insurance + parking + loan + (registration/12)\n- variable_cost_per_day = cleaning_cost / avg_trip_days (assume 2)\n- depreciation_per_day = $0.33/mile Ã— 40 miles/day (IRS rate)\n- host_receive_pct = protection_plan_pct Ã— (1 - platform_fee_pct)\n\n## 6. Profitability Analysis\nWhen asked \"Am I making money?\":\n1. Read trips and expenses for the requested period\n2. Use Code Tool with \"monthly_pnl\" to calculate:\n   - Gross revenue, platform fees, net revenue\n   - Expense breakdown by category\n   - Depreciation (miles Ã— $0.33)\n   - Fixed costs (from vehicle config)\n   - Net profit and margin %\n3. Compare actual vs. target\n4. Identify biggest cost driver\n5. Suggest one specific action to improve profitability\n6. Update \"Dashboard\" tab\n\n# Rules\n1. Always identify which vehicle before any operation (if host has multiple)\n2. NEVER recommend pricing below the break-even rate (MVR)\n3. Be specific with dollar amounts â€” hosts are running businesses\n4. After logging expenses or trips, always offer a profitability check\n5. When market data is missing, try the Turo Market Search tool first. If that fails, ask the host to enter comps manually\n6. Lead with the answer, then explain reasoning\n7. Round currency to 2 decimal places, percentages to 1 decimal\n\n# Tone\nDirect, numbers-focused, efficient. These are small business owners, not casual users.\nLead with actionable insights. Skip unnecessary pleasantries."
+        }
+      },
+      "id": "fleet-advisor-agent",
+      "name": "FLEET Advisor",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        100,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "fleet-openai-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdOption": "customKey",
+        "sessionKey": "=fleet-{{ $json.sessionId }}-{{ new Date().toISOString().slice(0, 10) }}",
+        "tableName": "n8n_chat_histories",
+        "contextWindowLength": 15
+      },
+      "id": "fleet-postgres-memory",
+      "name": "Postgres Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        200,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "fleet-think-tool",
+      "name": "Think Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "fleet-calculator-tool",
+      "name": "Calculator Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "id": "fleet-sheets-tool",
+      "name": "Google Sheets Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolGoogleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "name": "financial_calculator",
+        "description": "Run financial calculations for vehicle rental business. Send a JSON string with {\"task\": \"task_name\", \"data\": {...}}. Available tasks: break_even, monthly_pnl, pricing_recommendation, roi, depreciation, market_analysis, fuel_cost_estimate.",
+        "jsCode": "try {\n  const { task, data } = JSON.parse(query);\n\n  if (task === 'break_even') {\n    const fixedMonthly = (Number(data.monthly_insurance) || 0)\n      + (Number(data.monthly_parking) || 0)\n      + (Number(data.monthly_loan) || 0);\n    const targetDays = Number(data.target_days) || 15;\n    const cleanCost = Number(data.clean_cost) || 35;\n    const avgTripDays = 2;\n    const variablePerDay = cleanCost / avgTripDays;\n    const depreciationPerDay = 0.33 * 40;\n    const platformPct = (Number(data.platform_fee_pct) || 25) / 100;\n    const protectionPct = (Number(data.protection_plan_pct) || 80) / 100;\n    const hostReceivePct = protectionPct * (1 - platformPct);\n    const mvr = ((fixedMonthly / targetDays) + variablePerDay + depreciationPerDay) / hostReceivePct;\n    const breakEvenDays = Math.ceil(fixedMonthly / (mvr * hostReceivePct - variablePerDay - depreciationPerDay));\n    return JSON.stringify({\n      minimum_viable_rate: Math.ceil(mvr),\n      fixed_monthly_cost: fixedMonthly.toFixed(2),\n      variable_cost_per_day: variablePerDay.toFixed(2),\n      depreciation_per_day: depreciationPerDay.toFixed(2),\n      host_receive_pct: (hostReceivePct * 100).toFixed(1) + '%',\n      break_even_days: breakEvenDays\n    });\n  }\n\n  if (task === 'monthly_pnl') {\n    const trips = data.trips || [];\n    const expenses = data.expenses || [];\n    const vehicle = data.vehicle || {};\n    const grossRevenue = trips.reduce((s, t) => s + (Number(t.gross_revenue) || 0), 0);\n    const platformFees = trips.reduce((s, t) => s + (Number(t.platform_fees) || 0), 0);\n    const netRevenue = grossRevenue - platformFees;\n    const expenseByCategory = {};\n    let totalExpenses = 0;\n    expenses.forEach(e => {\n      const cat = e.category || 'other';\n      const amt = Number(e.amount) || 0;\n      expenseByCategory[cat] = (expenseByCategory[cat] || 0) + amt;\n      totalExpenses += amt;\n    });\n    const totalMiles = trips.reduce((s, t) => s + (Number(t.miles_driven) || 0), 0);\n    const depreciation = totalMiles * 0.33;\n    const fixedMonthly = (Number(vehicle.monthly_insurance) || 0)\n      + (Number(vehicle.monthly_parking) || 0)\n      + (Number(vehicle.monthly_loan) || 0);\n    const totalCosts = totalExpenses + depreciation + fixedMonthly;\n    const netProfit = netRevenue - totalCosts;\n    const totalDays = trips.reduce((s, t) => s + (Number(t.days) || 0), 0);\n    const margin = grossRevenue > 0 ? ((netProfit / grossRevenue) * 100).toFixed(1) : '0.0';\n    return JSON.stringify({\n      gross_revenue: grossRevenue.toFixed(2),\n      platform_fees: platformFees.toFixed(2),\n      net_revenue: netRevenue.toFixed(2),\n      expense_breakdown: expenseByCategory,\n      total_variable_expenses: totalExpenses.toFixed(2),\n      depreciation: depreciation.toFixed(2),\n      fixed_costs: fixedMonthly.toFixed(2),\n      total_costs: totalCosts.toFixed(2),\n      net_profit: netProfit.toFixed(2),\n      profit_margin_pct: margin,\n      days_booked: totalDays,\n      utilization_pct: ((totalDays / 30) * 100).toFixed(1),\n      total_miles: totalMiles,\n      biggest_cost: Object.entries(expenseByCategory).sort((a, b) => b[1] - a[1])[0] || ['none', 0]\n    });\n  }\n\n  if (task === 'pricing_recommendation') {\n    const mvr = Number(data.mvr) || 0;\n    const marketAvg = Number(data.market_avg) || 0;\n    const currentRate = Number(data.current_rate) || 0;\n    const utilization = Number(data.utilization) || 50;\n    let weekdayRate = Math.max(mvr, marketAvg * 0.9);\n    let weekendRate = weekdayRate * 1.2;\n    if (utilization > 80) { weekdayRate *= 1.1; weekendRate *= 1.15; }\n    if (utilization < 40) { weekdayRate *= 0.95; }\n    weekdayRate = Math.max(weekdayRate, mvr);\n    weekendRate = Math.max(weekendRate, mvr);\n    return JSON.stringify({\n      recommended_weekday: Math.ceil(weekdayRate),\n      recommended_weekend: Math.ceil(weekendRate),\n      minimum_floor: Math.ceil(mvr),\n      market_average: marketAvg.toFixed(2),\n      current_rate: currentRate.toFixed(2),\n      position_vs_market: currentRate > 0 && marketAvg > 0\n        ? ((currentRate / marketAvg) * 100).toFixed(0) + '% of market avg'\n        : 'no market data'\n    });\n  }\n\n  if (task === 'roi') {\n    const price = Number(data.purchase_price) || 1;\n    const profit = Number(data.annual_net_profit) || 0;\n    const roi = (profit / price) * 100;\n    const paybackMonths = profit > 0 ? Math.ceil((price / profit) * 12) : Infinity;\n    return JSON.stringify({\n      annual_roi_pct: roi.toFixed(1),\n      payback_months: paybackMonths,\n      monthly_avg_profit: (profit / 12).toFixed(2)\n    });\n  }\n\n  if (task === 'depreciation') {\n    const miles = Number(data.miles_this_period) || 0;\n    const irsCost = miles * 0.33;\n    const irsTotal = miles * 0.70;\n    return JSON.stringify({\n      depreciation_cost: irsCost.toFixed(2),\n      irs_total_deduction: irsTotal.toFixed(2),\n      miles: miles,\n      rate_per_mile: '$0.33 (IRS depreciation component)'\n    });\n  }\n\n\n  if (task === 'market_analysis') {\n    const rates = (data.competitor_rates || []).map(Number).filter(r => r > 0);\n    if (rates.length === 0) return JSON.stringify({ error: 'No competitor rates provided' });\n    const sorted = rates.sort((a, b) => a - b);\n    const avg = rates.reduce((a, b) => a + b, 0) / rates.length;\n    const median = sorted.length % 2 === 0\n      ? (sorted[sorted.length/2 - 1] + sorted[sorted.length/2]) / 2\n      : sorted[Math.floor(sorted.length/2)];\n    const myRate = Number(data.my_rate) || 0;\n    const percentile = myRate > 0 ? (sorted.filter(r => r <= myRate).length / sorted.length * 100) : 0;\n    return JSON.stringify({\n      sample_size: rates.length,\n      average: avg.toFixed(2),\n      median: median.toFixed(2),\n      min: sorted[0].toFixed(2),\n      max: sorted[sorted.length - 1].toFixed(2),\n      my_rate: myRate.toFixed(2),\n      my_percentile: percentile.toFixed(0) + 'th',\n      position: myRate < avg * 0.85 ? 'significantly_below_market'\n        : myRate < avg * 0.95 ? 'below_market'\n        : myRate < avg * 1.05 ? 'at_market'\n        : myRate < avg * 1.15 ? 'above_market'\n        : 'significantly_above_market',\n      recommendation: myRate < avg * 0.9 ? 'Priced too low - leaving money on the table'\n        : myRate > avg * 1.2 ? 'Priced high - may reduce bookings'\n        : 'Competitive positioning'\n    });\n  }\n\n  if (task === 'fuel_cost_estimate') {\n    const price = Number(data.gas_price_per_gallon) || 3.50;\n    const mpg = Number(data.mpg) || 25;\n    const miles = Number(data.miles_per_trip) || 150;\n    const gallons = miles / mpg;\n    const cost = gallons * price;\n    return JSON.stringify({\n      fuel_cost: cost.toFixed(2),\n      gallons_used: gallons.toFixed(1),\n      cost_per_mile: (cost / miles).toFixed(3),\n      gas_price: price.toFixed(2),\n      mpg: mpg,\n      miles: miles\n    });\n  }\n\n  return JSON.stringify({ error: 'Unknown task', task });\n} catch (e) {\n  return 'Error: ' + e.message + '. Send JSON: {\"task\": \"break_even\", \"data\": {...}}';\n}"
+      },
+      "id": "fleet-code-tool",
+      "name": "Financial Calculator Code",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "success-response",
+              "name": "response",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fleet-success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        500,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "try-again-response",
+              "name": "response",
+              "value": "I ran into an issue processing that. Could you rephrase your request? If the problem persists, try being more specific about which vehicle or what data you need.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fleet-try-again",
+      "name": "Try Again",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        500,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [],
+          "combinator": "and"
+        }
+      },
+      "id": "fleet-error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const errorMessage = $json.execution?.error?.message || 'Unknown error';\nconst workflowName = $json.workflow?.name || 'FLEET';\nconst timestamp = new Date().toISOString();\n\nreturn [{\n  json: {\n    error: errorMessage,\n    workflow: workflowName,\n    timestamp: timestamp,\n    summary: `FLEET Error at ${timestamp}: ${errorMessage}`\n  }\n}];"
+      },
+      "id": "fleet-format-error",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## FLEET â€” Vehicle Rental Pricing Advisor\n\n**Purpose**: AI-powered Turo host advisor for pricing, cost tracking, and profitability analysis.\n\n**Data Store**: Google Sheets (5 tabs: Vehicles, Expenses, Trips, Market Comps, Dashboard)\n\n**Capabilities**:\n1. Vehicle onboarding with cost structure\n2. Expense tracking (gas, repairs, insurance, etc.)\n3. Trip logging with fee calculations\n4. Market competitor data entry\n5. Break-even & pricing recommendations\n6. Monthly P&L and ROI analysis\n\n**Setup Required**:\n- Create Google Sheet with 5 tabs (see plan)\n- Configure Google Sheets OAuth2 credential\n- Configure OpenAI API credential\n- Configure Postgres credential\n- Link Google Sheets Tool to your spreadsheet",
+        "height": 460,
+        "width": 360
+      },
+      "id": "fleet-note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Agent Tools\n\n- **Think Tool**: Structured reasoning before recommendations\n- **Calculator Tool**: Quick arithmetic\n- **Google Sheets Tool**: Read/write all 5 data tabs\n- **Financial Calculator Code**: Break-even, P&L, pricing, ROI, depreciation\n\n**Code Tool Tasks**:\n```\nbreak_even â†’ minimum viable rate\nmonthly_pnl â†’ profit & loss statement\npricing_recommendation â†’ rate suggestions\nroi â†’ return on investment\ndepreciation â†’ IRS mileage costs\n```",
+        "height": 340,
+        "width": 360
+      },
+      "id": "fleet-note-tools",
+      "name": "Note: Tools",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search Turo for competitor vehicle rental listings and pricing in a specific city. Returns available vehicles with daily rates, ratings, and vehicle details. Use this when the host asks about competitor pricing or market rates. If this fails (403/blocked), fall back to the Market Comps sheet and ask the host to enter competitor data manually.",
+        "method": "GET",
+        "url": "https://turo.com/api/search?location={city}&startDate={startDate}&endDate={endDate}&vehicleType={vehicleType}",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0"
+            }
+          ]
+        },
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "city",
+              "description": "City and state (e.g. Dallas, TX)",
+              "type": "string"
+            },
+            {
+              "name": "startDate",
+              "description": "Search start date YYYY-MM-DD",
+              "type": "string"
+            },
+            {
+              "name": "endDate",
+              "description": "Search end date YYYY-MM-DD",
+              "type": "string"
+            },
+            {
+              "name": "vehicleType",
+              "description": "Vehicle class: sedan, suv, truck, luxury, minivan, convertible",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "fleet-turo-search",
+      "name": "Turo Market Search",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        -100,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get the daily pricing breakdown for a specific Turo vehicle listing. Use this to analyze a specific competitor pricing strategy over a date range.",
+        "method": "GET",
+        "url": "https://turo.com/api/vehicle/daily_pricing?vehicleId={vehicleId}&start={startDate}&end={endDate}",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0"
+            }
+          ]
+        },
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "vehicleId",
+              "description": "Turo vehicle listing ID number",
+              "type": "string"
+            },
+            {
+              "name": "startDate",
+              "description": "Start date YYYY-MM-DD",
+              "type": "string"
+            },
+            {
+              "name": "endDate",
+              "description": "End date YYYY-MM-DD",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "fleet-turo-pricing",
+      "name": "Turo Daily Pricing",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        50,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Decode a Vehicle Identification Number (VIN) to get full vehicle specifications including make, model, year, engine, fuel type, body class, and more. Use this when a host provides a VIN during vehicle onboarding or when you need to verify vehicle details. Free US government API, no key needed.",
+        "method": "GET",
+        "url": "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/{vin}?format=json",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "vin",
+              "description": "17-character Vehicle Identification Number",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "fleet-nhtsa-vin",
+      "name": "VIN Decoder (NHTSA)",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Look up all vehicle models for a specific manufacturer and year. Use to help hosts identify their vehicle type, verify make/model combinations, or categorize vehicles for market comparison. Free US government API.",
+        "method": "GET",
+        "url": "https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMakeYear/make/{make}/modelyear/{year}?format=json",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "make",
+              "description": "Vehicle manufacturer name (e.g. Honda, Toyota, Ford)",
+              "type": "string"
+            },
+            {
+              "name": "year",
+              "description": "Model year (e.g. 2022)",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "fleet-nhtsa-models",
+      "name": "Vehicle Models (NHTSA)",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        350,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get current gasoline and diesel prices for a specific US state. Use when calculating fuel costs for a vehicle, when the host asks about gas prices, or when updating fuel cost assumptions in break-even calculations. Requires CollectAPI key (free tier available at collectapi.com).",
+        "method": "GET",
+        "url": "https://api.collectapi.com/gasPrice/stateUsaPrice?state={state}",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "authorization",
+              "value": "apikey {apiKey}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "state",
+              "description": "US state abbreviation (e.g. TX, CA, IL, FL)",
+              "type": "string"
+            },
+            {
+              "name": "apiKey",
+              "description": "CollectAPI key from collectapi.com (free tier)",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "fleet-gas-prices",
+      "name": "Gas Prices (CollectAPI)",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        500,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Look up vehicle specifications and class information from NHTSA database. Use to help estimate vehicle value brackets for depreciation and ROI calculations, or to get detailed specs like engine size, drive type, and body class.",
+        "method": "GET",
+        "url": "https://vpic.nhtsa.dot.gov/api/vehicles/GetCanadianVehicleSpecifications/?make={make}&model={model}&year={year}&format=json",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "make",
+              "description": "Vehicle make (e.g. Honda)",
+              "type": "string"
+            },
+            {
+              "name": "model",
+              "description": "Vehicle model (e.g. Civic)",
+              "type": "string"
+            },
+            {
+              "name": "year",
+              "description": "Model year (e.g. 2022)",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "fleet-vehicle-specs",
+      "name": "Vehicle Specs (NHTSA)",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        650,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get weather forecast for a location to factor into pricing recommendations. Bad weather (rain, storms) reduces rental demand so lower rates. Good weather and holidays increase demand so raise rates. Free API, no key needed. Common city coords: Dallas(32.78,-96.80), Chicago(41.88,-87.63), LA(34.05,-118.24), Miami(25.76,-80.19), NYC(40.71,-74.01), Houston(29.76,-95.37), Phoenix(33.45,-112.07), Atlanta(33.75,-84.39).",
+        "method": "GET",
+        "url": "https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode&timezone=auto&forecast_days={days}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "latitude",
+              "description": "Location latitude (e.g. 32.78 for Dallas)",
+              "type": "string"
+            },
+            {
+              "name": "longitude",
+              "description": "Location longitude (e.g. -96.80 for Dallas)",
+              "type": "string"
+            },
+            {
+              "name": "days",
+              "description": "Number of forecast days 1-16",
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "id": "fleet-weather",
+      "name": "Weather Forecast",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Live API Tools (Agent-Callable)\n\n**Turo Market Search** - Competitor listings by city\n**Turo Daily Pricing** - Specific listing price breakdown\n**VIN Decoder (NHTSA)** - Free vehicle specs from VIN\n**Vehicle Models (NHTSA)** - Make/model/year lookup\n**Gas Prices (CollectAPI)** - Current fuel prices by state\n**Vehicle Specs (NHTSA)** - Detailed vehicle specifications\n**Weather Forecast** - Demand forecasting via weather\n\n**Free APIs (no key)**: NHTSA, Open-Meteo\n**Free tier**: CollectAPI (gas prices)\n**Best-effort**: Turo (may block automated requests)",
+        "height": 380,
+        "width": 360
+      },
+      "id": "fleet-note-api",
+      "name": "Note: API Tools",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        500
+      ]
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FLEET Advisor": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Try Again",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculator Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Financial Calculator Code": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turo Market Search": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turo Daily Pricing": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VIN Decoder (NHTSA)": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vehicle Models (NHTSA)": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gas Prices (CollectAPI)": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vehicle Specs (NHTSA)": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weather Forecast": {
+      "ai_tool": [
+        [
+          {
+            "node": "FLEET Advisor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": null,
+  "activeVersionId": null,
+  "versionCounter": 1,
+  "triggerCount": 0,
+  "activeVersion": null
+}

@@ -42,7 +42,9 @@ class Logger {
       !isMcpStdio &&
       process.env.NODE_ENV !== "production" &&
       process.env.DISABLE_CONSOLE_LOGGING !== "true";
-    this.enableFile = true; // Force enable for debugging
+    this.enableFile =
+      process.env.NODE_ENV !== "production" ||
+      process.env.ENABLE_FILE_LOGGING === "true";
     this.prefix = options?.prefix || "";
 
     if (this.enableFile) {
@@ -57,9 +59,16 @@ class Logger {
 
   private initializeFileLogging(): void {
     try {
-      const logFile = path.join(process.cwd(), "debug.log");
+      // Use __dirname (the dist/utils/ directory) to resolve the project root,
+      // NOT process.cwd() which can be C:\WINDOWS\system32 in Claude Desktop
+      const projectDir = path.resolve(__dirname, "..", "..");
+      const logFile = path.join(projectDir, "debug.log");
       this.logStream = createWriteStream(logFile, { flags: "a" });
-      // Write a startup message
+      // Handle async stream errors (e.g., EPERM) gracefully instead of crashing
+      this.logStream.on("error", () => {
+        this.enableFile = false;
+        this.logStream = undefined;
+      });
       this.logStream.write(
         `\n--- Starting Log Session at ${new Date().toISOString()} ---\n`
       );

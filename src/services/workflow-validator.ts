@@ -474,6 +474,31 @@ export class WorkflowValidator {
           }
         }
 
+        // Check for duplicate auth headers on HTTP nodes with httpHeaderAuth credential
+        if (
+          node.credentials &&
+          typeof node.credentials === "object" &&
+          (node.credentials as any).httpHeaderAuth
+        ) {
+          const headerParams =
+            (node.parameters as any)?.headerParameters?.parameters ||
+            (node.parameters as any)?.specifyHeaders === "keypair" &&
+              (node.parameters as any)?.headerParameters?.parameters;
+          if (Array.isArray(headerParams)) {
+            const hasManualAuth = headerParams.some(
+              (p: any) => p.name?.toLowerCase() === "authorization"
+            );
+            if (hasManualAuth) {
+              result.warnings.push({
+                type: "warning",
+                nodeId: node.id,
+                nodeName: node.name,
+                message: `"${node.name}" has both httpHeaderAuth credential and manual authorization header. The credential auto-injects the header, causing duplicates. Remove the manual authorization header.`,
+              });
+            }
+          }
+        }
+
         // Get node definition - try multiple formats
         let nodeInfo = this.nodeRepository.getNode(node.type);
 
@@ -1059,6 +1084,25 @@ export class WorkflowValidator {
         type: "warning",
         message: "Consider adding error handling to your workflow",
       });
+    }
+
+    // Check for nodes with onError: continueErrorOutput but no error output connection
+    for (const node of workflow.nodes) {
+      if (node.disabled) continue;
+      const nodeOnError = (node as any).onError;
+      if (nodeOnError === "continueErrorOutput") {
+        const nodeConns = workflow.connections[node.name];
+        const errorOutputs = nodeConns?.main?.[1];
+        const hasErrorConnection = errorOutputs && errorOutputs.length > 0 && errorOutputs.some((c: any) => c);
+        if (!hasErrorConnection) {
+          result.warnings.push({
+            type: "warning",
+            nodeId: node.id,
+            nodeName: node.name,
+            message: `"${node.name}" has onError=continueErrorOutput but error output (index 1) is not connected. Errors will be silently dropped.`,
+          });
+        }
+      }
     }
 
     // Check for very long linear workflows

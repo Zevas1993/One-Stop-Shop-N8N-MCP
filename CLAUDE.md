@@ -305,56 +305,54 @@ The project implements MCP (Model Context Protocol) to expose n8n node documenta
 - **Node Source Extractor** (`src/utils/node-source-extractor.ts`): Extracts node implementations from n8n packages
 - **Enhanced Documentation Fetcher** (`src/utils/enhanced-documentation-fetcher.ts`): Fetches and parses official n8n documentation
 
-### MCP Tools Available
-- `list_nodes` - List all available n8n nodes with filtering
-- `get_node_info` - Get comprehensive information about a specific node (now includes aiToolCapabilities)
-- `get_node_essentials` - **NEW** Get only essential properties (10-20) with examples (95% smaller)
-- `get_node_as_tool_info` - **NEW v2.5.1** Get specific information about using ANY node as an AI tool
-- `search_nodes` - Full-text search across all node documentation
-- `search_node_properties` - **NEW** Search for specific properties within a node
-- `get_node_for_task` - **NEW** Get pre-configured node settings for common tasks
-- `list_tasks` - **NEW** List all available task templates
-- `validate_node_operation` - **NEW v2.4.2** Verify node configuration with operation awareness and profiles
-- `validate_node_minimal` - **NEW v2.4.2** Quick validation for just required fields
-- `validate_workflow` - **NEW v2.5.0** Validate entire workflows before deployment (now validates ai_tool connections)
-- `validate_workflow_connections` - **NEW v2.5.0** Check workflow structure and connections
-- `validate_workflow_expressions` - **NEW v2.5.0** Validate all n8n expressions in a workflow
-- `get_property_dependencies` - **NEW** Analyze property dependencies and visibility conditions
-- `list_ai_tools` - List all AI-capable nodes (now includes usage guidance)
-- `get_node_documentation` - Get parsed documentation from n8n-docs
-- `get_database_statistics` - Get database usage statistics and metrics
-- `list_node_templates` - **NEW** Find workflow templates using specific nodes
-- `get_template` - **NEW** Get complete workflow JSON for import
-- `search_templates` - **NEW** Search templates by keywords
-- `get_templates_for_task` - **NEW** Get curated templates for common tasks
+### MCP Tools Available (Unified Server — `src/mcp/server-modern.ts`)
 
-### n8n Management Tools (NEW v2.6.0 - Requires API Configuration)
-These tools are only available when N8N_API_URL and N8N_API_KEY are configured:
+> **Note**: The unified server uses consolidated tools with `action` enums instead of individual tool names.
+> Legacy tool names (e.g., `n8n_create_workflow`) exist only in `src/interfaces/mcp-interface.ts` for backwards compatibility.
 
-#### Workflow Management
-- `n8n_create_workflow` - Create new workflows with nodes and connections
-- `n8n_get_workflow` - Get complete workflow by ID
-- `n8n_get_workflow_details` - Get workflow with execution statistics
-- `n8n_get_workflow_structure` - Get simplified workflow structure
-- `n8n_get_workflow_minimal` - Get minimal workflow info
-- `n8n_update_full_workflow` - Update existing workflows (complete replacement)
-- `n8n_update_partial_workflow` - **NEW v2.7.0** Update workflows using diff operations
-- `n8n_delete_workflow` - Delete workflows permanently
-- `n8n_list_workflows` - List workflows with filtering
-- `n8n_activate_workflow` - **NEW v2.7.3** Enable/disable workflows
-- `n8n_validate_workflow` - **NEW v2.6.3** Validate workflow from n8n instance by ID
+#### `node_discovery` — Find, search, and analyze n8n nodes
+Actions: `search`, `list`, `list_installed`, `get_info`, `get_documentation`, `search_properties`
+- `get_info` returns essentials by default (10-20 properties, 95% smaller than full)
+- `list_installed` queries the connected n8n instance for actual installed nodes
+- Version data includes disclaimer noting it's from local catalog (may differ from instance)
 
-#### Execution Management
-- `n8n_run_workflow` - **NEW v2.7.3** Execute workflows directly via API (no webhook needed)
-- `n8n_trigger_webhook_workflow` - Trigger workflows via webhook URL
-- `n8n_get_execution` - Get execution details by ID
-- `n8n_list_executions` - List executions with status filtering
-- `n8n_delete_execution` - Delete execution records
-- `n8n_stop_execution` - **NEW v2.7.3** Stop running executions (emergency stop)
+#### `node_validation` — Validate node configurations and dependencies
+Actions: `validate_minimal`, `validate_operation`, `get_dependencies`, `get_for_task`, `list_tasks`
 
-#### System Tools
-- `n8n_health_check` - Check n8n API connectivity and features
-- `n8n_list_available_tools` - List all available management tools
+#### `templates_and_guides` — Get templates and building guidance
+Actions: `get_template`, `search_templates`, `list_node_templates`, `get_templates_for_task`, `get_workflow_guide`, `get_ai_tools`, `get_database_stats`
+
+#### `n8n_docs` — Search official n8n documentation via kapa.ai
+Actions: `search`, `ask`
+
+### n8n Management Tools (Requires N8N_API_URL + N8N_API_KEY)
+
+#### `workflow_manager` — Create, read, update, and delete workflows
+Actions: `create`, `get`, `get_details`, `get_structure`, `get_minimal`, `update`, `list`, `search`, `validate`, `clean`, `activate`, `duplicate`
+- Create/update includes credential existence validation (warns if credentials missing on instance)
+- httpRequest nodes: version upgraded if needed, parameters preserved (never wiped)
+
+#### `workflow_execution` — Execute and monitor workflows
+Actions: `run`, `trigger`, `get`, `list`, `delete`, `stop`, `retry`, `monitor_running`, `list_mcp`
+
+#### `workflow_diff` — Precise incremental workflow updates
+- Uses diff operations (addNode, removeNode, updateNode, etc.) for 80-90% token savings
+- Max 5 operations per request, transaction-safe
+
+#### `credentials_manager` — Manage n8n credentials
+Actions: `list`, `get`, `create`, `update`, `delete`
+
+#### `tags_manager` — Manage workflow tags
+Actions: `list`, `create`, `update`, `delete`
+
+#### `variables_manager` — Manage instance-level variables
+Actions: `list`, `create`, `update`, `delete`
+
+#### `n8n_system` — System health and diagnostics
+Operations: `health`, `diagnose`, `list_tools`
+
+#### `source_control` — Git source control integration (Enterprise)
+Actions: `status`, `pull`, `push`
 
 ### Database Structure
 Uses SQLite with enhanced schema:

@@ -118,9 +118,16 @@ export function cleanWorkflowForCreate(
 
       // ✅ Enforce correct typeVersions for nodes that commonly break
       if (node.type === "n8n-nodes-base.httpRequest") {
-        // HTTP Request MUST be v4.2 (not v5!) with minimal parameters
-        fixedNode.typeVersion = 4.2;
-        fixedNode.parameters = { options: {} };
+        // Only upgrade typeVersion if missing or too old — NEVER wipe parameters
+        if (!fixedNode.typeVersion || fixedNode.typeVersion < 4.2) {
+          fixedNode.typeVersion = 4.2;
+        }
+        // Ensure options object exists without overwriting existing parameters
+        if (!fixedNode.parameters) {
+          fixedNode.parameters = { options: {} };
+        } else if (!fixedNode.parameters.options) {
+          fixedNode.parameters.options = {};
+        }
       }
 
       if (node.type === "n8n-nodes-base.switch") {
@@ -216,9 +223,16 @@ export function cleanWorkflowForUpdate(workflow: Workflow): Partial<Workflow> {
 
       // ✅ Enforce correct typeVersions for nodes that commonly break
       if (node.type === "n8n-nodes-base.httpRequest") {
-        // HTTP Request MUST be v4.2 (not v5!) with minimal parameters
-        fixedNode.typeVersion = 4.2;
-        fixedNode.parameters = { options: {} };
+        // Only upgrade typeVersion if missing or too old — NEVER wipe parameters
+        if (!fixedNode.typeVersion || fixedNode.typeVersion < 4.2) {
+          fixedNode.typeVersion = 4.2;
+        }
+        // Ensure options object exists without overwriting existing parameters
+        if (!fixedNode.parameters) {
+          fixedNode.parameters = { options: {} };
+        } else if (!fixedNode.parameters.options) {
+          fixedNode.parameters.options = {};
+        }
       }
 
       if (node.type === "n8n-nodes-base.switch") {

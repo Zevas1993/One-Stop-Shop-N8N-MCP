@@ -265,6 +265,8 @@ export class MCPToolService {
       category: node.category,
       version: node.version || "1",
       isVersioned: node.isVersioned || false,
+      versionNote:
+        "Version data from MCP local catalog. Your n8n instance may have newer node versions. Use n8n_docs or check your instance to verify.",
       requiredProperties: essentials.required,
       commonProperties: essentials.common,
       operations: operations.map((op: any) => ({
@@ -1156,6 +1158,8 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
           operations: data.operations || [],
           credentials: data.credentials || [],
           version: data.version || "1",
+          versionNote:
+            "Version data from MCP local catalog. Your n8n instance may have newer node versions.",
           aiToolCapabilities: data.aiToolCapabilities || null,
         };
       case "ai_tool":
