@@ -52,9 +52,6 @@ yarn-error.log*
 .yarn-integrity
 
 # CRCT System
-cline_docs/
-strategy_tasks/
-Previous_versions/
 --output
 test-output-summary.md
 
@@ -75,15 +72,12 @@ build/
 
 # Embeddings
 *.embedding
-embeddings/
-mcp-config.json
 
 # Cleanup - files to ignore
 *.bak
 *.backup
 temp_processes.txt
 test-output-*
-manual_verify_update.mjs
 n8n-scraping-progress.json
 next-node-continuation.md
 
@@ -133,3 +127,12 @@ backup/
 # Scripts
 scripts/debug/
 scripts/scratchpad/
+
+# Personal n8n workflow exports (may contain credential IDs)
+fleet-workflow*.json
+
+# Reference documents (not part of server)
+n8n-cheatsheet*.txt
+
+# One-off debug/test scripts with hardcoded credentials
+verify-stdio.js

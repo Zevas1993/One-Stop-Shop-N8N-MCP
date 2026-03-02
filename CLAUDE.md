@@ -150,8 +150,8 @@ src/
 │   ├── fetch-templates.ts     # Fetch workflow templates from n8n.io (NEW in v2.4.1)
 │   └── test-templates.ts      # Test template functionality (NEW in v2.4.1)
 ├── mcp/
-│   ├── server-update.ts       # MCP server with enhanced tools
-│   ├── tools-update.ts        # Tool definitions including new essentials
+│   ├── server-modern.ts       # Unified MCP server (active)
+│   ├── handlers-n8n-manager.ts # n8n API management handlers
 │   └── index.ts               # Main entry point with mode selection
 ├── utils/
 │   ├── console-manager.ts     # Console output isolation (NEW in v2.3.1)
