@@ -1,4 +1,4 @@
 version: 1
 start:
-  command: ["node", "build/index.js"]
+  command: ["node", "dist/mcp/stdio-wrapper.js"]
   port: 8000 

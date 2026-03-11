@@ -181,7 +181,8 @@ export class N8nVersionMonitor {
    */
   private loadLastKnownVersions(): void {
     try {
-      const versionFilePath = join(process.cwd(), "data", ".n8n-versions");
+      const projectRoot = join(__dirname, "..", "..");
+      const versionFilePath = join(projectRoot, "data", ".n8n-versions");
       if (existsSync(versionFilePath)) {
         const data = readFileSync(versionFilePath, "utf-8");
         const versions = JSON.parse(data);
@@ -207,11 +208,12 @@ export class N8nVersionMonitor {
         }
       });
 
-      const versionFilePath = join(process.cwd(), "data", ".n8n-versions");
+      const projectRoot = join(__dirname, "..", "..");
+      const versionFilePath = join(projectRoot, "data", ".n8n-versions");
       const { writeFileSync, mkdirSync } = require("fs");
 
       // Ensure data directory exists
-      const dataDir = join(process.cwd(), "data");
+      const dataDir = join(projectRoot, "data");
       if (!existsSync(dataDir)) {
         mkdirSync(dataDir, { recursive: true });
       }

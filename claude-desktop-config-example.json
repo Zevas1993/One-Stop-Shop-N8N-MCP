@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "n8n-copilot": {
+    "n8n-mcp": {
       "command": "node",
       "args": [
-        "C:/Users/Chris Boyd/Documents/MCP-Servers/One-Stop-Shop-N8N-MCP/start.js"
+        "C:/Users/Chris Boyd/Documents/MCP-Servers/One-Stop-Shop-N8N-MCP/dist/mcp/stdio-wrapper.js"
       ],
       "env": {
         "N8N_API_URL": "http://localhost:5678",

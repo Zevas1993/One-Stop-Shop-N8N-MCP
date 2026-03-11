@@ -13,4 +13,4 @@ export MCP_MODE=${MCP_MODE:-stdio}
 # The Nano LLMs (Embedding Model and Generation Model) are integrated
 # directly into the MCP server and orchestrate GraphRAG updates
 echo "Starting MCP server with Nano LLM learning pipeline..."
-exec node /app/dist/mcp/index.js
+exec node /app/dist/main.js

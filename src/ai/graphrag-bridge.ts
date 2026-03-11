@@ -58,10 +58,12 @@ export class GraphRAGBridge {
     let serverPath =
       process.env.GRAPH_BACKEND || "python/backend/graph/lightrag_service.py";
 
-    // Resolve to absolute path if relative (handles being called from different directories)
+    // Resolve to absolute path relative to project root (not process.cwd(),
+    // which is C:\WINDOWS\system32 in Claude Desktop)
     if (!serverPath.startsWith("/") && !serverPath.match(/^[a-z]:/i)) {
-      const { resolve } = require("path");
-      serverPath = resolve(serverPath);
+      const { resolve, join } = require("path");
+      const projectRoot = resolve(__dirname, "..", "..");
+      serverPath = join(projectRoot, serverPath);
     }
 
     const env = { ...process.env };
@@ -209,6 +211,16 @@ export class GraphRAGBridge {
     // Clear cache to reflect latest graph content
     this.cache.clear();
     return { ok: true };
+  }
+
+  async buildRelationships(): Promise<{ ok: boolean; relationships_built?: number; relationships_stored?: number }> {
+    const result = await this.rpc("build_relationships", {}, 60_000);
+    this.cache.clear();
+    return result;
+  }
+
+  async getStats(): Promise<any> {
+    return this.rpc("get_stats", {}, 5_000);
   }
 
   clearCache(): void {

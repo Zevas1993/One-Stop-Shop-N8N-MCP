@@ -232,7 +232,7 @@ export class AdaptiveResponseBuilder {
           displayName: nodeInfo.displayName,
           version: nodeInfo.version,
           category: nodeInfo.category,
-          _hint: 'Use get_node_essentials for common properties or get_node_info for all properties',
+          _hint: 'Use node_discovery { action: "get_info", nodeType: "..." } for details',
         };
 
       case ResponseSize.COMPACT:
@@ -245,15 +245,15 @@ export class AdaptiveResponseBuilder {
           propertiesCount: nodeInfo.properties?.length || 0,
           operationsCount: nodeInfo.operations?.length || 0,
           hasAuth: !!nodeInfo.credentials,
-          _hint: 'Use get_node_essentials for essential properties with examples',
+          _hint: 'Use node_discovery { action: "get_info", nodeType: "..." } for essential properties with examples',
         };
 
       case ResponseSize.STANDARD:
-        // Delegate to get_node_essentials logic
+        // Essentials view
         return {
           ...nodeInfo,
           properties: nodeInfo.essentialProperties || nodeInfo.properties?.slice(0, 20),
-          _hint: 'This is the essential properties view. Use get_node_info for all properties',
+          _hint: 'This is the essential properties view. Use node_discovery { action: "get_info", nodeType: "...", verbosity: "full" } for all properties',
         };
 
       case ResponseSize.FULL:
@@ -285,10 +285,9 @@ export class AdaptiveResponseBuilder {
     const { tool } = context;
 
     const hints: Record<string, string> = {
-      list_workflows: 'Use get_workflow(id) for details on a specific workflow',
-      list_executions: 'Use get_execution(id, includeData=true) for execution details',
-      search_nodes: 'Use get_node_info(name) or get_node_essentials(name) for node details',
-      list_nodes: 'Use get_node_essentials(name) for essential properties with examples',
+      workflow_manager: 'Use workflow_manager { action: "get", id: "..." } for details on a specific workflow',
+      workflow_execution: 'Use workflow_execution { action: "get", executionId: "..." } for execution details',
+      node_discovery: 'Use node_discovery { action: "get_info", nodeType: "..." } for node details with examples',
     };
 
     return {

@@ -1,5 +1,5 @@
 /**
- * n8n Co-Pilot MCP Server
+ * n8n MCP Server
  *
  * A stateless extension of n8n that provides:
  * - Live node catalog sync from connected n8n instance
@@ -22,13 +22,14 @@
  */
 
 import dotenv from "dotenv";
-// Always try to load .env file - this provides defaults for local development
-// Use override: true to ensure .env values take precedence (fixes Windows # character issue)
+import path from "path";
+// Three-tier config: caller env (highest) > data/.env (browser setup) > repo .env (dev fallback)
 try {
-  dotenv.config({ override: true });
-} catch (e) {
-  // Ignore errors if .env doesn't exist
-}
+  dotenv.config({ path: path.join(process.cwd(), "data", ".env") });
+} catch (e) { /* data/.env may not exist */ }
+try {
+  dotenv.config();
+} catch (e) { /* .env may not exist */ }
 
 // Note: express, helmet, rateLimit moved to SingleSessionHTTPServer
 import { logger } from "./utils/logger";
@@ -102,7 +103,7 @@ async function main(): Promise<void> {
   const logFn = config.mode === "mcp" ? console.error : console.log;
   logFn("");
   logFn("╔════════════════════════════════════════════════════════════╗");
-  logFn("║              n8n Co-Pilot MCP Server v3.0.0                ║");
+  logFn("║              n8n MCP Server v3.0.0                          ║");
   logFn("║                                                            ║");
   logFn("║  Stateless • Validated • Live Sync • LLM-Powered          ║");
   logFn("╚════════════════════════════════════════════════════════════╝");

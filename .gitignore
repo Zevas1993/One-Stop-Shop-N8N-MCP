@@ -12,6 +12,9 @@ coverage/
 **/env/**
 **/.env/**
 
+# Persisted setup config (contains API keys)
+data/.env
+
 # Allow .env.example for user setup documentation
 !.env.example
 
@@ -24,6 +27,9 @@ api-keys.json
 # kapa.ai OAuth tokens (contains access/refresh tokens)
 .kapa-tokens.json
 .kapa-client.json
+
+# Windows AppData artifacts
+AppData/
 
 # Build outputs
 dist/

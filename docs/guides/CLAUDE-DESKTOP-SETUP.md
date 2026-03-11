@@ -50,10 +50,10 @@ Choose ONE of the configurations below:
 ```json
 {
   "mcpServers": {
-    "n8n-mcp-consolidated": {
+    "n8n-mcp": {
       "command": "node",
       "args": [
-        "C:/Users/Chris Boyd/Documents/MCP-Servers/One-Stop-Shop-N8N-MCP/dist/consolidated-server.js"
+        "C:/Users/Chris Boyd/Documents/MCP-Servers/One-Stop-Shop-N8N-MCP/start.js"
       ],
       "env": {
         "N8N_API_URL": "http://localhost:5678",
@@ -277,11 +277,11 @@ If you encounter issues:
 2. **Verify paths:** Ensure all paths are correct and absolute
 3. **Test manually:** Run the server directly to see errors:
    ```bash
-   # Consolidated
-   node dist/consolidated-server.js
+   # Recommended (via smart launcher)
+   node start.js
 
-   # Legacy
-   MCP_MODE=stdio node dist/mcp/index.js
+   # Direct stdio mode
+   node dist/mcp/stdio-wrapper.js
    ```
 4. **Rebuild database:** `npm run rebuild:local`
 5. **Reinstall dependencies:** `rm -rf node_modules && npm install`
@@ -295,10 +295,10 @@ Here's a complete example with multiple MCP servers:
 ```json
 {
   "mcpServers": {
-    "n8n-mcp-consolidated": {
+    "n8n-mcp": {
       "command": "node",
       "args": [
-        "C:/Users/Chris Boyd/Documents/MCP-Servers/One-Stop-Shop-N8N-MCP/dist/consolidated-server.js"
+        "C:/Users/Chris Boyd/Documents/MCP-Servers/One-Stop-Shop-N8N-MCP/start.js"
       ],
       "env": {
         "N8N_API_URL": "http://localhost:5678",

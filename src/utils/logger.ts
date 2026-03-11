@@ -41,8 +41,9 @@ class Logger {
       process.env.NODE_ENV !== "production" &&
       process.env.DISABLE_CONSOLE_LOGGING !== "true";
     this.enableFile =
-      process.env.NODE_ENV !== "production" ||
-      process.env.ENABLE_FILE_LOGGING === "true";
+      ((process.env.NODE_ENV !== "production" ||
+        process.env.ENABLE_FILE_LOGGING === "true") &&
+       !isMcpStdio);
     this.prefix = options?.prefix || "";
 
     if (this.enableFile) {
@@ -70,8 +71,8 @@ class Logger {
       this.logStream.write(
         `\n--- Starting Log Session at ${new Date().toISOString()} ---\n`
       );
-    } catch (error) {
-      console.error("Failed to initialize file logging:", error);
+    } catch {
+      // Silent failure — console.error would corrupt MCP stdio JSON-RPC stream
       this.enableFile = false;
     }
   }

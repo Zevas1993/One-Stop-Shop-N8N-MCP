@@ -1220,62 +1220,21 @@ export class WorkflowValidator {
    * Find similar node types for suggestions
    */
   private findSimilarNodeTypes(invalidType: string): string[] {
-    // Since we don't have a method to list all nodes, we'll use a predefined list
-    // of common node types that users might be looking for
-    const suggestions: string[] = [];
+    // Use the live node repository to find similar node types
     const nodeName = invalidType.includes(".")
       ? invalidType.split(".").pop()!
       : invalidType;
 
-    const commonNodeMappings: Record<string, string[]> = {
-      webhook: ["nodes-base.webhook"],
-      httpRequest: ["nodes-base.httpRequest"],
-      http: ["nodes-base.httpRequest"],
-      set: ["nodes-base.set"],
-      code: ["nodes-base.code"],
-      manualTrigger: ["nodes-base.manualTrigger"],
-      manual: ["nodes-base.manualTrigger"],
-      scheduleTrigger: ["nodes-base.scheduleTrigger"],
-      schedule: ["nodes-base.scheduleTrigger"],
-      cron: ["nodes-base.scheduleTrigger"],
-      emailSend: ["nodes-base.emailSend"],
-      email: ["nodes-base.emailSend"],
-      slack: ["nodes-base.slack"],
-      discord: ["nodes-base.discord"],
-      postgres: ["nodes-base.postgres"],
-      mysql: ["nodes-base.mySql"],
-      mongodb: ["nodes-base.mongoDb"],
-      redis: ["nodes-base.redis"],
-      if: ["nodes-base.if"],
-      switch: ["nodes-base.switch"],
-      merge: ["nodes-base.merge"],
-      splitInBatches: ["nodes-base.splitInBatches"],
-      loop: ["nodes-base.splitInBatches"],
-      googleSheets: ["nodes-base.googleSheets"],
-      sheets: ["nodes-base.googleSheets"],
-      airtable: ["nodes-base.airtable"],
-      github: ["nodes-base.github"],
-      git: ["nodes-base.github"],
-    };
-
-    // Check for exact match
-    const lowerNodeName = nodeName.toLowerCase();
-    if (commonNodeMappings[lowerNodeName]) {
-      suggestions.push(...commonNodeMappings[lowerNodeName]);
+    try {
+      const results = this.nodeRepository.searchNodes(nodeName, { limit: 5 });
+      return results
+        .map((r: any) => r.type || r.name)
+        .filter((t: string) => t && t !== invalidType)
+        .slice(0, 3);
+    } catch {
+      // Fallback: return empty if repository search fails
+      return [];
     }
-
-    // Check for partial matches
-    Object.entries(commonNodeMappings).forEach(([key, values]) => {
-      if (key.includes(lowerNodeName) || lowerNodeName.includes(key)) {
-        values.forEach((v) => {
-          if (!suggestions.includes(v)) {
-            suggestions.push(v);
-          }
-        });
-      }
-    });
-
-    return suggestions.slice(0, 3); // Return top 3 suggestions
   }
 
   /**
@@ -1306,7 +1265,7 @@ export class WorkflowValidator {
       );
     }
 
-    // Suggest using Code node for complex logic
+    // Suggest searching for built-in nodes for complex expression patterns
     const complexExpressionNodes = workflow.nodes.filter((node) => {
       const jsonString = JSON.stringify(node.parameters);
       const expressionCount = (jsonString.match(/\{\{/g) || []).length;
@@ -1315,7 +1274,7 @@ export class WorkflowValidator {
 
     if (complexExpressionNodes.length > 0) {
       result.suggestions.push(
-        "Consider using a Code node for complex data transformations instead of multiple expressions"
+        "Some nodes have many expressions. Search for built-in nodes that handle this data transformation natively (e.g., Set, Item Lists, Merge)."
       );
     }
 

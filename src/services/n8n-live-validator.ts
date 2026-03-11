@@ -74,9 +74,7 @@ export class N8nLiveValidator {
       if (workflow.pinData) {
         workflowPayload.pinData = workflow.pinData;
       }
-      if (workflow.meta) {
-        workflowPayload.meta = workflow.meta;
-      }
+      // NOTE: Do NOT include 'meta' — n8n API has additionalProperties: false and rejects it
 
       // Try to validate by creating a temporary workflow
       // n8n's validation happens during the create/update process
@@ -122,8 +120,10 @@ export class N8nLiveValidator {
   }
 
   /**
-   * Validate workflow structure and nodes exist in n8n
-   * This is a lighter check that doesn't create workflows
+   * Structural-only validation: checks node array shape, node type format,
+   * and connection references. Does NOT create a real workflow on the n8n
+   * instance (no ghost workflows). For live API validation that creates a
+   * throwaway workflow, use validateWithN8n() instead.
    */
   async validateWorkflowStructure(
     workflow: Workflow

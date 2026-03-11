@@ -1,10 +1,14 @@
 /**
  * n8n-MCP - Model Context Protocol Server for n8n
  * Copyright (c) 2024 AiAdvisors Romuald Czlonkowski
- * Licensed under the Sustainable Use License v1.0
+ * Licensed under the MIT License
+ *
+ * Library exports for HTTP/API integration.
+ * The canonical stdio MCP entrypoint is dist/mcp/stdio-wrapper.js.
+ * These exports are for embedding the MCP server in HTTP services.
  */
 
-// Engine exports for service integration
+// Engine exports for HTTP/API service integration
 export { N8NMCPEngine, EngineHealth, EngineOptions } from "./mcp-engine";
 export { SingleSessionHTTPServer } from "./http-server-single-session";
 export { ConsoleManager } from "./utils/console-manager";
@@ -13,6 +17,3 @@ export { createUnifiedMCPServer, UnifiedMCPServer } from "./mcp/server-modern";
 // Default export for convenience
 import N8NMCPEngine from "./mcp-engine";
 export default N8NMCPEngine;
-
-// Legacy CLI functionality - moved to ./mcp/index.ts
-// This file now serves as the main entry point for library usage

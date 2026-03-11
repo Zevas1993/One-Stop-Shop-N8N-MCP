@@ -1,7 +1,7 @@
 /**
  * MCP Interface
  *
- * Exposes the n8n Co-Pilot core as MCP (Model Context Protocol) tools.
+ * Exposes the n8n MCP Server core as MCP (Model Context Protocol) tools.
  * This is the interface that AI agents (like Claude) connect to.
  *
  * Key Features:
@@ -417,7 +417,7 @@ Only nodes returned by this search are guaranteed to exist.`,
   {
     name: "n8n_status",
     description:
-      "Get the status of the n8n Co-Pilot system including connection status, node count, and LLM availability",
+      "Get the status of the n8n MCP Server system including connection status, node count, and LLM availability",
     inputSchema: {
       type: "object",
       properties: {},

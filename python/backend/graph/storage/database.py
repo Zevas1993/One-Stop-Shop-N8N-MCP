@@ -304,6 +304,21 @@ class Database:
             logger.error(f"Failed to get edge count: {e}")
             return 0
 
+    def get_edges(self, limit: int = 10000, offset: int = 0) -> List[Edge]:
+        """Get all edges with pagination"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT * FROM edges ORDER BY strength DESC LIMIT ? OFFSET ?",
+                    (limit, offset)
+                )
+                rows = cursor.fetchall()
+                return [Edge.from_dict(dict(row)) for row in rows]
+        except Exception as e:
+            logger.error(f"Failed to get edges: {e}")
+            return []
+
     # Embedding Operations
     def add_embedding(self, embedding: Embedding) -> bool:
         """Add embedding for a node"""

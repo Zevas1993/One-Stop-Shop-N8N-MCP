@@ -14,7 +14,14 @@
  */
 
 import { logger } from '../utils/logger';
-import Database from 'better-sqlite3';
+// Lazy-loaded: better-sqlite3 may not be available in all environments
+let Database: any;
+try {
+  Database = require('better-sqlite3');
+} catch {
+  // Will be handled in initialize() — event bus degrades gracefully
+  Database = null;
+}
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -54,7 +61,7 @@ export interface EventBusStats {
 // ============================================================================
 
 export class EventBus {
-  private db: Database.Database | null = null;
+  private db: any | null = null;
   private dbPath: string;
   private subscriptions: Map<string, EventSubscription> = new Map();
   private initialized: boolean = false;
@@ -96,7 +103,11 @@ export class EventBus {
         fs.mkdirSync(dbDir, { recursive: true });
       }
 
-      // Open database
+      // Open database (requires better-sqlite3)
+      if (!Database) {
+        logger.warn('[EventBus] better-sqlite3 not available — event persistence disabled');
+        return;
+      }
       this.db = new Database(this.dbPath);
       this.db.pragma('journal_mode = WAL');
 
@@ -105,7 +116,13 @@ export class EventBus {
 
       this.initialized = true;
       logger.info('[EventBus] Initialized successfully');
-    } catch (error) {
+    } catch (error: any) {
+      // Degrade gracefully if better-sqlite3 is unavailable (e.g., Claude Desktop)
+      if (!Database || error?.message?.includes('MODULE_NOT_FOUND') || error?.code === 'MODULE_NOT_FOUND') {
+        logger.warn('[EventBus] better-sqlite3 not available — event persistence disabled (in-memory only)');
+        this.initialized = false;
+        return;
+      }
       logger.error('[EventBus] Failed to initialize:', error);
       throw error;
     }

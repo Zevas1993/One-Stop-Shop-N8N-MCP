@@ -86,43 +86,40 @@ export function validateWorkflowSettings(
 export function cleanWorkflowForCreate(
   workflow: Partial<Workflow>
 ): Partial<Workflow> {
-  const {
-    // Remove read-only fields
-    id,
-    createdAt,
-    updatedAt,
-    versionId,
-    meta,
-    // Remove fields that cause API errors during creation
-    active,
-    tags,
-    // Keep everything else
-    ...cleanedWorkflow
-  } = workflow;
+  // ALLOWLIST approach: Only include fields the n8n POST /workflows API accepts.
+  // The API has additionalProperties: false — any unlisted field causes a hard 400.
+  const cleaned: any = {
+    name: (workflow as any).name,
+    nodes: (workflow as any).nodes,
+    connections: (workflow as any).connections,
+    settings: (workflow as any).settings ?? defaultWorkflowSettings,
+  };
+
+  // Optional user-settable fields
+  if ((workflow as any).staticData != null) {
+    cleaned.staticData = (workflow as any).staticData;
+  }
 
   // CRITICAL FIX: Clean nodes to match n8n UI requirements
-  if (cleanedWorkflow.nodes) {
-    cleanedWorkflow.nodes = cleanedWorkflow.nodes.map((node: any) => {
+  if (cleaned.nodes) {
+    cleaned.nodes = cleaned.nodes.map((node: any) => {
       const fixedNode: any = { ...node };
 
-      // ❌ CRITICAL: REMOVE credentials field - n8n UI breaks when this exists!
-      // The API docs are WRONG - working workflows have NO credentials field
+      // REMOVE credentials field - n8n UI breaks when this exists
       if (fixedNode.credentials !== undefined) {
         delete fixedNode.credentials;
       }
 
-      // ✅ NEVER include webhookId (n8n server generates this)
+      // NEVER include webhookId (n8n server generates this)
       if (fixedNode.webhookId) {
         delete fixedNode.webhookId;
       }
 
-      // ✅ Enforce correct typeVersions for nodes that commonly break
+      // Enforce correct typeVersions for nodes that commonly break
       if (node.type === "n8n-nodes-base.httpRequest") {
-        // Only upgrade typeVersion if missing or too old — NEVER wipe parameters
         if (!fixedNode.typeVersion || fixedNode.typeVersion < 4.2) {
           fixedNode.typeVersion = 4.2;
         }
-        // Ensure options object exists without overwriting existing parameters
         if (!fixedNode.parameters) {
           fixedNode.parameters = { options: {} };
         } else if (!fixedNode.parameters.options) {
@@ -131,10 +128,8 @@ export function cleanWorkflowForCreate(
       }
 
       if (node.type === "n8n-nodes-base.switch") {
-        // Switch MUST be v3.2 (not v1!) with correct parameter structure
         if (fixedNode.typeVersion < 3) {
           fixedNode.typeVersion = 3.2;
-          // Convert old v1 parameter structure to v3.2 if needed
           if (fixedNode.parameters?.rules?.values) {
             fixedNode.parameters = {
               rules: {
@@ -174,54 +169,44 @@ export function cleanWorkflowForCreate(
     });
   }
 
-  // Ensure settings are present with defaults
-  if (!cleanedWorkflow.settings) {
-    cleanedWorkflow.settings = defaultWorkflowSettings;
-  }
-
-  return cleanedWorkflow;
+  return cleaned;
 }
 
 export function cleanWorkflowForUpdate(workflow: Workflow): Partial<Workflow> {
-  const {
-    // Remove read-only/system-managed fields
-    id,
-    createdAt,
-    updatedAt,
-    versionId,
-    meta,
-    tags,
-    // Remove additional fields that n8n API doesn't accept
-    isArchived,
-    usedCredentials,
-    sharedWithProjects,
-    triggerCount,
-    shared,
-    active, // Active is managed via separate activation endpoint, not update endpoint
-    // NOTE: Allow these fields for updates
-    // - staticData: User-settable node state
-    // - pinData: User-settable pinned execution data
-    // Keep everything else
-    ...cleanedWorkflow
-  } = workflow as any;
+  // ALLOWLIST approach: Only include fields the n8n PUT /workflows/{id} API accepts.
+  // The API has additionalProperties: false — any unlisted field causes a hard 400.
+  // This is immune to new read-only fields added by future n8n versions.
+  const cleaned: any = {
+    name: (workflow as any).name,
+    nodes: (workflow as any).nodes,
+    connections: (workflow as any).connections,
+    settings: (workflow as any).settings ?? defaultWorkflowSettings,
+  };
+
+  // Optional user-settable fields (allowed by API)
+  if ((workflow as any).staticData != null) {
+    cleaned.staticData = (workflow as any).staticData;
+  }
+  if ((workflow as any).pinData != null) {
+    cleaned.pinData = (workflow as any).pinData;
+  }
 
   // CRITICAL FIX: Clean nodes to match n8n UI requirements
-  if (cleanedWorkflow.nodes) {
-    cleanedWorkflow.nodes = cleanedWorkflow.nodes.map((node: any) => {
+  if (cleaned.nodes) {
+    cleaned.nodes = cleaned.nodes.map((node: any) => {
       const fixedNode: any = { ...node };
 
-      // ❌ CRITICAL: REMOVE credentials field - n8n UI breaks when this exists!
-      // The API docs are WRONG - working workflows have NO credentials field
+      // REMOVE credentials field - n8n UI breaks when this exists
       if (fixedNode.credentials !== undefined) {
         delete fixedNode.credentials;
       }
 
-      // ✅ NEVER include webhookId (n8n server generates this)
+      // NEVER include webhookId (n8n server generates this)
       if (fixedNode.webhookId) {
         delete fixedNode.webhookId;
       }
 
-      // ✅ Enforce correct typeVersions for nodes that commonly break
+      // Enforce correct typeVersions for nodes that commonly break
       if (node.type === "n8n-nodes-base.httpRequest") {
         // Only upgrade typeVersion if missing or too old — NEVER wipe parameters
         if (!fixedNode.typeVersion || fixedNode.typeVersion < 4.2) {
@@ -279,12 +264,7 @@ export function cleanWorkflowForUpdate(workflow: Workflow): Partial<Workflow> {
     });
   }
 
-  // Ensure settings are present
-  if (!cleanedWorkflow.settings) {
-    cleanedWorkflow.settings = defaultWorkflowSettings;
-  }
-
-  return cleanedWorkflow;
+  return cleaned;
 }
 
 // Validate workflow structure

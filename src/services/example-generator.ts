@@ -521,12 +521,14 @@ return processedItems;`
    * Get examples for a specific node type
    */
   static getExamples(nodeType: string, essentials?: any): NodeExamples {
-    // Return curated examples if available
-    const examples = this.NODE_EXAMPLES[nodeType];
+    // Return curated examples if available — try canonical key then short form
+    const examples = this.NODE_EXAMPLES[nodeType]
+      || this.NODE_EXAMPLES[nodeType.replace(/^n8n-nodes-base\./, 'nodes-base.')]
+      || this.NODE_EXAMPLES[nodeType.replace(/^@n8n\/n8n-nodes-langchain\./, 'n8n-nodes-langchain.')];
     if (examples) {
       return examples;
     }
-    
+
     // Generate basic examples for unconfigured nodes
     return this.generateBasicExamples(nodeType, essentials);
   }
@@ -644,7 +646,9 @@ return processedItems;`
    * Get example for a specific use case
    */
   static getTaskExample(nodeType: string, task: string): Record<string, any> | undefined {
-    const examples = this.NODE_EXAMPLES[nodeType];
+    const examples = this.NODE_EXAMPLES[nodeType]
+      || this.NODE_EXAMPLES[nodeType.replace(/^n8n-nodes-base\./, 'nodes-base.')]
+      || this.NODE_EXAMPLES[nodeType.replace(/^@n8n\/n8n-nodes-langchain\./, 'n8n-nodes-langchain.')];
     if (!examples) return undefined;
     
     // Map common tasks to example types

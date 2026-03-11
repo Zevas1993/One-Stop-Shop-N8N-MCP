@@ -35,8 +35,8 @@ export class TemplateRepository {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
-    // Extract node types from workflow
-    const nodeTypes = workflow.nodes.map(n => n.name);
+    // Extract node types from workflow (use n.type for machine-readable node type, not n.name which is display name)
+    const nodeTypes = workflow.nodes.map(n => n.type || n.name);
     
     // Build URL
     const url = `https://n8n.io/workflows/${workflow.id}`;

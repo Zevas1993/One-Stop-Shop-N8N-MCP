@@ -67,10 +67,13 @@ export class NodeDocumentationService {
   private initialized: Promise<void>;
 
   constructor(dbPath?: string) {
+    // Use __dirname to resolve project root (NOT process.cwd() which can be
+    // C:\WINDOWS\system32 when launched from Claude Desktop)
+    const projectRoot = path.resolve(__dirname, "..", "..");
     this.dbPath =
       dbPath ||
       process.env.NODE_DB_PATH ||
-      path.join(process.cwd(), "data", "nodes-v2.db");
+      path.join(projectRoot, "data", "nodes-v2.db");
 
     // Ensure directory exists
     const dbDir = path.dirname(this.dbPath);

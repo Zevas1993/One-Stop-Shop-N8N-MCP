@@ -78,8 +78,8 @@ export class ConfigService {
     const config: ServerConfig = {
       database: {
         paths: [
-          path.join(process.cwd(), 'data', 'nodes.db'),
           path.join(__dirname, '../../data', 'nodes.db'),
+          path.join(process.cwd(), 'data', 'nodes.db'),
           './data/nodes.db'
         ]
       },

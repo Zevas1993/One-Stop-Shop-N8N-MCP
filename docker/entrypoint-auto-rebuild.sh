@@ -162,4 +162,4 @@ echo -e "${BLUE}Starting MCP server...${NC}"
 echo ""
 
 # Start the MCP server
-exec node /app/dist/mcp/index.js
+exec node /app/dist/main.js

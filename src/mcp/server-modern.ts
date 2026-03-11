@@ -4,7 +4,9 @@ import {
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
+import type { OAuthTokens, OAuthClientMetadata, OAuthClientInformationMixed } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { z } from "zod";
 
 import { isN8nApiConfigured, getN8nApiConfig } from "../config/n8n-api";
@@ -122,9 +124,12 @@ export class UnifiedMCPServer {
   }
 
   private findDatabasePath(): string {
+    // Use __dirname-relative paths first (NOT process.cwd() which can be
+    // C:\WINDOWS\system32 when launched from Claude Desktop)
+    const projectRoot = path.resolve(__dirname, "..", "..");
     const possiblePaths = [
+      path.join(projectRoot, "data", "nodes.db"),
       path.join(process.cwd(), "data", "nodes.db"),
-      path.join(__dirname, "../../data", "nodes.db"),
       "./data/nodes.db",
     ];
 
@@ -134,8 +139,8 @@ export class UnifiedMCPServer {
       }
     }
 
-    // Default to creating in data directory
-    return path.join(process.cwd(), "data", "nodes.db");
+    // Default to __dirname-relative data directory
+    return path.join(projectRoot, "data", "nodes.db");
   }
 
   private async ensureInitialized(): Promise<void> {
@@ -211,7 +216,7 @@ export class UnifiedMCPServer {
       },
       async (args) => {
         await this.ensureInitialized();
-        const { action, query, category, pkg, limit, nodeType } = args as any;
+        const { action, query, category, package: pkg, limit, nodeType } = args as any;
         try {
           switch (action) {
             case "search":
@@ -268,7 +273,16 @@ export class UnifiedMCPServer {
     // 2. Node Validation
     this.server.tool(
       "node_validation",
-      "Validate node configurations and dependencies",
+      `Validate node configurations, get dependencies, and find nodes for tasks.
+
+Actions:
+- validate_minimal: Quick validation of a node config. Pass 'nodeType' + optional 'configuration'.
+- validate_operation: Full validation including operations. Pass 'nodeType' + optional 'configuration'.
+- get_dependencies: Get required credentials and connected nodes. Pass 'nodeType'.
+- get_for_task: Find the best node for a task description. Pass 'task' (e.g. "send email", "parse JSON").
+- list_tasks: List all available task categories.
+
+Example: { action: "get_for_task", task: "send a Slack message" }`,
       {
         action: z.enum([
           "validate_minimal",
@@ -277,11 +291,11 @@ export class UnifiedMCPServer {
           "get_for_task",
           "list_tasks",
         ]),
-        nodeType: z.string().optional(),
-        configuration: z.any().optional(),
-        profile: z.string().optional(),
-        options: z.any().optional(),
-        task: z.string().optional(),
+        nodeType: z.string().optional().describe("Node type, e.g. 'n8n-nodes-base.httpRequest' (for validate/dependencies)"),
+        configuration: z.any().optional().describe("Node configuration object to validate"),
+        profile: z.string().optional().describe("Validation profile"),
+        options: z.any().optional().describe("Additional options for dependency analysis"),
+        task: z.string().optional().describe("Task description, e.g. 'send email' (for get_for_task)"),
       },
       async (args) => {
         await this.ensureInitialized();
@@ -342,7 +356,23 @@ export class UnifiedMCPServer {
     // 3. Workflow Manager
     this.server.tool(
       "workflow_manager",
-      "Create, read, update, and delete workflows (Requires API)",
+      `Create, read, update, and delete n8n workflows.
+
+Actions:
+- create: Pass 'workflow' with { name, nodes[], connections{}, settings{} }
+- get / get_details / get_structure / get_minimal: Pass 'id' to fetch a workflow
+- update: Pass 'id' + 'changes' with any of { name?, nodes?, connections?, settings? }. Missing fields are auto-filled from current workflow. You do NOT need to send the full workflow.
+- list: Pass optional 'filters' { limit?, active?, tags? }
+- search: Pass 'query' to search workflows by name
+- validate: Pass 'id' with mode 'remote' to validate against your n8n instance (no workflow JSON needed). Or pass 'workflow' JSON + mode (full|quick|structure|connections|expressions|nodes) for local validation.
+- activate: Pass 'id' + 'active' (true/false) to enable/disable a workflow
+- duplicate: Pass 'id' + optional 'newName'
+- clean: Pass 'id' to strip invalid fields from a workflow
+
+Example update: { action: "update", id: "abc123", changes: { name: "New Name" } }
+Example create: { action: "create", workflow: { name: "My Flow", nodes: [...], connections: {}, settings: { executionOrder: "v1" } } }
+
+Requires N8N_API_URL and N8N_API_KEY.`,
       {
         action: z.enum([
           "create",
@@ -358,15 +388,15 @@ export class UnifiedMCPServer {
           "activate",
           "duplicate",
         ]),
-        workflow: z.any().optional(),
-        id: z.string().optional(),
-        changes: z.any().optional(),
-        filters: z.any().optional(),
-        query: z.string().optional(),
-        format: z.enum(["full", "simplified"]).optional(),
-        autoFix: z.boolean().optional(),
-        active: z.boolean().optional(),
-        newName: z.string().optional(),
+        workflow: z.any().optional().describe("Full workflow object (for create/validate)"),
+        id: z.string().optional().describe("Workflow ID (for get/update/activate/duplicate/clean)"),
+        changes: z.any().optional().describe("Partial workflow changes for update: { name?, nodes?, connections?, settings? }. Missing fields auto-filled from current workflow."),
+        filters: z.any().optional().describe("List filters: { limit?, active?, tags?, cursor? }"),
+        query: z.string().optional().describe("Search query string (for search action)"),
+        format: z.enum(["full", "simplified"]).optional().describe("Response format"),
+        autoFix: z.boolean().optional().describe("Auto-fix validation issues"),
+        active: z.boolean().optional().describe("Enable (true) or disable (false) workflow (for activate action)"),
+        newName: z.string().optional().describe("New name for duplicated workflow"),
         mode: z
           .enum([
             "full",
@@ -377,7 +407,8 @@ export class UnifiedMCPServer {
             "expressions",
             "nodes",
           ])
-          .optional(),
+          .optional()
+          .describe("Validation mode (for validate action)"),
       },
       async (args) => {
         const { action, id, changes, filters, query } = args as any;
@@ -439,19 +470,23 @@ export class UnifiedMCPServer {
               return this.formatResponse(
                 await n8nHandlers.handleGetWorkflowMinimal({ id })
               );
-            case "update":
+            case "update": {
               if (!id || !changes) throw new Error("id and changes required");
+              const parsedChanges = typeof changes === 'string' ? JSON.parse(changes) : changes;
               await this.ensureInitialized();
               return this.formatResponse(
                 await n8nHandlers.handleUpdateWorkflow(
-                  { id, ...changes },
+                  { id, ...parsedChanges },
                   this.initManager.getRepository()
                 )
               );
-            case "list":
+            }
+            case "list": {
+              const parsedFilters = typeof filters === 'string' ? JSON.parse(filters) : (filters || {});
               return this.formatResponse(
-                await n8nHandlers.handleListWorkflows(filters || {})
+                await n8nHandlers.handleListWorkflows(parsedFilters)
               );
+            }
             case "search":
               if (!query) throw new Error("query required");
               const workflows = await n8nHandlers.handleListWorkflows({
@@ -497,15 +532,26 @@ export class UnifiedMCPServer {
     // 3.5. Credentials Manager
     this.server.tool(
       "credentials_manager",
-      "Manage n8n credentials (Requires API)",
+      `Manage n8n credentials for node authentication.
+
+Actions:
+- list: List all credentials. Optional 'limit'/'cursor' for pagination.
+- get: Get credential details by 'id'.
+- create: Create a credential. Pass 'name', 'type' (e.g. "httpHeaderAuth"), and 'data' (credential values).
+- update: Update a credential. Pass 'id' + fields to change ('name', 'data').
+- delete: Delete a credential by 'id'.
+
+Example create: { action: "create", name: "My API Key", type: "httpHeaderAuth", data: { name: "Authorization", value: "Bearer sk-..." } }
+
+Requires N8N_API_URL and N8N_API_KEY.`,
       {
         action: z.enum(["list", "get", "create", "update", "delete"]),
-        id: z.string().optional(),
-        name: z.string().optional(),
-        type: z.string().optional(),
-        data: z.any().optional(),
-        limit: z.number().optional(),
-        cursor: z.string().optional(),
+        id: z.string().optional().describe("Credential ID (for get/update/delete)"),
+        name: z.string().optional().describe("Credential display name (for create/update)"),
+        type: z.string().optional().describe("Credential type, e.g. 'httpHeaderAuth', 'oAuth2Api' (for create)"),
+        data: z.any().optional().describe("Credential values object, e.g. { name: 'Authorization', value: 'Bearer ...' }"),
+        limit: z.number().optional().describe("Max results for list"),
+        cursor: z.string().optional().describe("Pagination cursor for list"),
       },
       async (args) => {
         this.ensureN8nConfigured();
@@ -550,7 +596,23 @@ export class UnifiedMCPServer {
     // 4. Workflow Execution
     this.server.tool(
       "workflow_execution",
-      "Execute and monitor workflows (Requires API)",
+      `Execute and monitor n8n workflow runs.
+
+Actions:
+- run: Execute a workflow by ID via n8n API. Note: requires workflow to be active and may not work on all n8n editions. For webhook-triggered workflows, use 'trigger' instead. Pass 'workflowId' + optional 'data'.
+- trigger: Execute via webhook URL. Pass 'webhookUrl' + 'httpMethod' (GET/POST) + optional 'data'/'headers'.
+- get: Get execution details by execution 'id'.
+- list: List executions. Pass optional 'filters' { workflowId?, status?, limit? }.
+- stop: Stop a running execution by 'id'.
+- retry: Retry a failed execution by 'id'.
+- delete: Delete an execution record by 'id'.
+- monitor_running: Get all currently running executions. Optional 'workflowId' to filter.
+- list_mcp: List MCP-triggered executions.
+
+Example run: { action: "run", workflowId: "abc123", data: { key: "value" } }
+Example trigger: { action: "trigger", webhookUrl: "http://localhost:5678/webhook/xyz", httpMethod: "POST", data: { key: "value" } }
+
+Requires N8N_API_URL and N8N_API_KEY.`,
       {
         action: z.enum([
           "run",
@@ -563,21 +625,20 @@ export class UnifiedMCPServer {
           "monitor_running",
           "list_mcp",
         ]),
-        workflowId: z.string().optional(),
-        webhookUrl: z.string().optional(),
-        httpMethod: z.string().optional(),
-        data: z.any().optional(),
-        headers: z.any().optional(),
-        id: z.string().optional(),
-        filters: z.any().optional(),
-        waitForResponse: z.boolean().optional(),
-        loadWorkflow: z.boolean().optional(),
-        includeStats: z.boolean().optional(),
-        limit: z.number().optional(),
+        workflowId: z.string().optional().describe("Workflow ID (for run/monitor_running)"),
+        webhookUrl: z.string().optional().describe("Full webhook URL (for trigger action)"),
+        httpMethod: z.string().optional().describe("HTTP method: GET or POST (for trigger action, default POST)"),
+        data: z.any().optional().describe("Input data to pass to the workflow"),
+        headers: z.any().optional().describe("Custom HTTP headers (for trigger action)"),
+        id: z.string().optional().describe("Execution ID (for get/stop/retry/delete)"),
+        filters: z.any().optional().describe("List filters: { workflowId?, status?, limit?, cursor? }"),
+        waitForResponse: z.boolean().optional().describe("Wait for webhook response (for trigger action)"),
+        loadWorkflow: z.boolean().optional().describe("Include workflow data in retry"),
+        includeStats: z.boolean().optional().describe("Include execution statistics"),
+        limit: z.number().optional().describe("Max results for list_mcp"),
       },
       async (args) => {
         this.ensureN8nConfigured();
-        const v3Handlers = await import("./handlers-v3-tools");
         const {
           action,
           webhookUrl,
@@ -620,10 +681,12 @@ export class UnifiedMCPServer {
                   includeData: filters?.includeData,
                 })
               );
-            case "list":
+            case "list": {
+              const parsedFilters = typeof filters === 'string' ? JSON.parse(filters) : (filters || {});
               return this.formatResponse(
-                await n8nHandlers.handleListExecutions(filters || {})
+                await n8nHandlers.handleListExecutions(parsedFilters)
               );
+            }
             case "delete":
               if (!id) throw new Error("id required");
               return this.formatResponse(
@@ -635,25 +698,52 @@ export class UnifiedMCPServer {
               return this.formatResponse(
                 await n8nHandlers.handleStopExecution({ id })
               );
-            case "retry":
+            case "retry": {
               if (!id) throw new Error("id required");
-              return this.formatResponse(
-                await v3Handlers.handleRetryExecution({
-                  executionId: id,
-                  loadWorkflow,
-                })
-              );
-            case "monitor_running":
-              return this.formatResponse(
-                await v3Handlers.handleMonitorRunningExecutions({
-                  workflowId,
-                  includeStats,
-                })
-              );
-            case "list_mcp":
-              return this.formatResponse(
-                await v3Handlers.handleListMcpWorkflows({ limit, includeStats })
-              );
+              try {
+                const v3Handlers = await import("./handlers-v3-tools.js");
+                return this.formatResponse(
+                  await v3Handlers.handleRetryExecution({
+                    executionId: id,
+                    loadWorkflow,
+                  })
+                );
+              } catch (importErr: any) {
+                return this.formatResponse({
+                  success: false,
+                  error: `Failed to load v3 handlers: ${importErr?.message}. Try restarting the MCP server after a fresh build.`,
+                });
+              }
+            }
+            case "monitor_running": {
+              try {
+                const v3Handlers = await import("./handlers-v3-tools.js");
+                return this.formatResponse(
+                  await v3Handlers.handleMonitorRunningExecutions({
+                    workflowId,
+                    includeStats,
+                  })
+                );
+              } catch (importErr: any) {
+                return this.formatResponse({
+                  success: false,
+                  error: `Failed to load v3 handlers: ${importErr?.message}. Try restarting the MCP server after a fresh build.`,
+                });
+              }
+            }
+            case "list_mcp": {
+              try {
+                const v3Handlers = await import("./handlers-v3-tools.js");
+                return this.formatResponse(
+                  await v3Handlers.handleListMcpWorkflows({ limit, includeStats })
+                );
+              } catch (importErr: any) {
+                return this.formatResponse({
+                  success: false,
+                  error: `Failed to load v3 handlers: ${importErr?.message}. Try restarting the MCP server after a fresh build.`,
+                });
+              }
+            }
             default:
               throw new Error(`Unknown action: ${action}`);
           }
@@ -778,11 +868,27 @@ export class UnifiedMCPServer {
     // 7. Workflow Diff
     this.server.tool(
       "workflow_diff",
-      "Precise incremental workflow updates",
+      `Precise incremental workflow updates using diff operations. Max 5 operations per request.
+
+Operations (use 'type' field to specify):
+- addNode: { type: "addNode", node: { name, type, position: [x,y], parameters? } }
+- removeNode: { type: "removeNode", nodeName: "Node Name" }
+- updateNode: { type: "updateNode", nodeName: "Node Name", changes: { "parameters.key": value } }
+- moveNode: { type: "moveNode", nodeName: "Node Name", position: [x, y] }
+- enableNode / disableNode: { type: "enableNode", nodeName: "Node Name" }
+- addConnection: { type: "addConnection", source: "Source Node", target: "Target Node" }
+- removeConnection: { type: "removeConnection", source: "Source Node", target: "Target Node" }
+- updateSettings: { type: "updateSettings", settings: { executionOrder: "v1" } }
+- updateName: { type: "updateName", name: "New Workflow Name" }
+- addTag / removeTag: { type: "addTag", tag: "my-tag" }
+
+Example: { id: "abc123", operations: [{ type: "updateNode", nodeName: "HTTP Request", changes: { "parameters.url": "https://api.example.com" } }] }
+
+Use nodeName (display name) or nodeId to reference nodes. Requires N8N_API_URL and N8N_API_KEY.`,
       {
-        id: z.string(),
-        operations: z.array(z.any()),
-        validateOnly: z.boolean().optional(),
+        id: z.string().describe("Workflow ID to modify"),
+        operations: z.array(z.any()).describe("Array of diff operations (see description for format of each type)"),
+        validateOnly: z.boolean().optional().describe("If true, validate operations without applying changes"),
       },
       async (args) => {
         this.ensureN8nConfigured();
@@ -793,6 +899,36 @@ export class UnifiedMCPServer {
           );
         } catch (error) {
           return this.formatErrorResponse(error, "workflow_diff");
+        }
+      }
+    );
+
+    // 7.5. Patch Workflow (convenience tool for single-parameter changes)
+    this.server.tool(
+      "patch_workflow",
+      `Quick single-parameter update for a workflow node. Fetches the workflow, patches one value, and saves.
+
+Use this instead of workflow_manager update when changing a single node parameter — no need to construct the full workflow JSON.
+
+Example: { id: "abc123", nodeName: "HTTP Request", parameterPath: "url", value: "https://api.example.com" }
+Example nested: { id: "abc123", nodeName: "Agent", parameterPath: "options.maxIterations", value: 15 }
+
+Requires N8N_API_URL and N8N_API_KEY.`,
+      {
+        id: z.string().describe("Workflow ID"),
+        nodeName: z.string().describe("Exact node name as shown in n8n UI"),
+        parameterPath: z.string().describe("Dot-notation parameter path, e.g. 'options.maxIterations' or 'url'"),
+        value: z.any().describe("New value to set"),
+      },
+      async (args) => {
+        this.ensureN8nConfigured();
+        const { id, nodeName, parameterPath, value } = args as any;
+        try {
+          return this.formatResponse(
+            await n8nHandlers.handlePatchWorkflow({ id, nodeName, parameterPath, value })
+          );
+        } catch (error) {
+          return this.formatErrorResponse(error, "patch_workflow");
         }
       }
     );
@@ -825,7 +961,8 @@ export class UnifiedMCPServer {
       },
       async (args) => {
         try {
-          const service = new GraphPopulationService();
+          await this.ensureInitialized();
+          const service = new GraphPopulationService(this.initManager.getRepository());
           const stats = await service.populate(args.force);
           return this.formatResponse(stats);
         } catch (error) {
@@ -1342,9 +1479,14 @@ export class UnifiedMCPServer {
             this.kapaTools = tools.map(t => ({ name: t.name, description: t.description }));
           }
 
-          // Find the matching kapa.ai tool for the requested action
+          // Map our action names to kapa.ai tool name keywords
+          const actionKeywords: Record<string, string[]> = {
+            "search": ["search"],
+            "ask": ["search", "ask", "question", "knowledge"],
+          };
+          const keywords = actionKeywords[args.action] || [args.action];
           const toolName = this.kapaTools.find(t =>
-            t.name.toLowerCase().includes(args.action.toLowerCase())
+            keywords.some(kw => t.name.toLowerCase().includes(kw))
           )?.name;
 
           if (!toolName) {
@@ -1365,7 +1507,14 @@ export class UnifiedMCPServer {
           this.kapaClient = null;
           this.kapaConnecting = null;
           this.kapaTools = null;
-          return this.formatErrorResponse(error, "n8n_docs");
+          const kapaUrl = process.env.KAPA_MCP_URL || "https://n8n.mcp.kapa.ai/";
+          const hint = error?.message?.includes("404") || error?.message?.includes("ECONNREFUSED")
+            ? ` The kapa.ai endpoint (${kapaUrl}) may be unavailable. Set KAPA_MCP_URL env var to override, or use the standalone n8n-docs MCP server as an alternative.`
+            : "";
+          return this.formatResponse({
+            success: false,
+            error: `n8n_docs failed: ${error?.message || "Unknown error"}.${hint}`,
+          });
         }
       }
     );
@@ -1494,16 +1643,68 @@ export class UnifiedMCPServer {
 
     this.kapaConnecting = (async () => {
       const client = new Client({ name: "n8n-mcp-kapa-proxy", version: PROJECT_VERSION });
-      const transport = new SSEClientTransport(new URL("https://n8n.mcp.kapa.ai/mcp"));
+      const kapaUrl = process.env.KAPA_MCP_URL || "https://n8n.mcp.kapa.ai/";
 
-      transport.onclose = () => {
-        this.kapaClient = null;
-        this.kapaTools = null;
+      // Build OAuth provider from saved tokens (created by --setup-kapa)
+      const projectRoot = path.resolve(__dirname, "..", "..");
+      const tokensPath = path.join(projectRoot, ".kapa-tokens.json");
+      const clientPath = path.join(projectRoot, ".kapa-client.json");
+
+      if (!existsSync(tokensPath)) {
+        throw new Error(
+          "kapa.ai OAuth tokens not found. Run 'node start.js --setup-kapa' to authenticate first, " +
+          "or use the standalone n8n-docs MCP server (npx -y mcp-remote https://n8n.mcp.kapa.ai/) as an alternative."
+        );
+      }
+
+      const authProvider: OAuthClientProvider = {
+        get redirectUrl() { return "http://localhost:9876/callback"; },
+        get clientMetadata(): OAuthClientMetadata {
+          return {
+            redirect_uris: [new URL("http://localhost:9876/callback")],
+            client_name: "n8n-mcp-copilot",
+            grant_types: ["authorization_code", "refresh_token"],
+            response_types: ["code"],
+            token_endpoint_auth_method: "none",
+          } as OAuthClientMetadata;
+        },
+        async clientInformation(): Promise<OAuthClientInformationMixed | undefined> {
+          try {
+            if (existsSync(clientPath)) {
+              const { readFileSync } = await import("fs");
+              return JSON.parse(readFileSync(clientPath, "utf-8"));
+            }
+          } catch { /* no saved client info */ }
+          return undefined;
+        },
+        async saveClientInformation(info: OAuthClientInformationMixed): Promise<void> {
+          const { writeFileSync } = await import("fs");
+          writeFileSync(clientPath, JSON.stringify(info, null, 2));
+        },
+        async tokens(): Promise<OAuthTokens | undefined> {
+          try {
+            if (existsSync(tokensPath)) {
+              const { readFileSync } = await import("fs");
+              return JSON.parse(readFileSync(tokensPath, "utf-8"));
+            }
+          } catch { /* no saved tokens */ }
+          return undefined;
+        },
+        async saveTokens(tokens: OAuthTokens): Promise<void> {
+          const { writeFileSync } = await import("fs");
+          writeFileSync(tokensPath, JSON.stringify(tokens, null, 2));
+        },
+        async redirectToAuthorization(): Promise<void> {
+          throw new Error("Interactive OAuth not available in headless mode. Run 'node start.js --setup-kapa' first.");
+        },
+        async saveCodeVerifier(): Promise<void> { /* no-op */ },
+        async codeVerifier(): Promise<string> { return ""; },
       };
-      transport.onerror = () => {
-        this.kapaClient = null;
-        this.kapaTools = null;
-      };
+
+      const transport = new StreamableHTTPClientTransport(
+        new URL(kapaUrl),
+        { authProvider }
+      );
 
       await client.connect(transport);
       this.kapaClient = client;
@@ -1575,54 +1776,64 @@ export class UnifiedMCPServer {
     };
   }
 
-  async run(): Promise<void> {
-    // Initialize n8n node synchronization in background (non-blocking)
-    // This ensures the node database is up-to-date with the connected n8n instance
-    if (process.env.N8N_AUTO_SYNC !== "false" && isN8nApiConfigured()) {
-      this.syncN8nNodes()
-        .then((syncResult) => {
-          if (syncResult) {
-            if (syncResult.synced) {
-              logger.info(
-                `[Server] ✅ Node database synchronized with n8n ${syncResult.version}`
-              );
-              if (syncResult.nodesCount) {
+  private backgroundInitPromise: Promise<void> | null = null;
+
+  /**
+   * Ensure background initialization (node sync + orchestrator) runs exactly once.
+   * Called from both run() and connect() so stdio-wrapper gets the same warmup.
+   */
+  private ensureBackgroundInit(): void {
+    if (this.backgroundInitPromise) return;
+    this.backgroundInitPromise = (async () => {
+      // Initialize n8n node synchronization in background (non-blocking)
+      if (process.env.N8N_AUTO_SYNC !== "false" && isN8nApiConfigured()) {
+        this.syncN8nNodes()
+          .then((syncResult) => {
+            if (syncResult) {
+              if (syncResult.synced) {
                 logger.info(
-                  `[Server]    Loaded ${syncResult.nodesCount} nodes via ${syncResult.method}`
+                  `[Server] ✅ Node database synchronized with n8n ${syncResult.version}`
+                );
+                if (syncResult.nodesCount) {
+                  logger.info(
+                    `[Server]    Loaded ${syncResult.nodesCount} nodes via ${syncResult.method}`
+                  );
+                }
+              } else {
+                logger.info(
+                  `[Server] ✅ Node database already up-to-date (${syncResult.version})`
                 );
               }
-            } else {
-              logger.info(
-                `[Server] ✅ Node database already up-to-date (${syncResult.version})`
-              );
             }
-          }
+          })
+          .catch((error) => {
+            logger.warn(
+              "[Server] Node sync failed (continuing with existing database):",
+              error instanceof Error ? error.message : String(error)
+            );
+          });
+      } else {
+        logger.info(
+          "[Server] Node auto-sync disabled (set N8N_API_URL and N8N_API_KEY to enable)"
+        );
+      }
+
+      // Initialize nano agent orchestrator in background (non-blocking)
+      this.initializeNanoAgentOrchestrator()
+        .then(() => {
+          logger.info("[Server] ✅ Nano agent orchestrator initialized");
         })
         .catch((error) => {
           logger.warn(
-            "[Server] Node sync failed (continuing with existing database):",
+            "[Server] Failed to initialize nano agent orchestrator:",
             error instanceof Error ? error.message : String(error)
           );
         });
-    } else {
-      logger.info(
-        "[Server] Node auto-sync disabled (set N8N_API_URL and N8N_API_KEY to enable)"
-      );
-    }
+    })();
+  }
 
-    // Initialize nano agent orchestrator in background (non-blocking)
-    // This prevents the server from hanging during startup
-    this.initializeNanoAgentOrchestrator()
-      .then(() => {
-        logger.info("[Server] ✅ Nano agent orchestrator initialized");
-      })
-      .catch((error) => {
-        logger.warn(
-          "[Server] Failed to initialize nano agent orchestrator:",
-          error instanceof Error ? error.message : String(error)
-        );
-      });
-
+  async run(): Promise<void> {
+    this.ensureBackgroundInit();
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     logger.info("Unified MCP Server running on stdio");
@@ -1642,7 +1853,7 @@ export class UnifiedMCPServer {
         throw new Error("n8n API configuration not available");
       }
 
-      const { N8nApiClient } = await import("../services/n8n-api-client");
+      const { N8nApiClient } = await import("../services/n8n-api-client.js");
       const n8nClient = new N8nApiClient(config);
 
       const nodeSync = new N8nNodeSync(
@@ -1671,7 +1882,7 @@ export class UnifiedMCPServer {
    */
   private async initializeNanoAgentOrchestrator(): Promise<void> {
     try {
-      const { ensureOrchestratorReady } = await import("./tools-nano-agents");
+      const { ensureOrchestratorReady } = await import("./tools-nano-agents.js");
 
       // Wrap with timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) =>
@@ -1692,6 +1903,7 @@ export class UnifiedMCPServer {
   }
 
   async connect(transport: any): Promise<void> {
+    this.ensureBackgroundInit();
     await this.server.connect(transport);
     logger.info("Unified MCP Server connected to transport");
   }

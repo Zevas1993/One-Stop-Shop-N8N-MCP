@@ -29,6 +29,7 @@ const CONFIG = {
   minNodeVersion: 18,
   distMain: path.join(__dirname, 'dist', 'main.js'),
   srcMain: path.join(__dirname, 'src', 'main.ts'),
+  dataEnvFile: path.join(__dirname, 'data', '.env'),
   envFile: path.join(__dirname, '.env'),
   envExample: path.join(__dirname, '.env.example'),
   defaultEnv: {
@@ -65,11 +66,12 @@ const logInfo = (msg) => log(`${colors.dim}    ${msg}${colors.reset}`);
 // ENVIRONMENT LOADING
 // ============================================================================
 
-function loadEnvFile() {
-  // Try to load .env file manually (no dependency on dotenv)
-  if (fs.existsSync(CONFIG.envFile)) {
+function loadEnvFile(filePath) {
+  // Three-tier config: caller env (highest) > data/.env (browser setup) > repo .env (dev fallback)
+  const envPath = filePath || CONFIG.envFile;
+  if (fs.existsSync(envPath)) {
     try {
-      const envContent = fs.readFileSync(CONFIG.envFile, 'utf8');
+      const envContent = fs.readFileSync(envPath, 'utf8');
       const lines = envContent.split('\n');
       
       for (const line of lines) {
@@ -300,6 +302,7 @@ async function runDiagnostics() {
   console.log('');
   results.node = checkNodeVersion();
   results.env = checkEnvFile();
+  loadEnvFile(CONFIG.dataEnvFile);
   loadEnvFile();
   results.deps = checkDependencies();
   results.build = checkDistBuild();
@@ -477,6 +480,7 @@ async function main() {
       logInfo('Build first: npx swc src/kapa-auth-setup.ts -o dist/kapa-auth-setup.js -C jsc.parser.syntax=typescript -C jsc.target=es2020 -C module.type=commonjs');
       process.exit(1);
     }
+    loadEnvFile(CONFIG.dataEnvFile);
     loadEnvFile();
     const child = spawn('node', [kapaSetupPath], {
       stdio: 'inherit',
@@ -519,7 +523,7 @@ ${colors.cyan}Environment:${colors.reset}
   // Normal startup
   console.log('');
   console.log(`${colors.cyan}╔════════════════════════════════════════════════════════════╗${colors.reset}`);
-  console.log(`${colors.cyan}║${colors.reset}              ${colors.bright}n8n Co-Pilot MCP Server${colors.reset}                     ${colors.cyan}║${colors.reset}`);
+  console.log(`${colors.cyan}║${colors.reset}              ${colors.bright}n8n MCP Server${colors.reset}                     ${colors.cyan}║${colors.reset}`);
   console.log(`${colors.cyan}╚════════════════════════════════════════════════════════════╝${colors.reset}`);
   console.log('');
   
@@ -532,6 +536,7 @@ ${colors.cyan}Environment:${colors.reset}
   }
   
   const hasEnv = checkEnvFile();
+  loadEnvFile(CONFIG.dataEnvFile);
   if (hasEnv) {
     loadEnvFile();
   }

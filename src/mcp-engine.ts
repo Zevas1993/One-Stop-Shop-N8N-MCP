@@ -1,9 +1,9 @@
 /**
- * N8N MCP Engine - Clean interface for service integration
- * 
- * This class provides a simple API for integrating the n8n-MCP server
- * into larger services. The wrapping service handles authentication,
- * multi-tenancy, rate limiting, etc.
+ * N8N MCP Engine - HTTP/API wrapper for service integration
+ *
+ * This class provides a simple API for embedding the n8n MCP server
+ * into HTTP services. Not the primary product entrypoint — for stdio
+ * MCP, use dist/mcp/stdio-wrapper.js directly.
  */
 import { Request, Response } from 'express';
 import { SingleSessionHTTPServer } from './http-server-single-session';

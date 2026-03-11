@@ -8,7 +8,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const distMain = path.join(__dirname, 'dist', 'main.js');
+const distMain = path.join(path.resolve(__dirname, '..'), 'dist', 'mcp', 'stdio-wrapper.js');
 
 // Skip if dist already exists and is recent
 if (fs.existsSync(distMain)) {
@@ -24,7 +24,7 @@ if (fs.existsSync(distMain)) {
 console.log('Attempting to pre-build distribution...');
 
 try {
-  execSync('npm run build', { 
+  execSync('npm run build:esbuild', {
     stdio: 'pipe',
     timeout: 120000, // 2 minutes
     env: {

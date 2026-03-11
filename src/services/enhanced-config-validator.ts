@@ -549,15 +549,6 @@ export class EnhancedConfigValidator extends ConfigValidator {
         result.warnings = [];
         result.suggestions = [];
         break;
-        if (result.warnings.length === 0 && result.errors.length === 0) {
-          result.suggestions.push(
-            "Consider adding error handling and timeout configuration"
-          );
-          result.suggestions.push(
-            "Add authentication if connecting to external services"
-          );
-        }
-        break;
 
       case "ai-friendly":
       default:

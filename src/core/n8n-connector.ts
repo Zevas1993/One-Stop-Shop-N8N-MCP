@@ -361,9 +361,31 @@ export class N8nConnector extends EventEmitter {
   }> {
     logger.info(`[N8nConnector] Updating workflow: ${id}`);
 
-    // Validate first!
+    // Fetch current workflow and merge partial changes so callers can send
+    // only the fields they want to change (e.g., just { name: "New Name" })
+    let merged: any = workflow;
+    try {
+      const current = await this.getWorkflow(id);
+      if (current) {
+        merged = {
+          name: (workflow as any).name ?? current.name,
+          nodes: (workflow as any).nodes ?? current.nodes,
+          connections: (workflow as any).connections ?? current.connections,
+          settings: (workflow as any).settings ?? (current as any).settings ?? {},
+        };
+        // Preserve optional fields if present in the update
+        if ((workflow as any).staticData != null) merged.staticData = (workflow as any).staticData;
+        if ((workflow as any).pinData != null) merged.pinData = (workflow as any).pinData;
+        if ((workflow as any).meta != null) merged.meta = (workflow as any).meta;
+        logger.info(`[N8nConnector] Merged partial update onto current workflow ${id}`);
+      }
+    } catch (fetchError) {
+      logger.warn(`[N8nConnector] Could not fetch current workflow ${id} for merge, using raw input`, fetchError);
+    }
+
+    // Validate the merged workflow (not the partial input)
     if (this.validationGateway) {
-      const validation = await this.validationGateway.validate(workflow);
+      const validation = await this.validationGateway.validate(merged);
 
       if (!validation.valid) {
         logger.warn(
@@ -381,7 +403,7 @@ export class N8nConnector extends EventEmitter {
     }
 
     try {
-      const cleanedWorkflow = this.cleanWorkflowForUpdate(workflow);
+      const cleanedWorkflow = this.cleanWorkflowForUpdate(merged);
 
       // Try PUT first, fallback to PATCH
       let response;

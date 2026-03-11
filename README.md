@@ -1,8 +1,8 @@
-# n8n Co-Pilot MCP Server
+# n8n MCP Server
 
 > **Stateless • Validated • Live Sync • LLM-Powered**
 
-Transform your n8n workflow development with an intelligent co-pilot that prevents errors before they happen.
+Transform your n8n workflow development with an intelligent MCP server that prevents errors before they happen.
 
 ## 🚀 What's New in v3.0
 
@@ -40,6 +40,15 @@ The smart launcher automatically:
 - ✅ Falls back to ts-node if needed
 - ✅ Sets sensible defaults
 
+### Node.js Requirements
+
+| Use Case | Minimum Node.js |
+|----------|----------------|
+| **Runtime** (pre-built `nodes.db`, `npx n8n-mcp`) | Node 18+ |
+| **Development** (`npm install` with devDeps, `npm run rebuild`) | Node 20.19+ |
+
+The runtime uses a dual database adapter (better-sqlite3 → sql.js fallback) for universal compatibility.
+
 ### Configure Claude Desktop
 
 Add to `claude_desktop_config.json`:
@@ -47,7 +56,7 @@ Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "n8n-copilot": {
+    "n8n-mcp": {
       "command": "node",
       "args": ["C:/path/to/One-Stop-Shop-N8N-MCP/start.js"],
       "env": {
@@ -272,4 +281,4 @@ MIT
 ## 🙏 Credits
 
 - Original MCP server by [Romuald Czlonkowski](https://www.aiadvisors.pl/en)
-- Refactored to v3.0 Co-Pilot architecture
+- Refactored to v3.0 MCP Server architecture

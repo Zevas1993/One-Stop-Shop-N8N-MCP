@@ -17,7 +17,7 @@ let envLoaded = false;
 export function getN8nApiConfig() {
   // Load environment variables on first access
   if (!envLoaded) {
-    dotenv.config({ override: true });
+    dotenv.config({ override: false });
     envLoaded = true;
   }
   

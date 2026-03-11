@@ -56,7 +56,7 @@ if [ "$MCP_MODE" = "stdio" ]; then
         exec node /app/dist/mcp/stdio-wrapper.js
     else
         # Fallback: run with explicit environment
-        exec env MCP_MODE=stdio DISABLE_CONSOLE_OUTPUT=true LOG_LEVEL=error node /app/dist/mcp/index.js
+        exec env MCP_MODE=stdio DISABLE_CONSOLE_OUTPUT=true LOG_LEVEL=error node /app/dist/main.js
     fi
 else
     # HTTP mode or other

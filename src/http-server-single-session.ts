@@ -15,7 +15,11 @@ import { GraphRAGLearningService } from "./services/graphrag-learning-service";
 import { createLocalLLMRoutes } from "./http/routes-local-llm";
 import dotenv from "dotenv";
 
-dotenv.config({ override: true });
+// Three-tier config: caller env (highest) > data/.env (browser setup) > repo .env (dev fallback)
+try {
+  dotenv.config({ path: path.join(process.cwd(), "data", ".env") });
+} catch (e) { /* data/.env may not exist */ }
+dotenv.config();
 
 interface Session {
   server: UnifiedMCPServer;
@@ -139,7 +143,7 @@ export class SingleSessionHTTPServer {
     try {
       // Create new session
       logger.info("Creating new UnifiedMCPServer...");
-      const { createUnifiedMCPServer } = await import("./mcp/server-modern");
+      const { createUnifiedMCPServer } = await import("./mcp/server-modern.js");
       const server = await createUnifiedMCPServer();
 
       logger.info("Creating StreamableHTTPServerTransport...");

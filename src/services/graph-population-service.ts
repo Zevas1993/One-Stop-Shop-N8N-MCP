@@ -1,5 +1,5 @@
 import { logger } from "../utils/logger";
-import { NodeDocumentationService } from "./node-documentation-service";
+import { NodeRepository } from "../database/node-repository";
 import { GraphRAGBridge } from "../ai/graphrag-bridge";
 import { createHash } from "crypto";
 
@@ -13,12 +13,12 @@ interface GraphEntity {
 }
 
 export class GraphPopulationService {
-  private nodeDocs: NodeDocumentationService;
+  private repository: NodeRepository;
   private graphBridge: GraphRAGBridge;
   private batchSize = 10;
 
-  constructor() {
-    this.nodeDocs = new NodeDocumentationService();
+  constructor(repository: NodeRepository) {
+    this.repository = repository;
     this.graphBridge = GraphRAGBridge.get();
   }
 
@@ -29,27 +29,19 @@ export class GraphPopulationService {
   async populate(force: boolean = false): Promise<{
     processed: number;
     updated: number;
+    relationships: number;
     errors: string[];
   }> {
     logger.info(`Starting graph population (force=${force})...`);
-    const stats = { processed: 0, updated: 0, errors: [] as string[] };
+    const stats = { processed: 0, updated: 0, relationships: 0, errors: [] as string[] };
 
     try {
-      // 1. Get all available nodes
-      const nodes = await this.nodeDocs.listNodes();
-      logger.info(`Found ${nodes.length} nodes in documentation database`);
+      // 1. Get all available nodes from NodeRepository
+      const nodes = this.repository.searchNodes('');
+      logger.info(`Found ${nodes.length} nodes in database`);
 
       if (nodes.length === 0) {
-        logger.info("Documentation database is empty. Triggering rebuild...");
-        await this.nodeDocs.rebuildDatabase();
-        // Fetch again after rebuild
-        const rebuiltNodes = await this.nodeDocs.listNodes();
-        logger.info(`Found ${rebuiltNodes.length} nodes after rebuild`);
-        if (rebuiltNodes.length === 0) {
-          throw new Error("Database rebuild failed to find any nodes");
-        }
-        // Use rebuilt nodes
-        nodes.push(...rebuiltNodes);
+        throw new Error("No nodes found in database. Run 'npm run rebuild' to populate the node database first.");
       }
 
       // 2. Filter for updates if not forced
@@ -65,7 +57,9 @@ export class GraphPopulationService {
 
         for (const node of batch) {
           try {
-            const entity = this.transformNodeToGraphEntity(node);
+            // Get full node info (with operations, documentation) for richer graph content
+            const fullNode = this.repository.getNode(node.nodeType);
+            const entity = this.transformNodeToGraphEntity(fullNode || node);
             entities.push(entity);
             stats.processed++;
           } catch (error) {
@@ -82,8 +76,24 @@ export class GraphPopulationService {
         }
       }
 
+      // 4. Build relationships between nodes
+      try {
+        logger.info("Building relationships between graph nodes...");
+        const relResult = await this.graphBridge.buildRelationships();
+        if (relResult.ok) {
+          stats.relationships = relResult.relationships_stored || 0;
+          logger.info(`Built ${stats.relationships} relationships`);
+        } else {
+          stats.errors.push(`Relationship building failed: ${(relResult as any).error || "unknown"}`);
+        }
+      } catch (relError) {
+        const msg = `Failed to build relationships: ${relError}`;
+        logger.error(msg);
+        stats.errors.push(msg);
+      }
+
       logger.info(
-        `Graph population complete. Processed: ${stats.processed}, Updated: ${stats.updated}`
+        `Graph population complete. Processed: ${stats.processed}, Updated: ${stats.updated}, Relationships: ${stats.relationships}`
       );
     } catch (error) {
       logger.error("Graph population failed", error);
@@ -95,61 +105,64 @@ export class GraphPopulationService {
 
   /**
    * Filter nodes that have changed since last ingestion
-   * Uses a hash of the content to detect changes
    */
   private async filterChangedNodes(nodes: any[]): Promise<any[]> {
-    // In a real implementation, we would query GraphRAG to check existing hashes
-    // For now, we'll rely on the fact that GraphRAG handles upserts gracefully
-    // and we want to ensure consistency.
-    // TODO: Implement efficient diffing against GraphRAG state
+    // GraphRAG handles upserts gracefully — return all nodes
     return nodes;
   }
 
   /**
-   * Transform n8n NodeInfo to GraphRAG entity
-   * Critical: Each node is a single chunk
+   * Transform n8n node data to GraphRAG entity
    */
   private transformNodeToGraphEntity(node: any): GraphEntity {
+    const displayName = node.displayName || node.display_name || node.nodeType;
+    const description = node.description || "";
+    const category = node.category || "Unknown";
+    const nodeType = node.nodeType || node.node_type;
+    const packageName = node.package || node.packageName || node.package_name || "";
+
     // Construct rich content block
     const contentParts = [
-      `Node: ${node.displayName} (${node.name})`,
-      `Category: ${node.category}`,
-      `Description: ${node.description}`,
+      `Node: ${displayName} (${nodeType})`,
+      `Category: ${category}`,
+      `Description: ${description}`,
     ];
 
-    if (node.operations) {
+    // Operations (from getNode() full result)
+    const operations = node.operations;
+    if (operations && Array.isArray(operations) && operations.length > 0) {
       contentParts.push("\nOperations:");
-      const ops = Array.isArray(node.operations)
-        ? node.operations
-        : JSON.parse(node.operations || "[]");
-      ops.forEach((op: any) => {
-        contentParts.push(
-          `- ${op.resource} > ${op.operation}: ${op.description}`
-        );
+      operations.forEach((op: any) => {
+        if (op.resource && op.operation) {
+          contentParts.push(
+            `- ${op.resource} > ${op.operation}: ${op.description || ""}`
+          );
+        }
       });
     }
 
-    if (node.documentationMarkdown) {
+    // Documentation (from getNode() — stored as `documentation` in schema.sql)
+    const docs = node.documentation || node.documentationMarkdown;
+    if (docs) {
       contentParts.push("\nDocumentation:");
-      // Truncate docs to avoid excessive token usage, keeping the most relevant parts
-      contentParts.push(node.documentationMarkdown.slice(0, 2000));
+      contentParts.push(docs.slice(0, 2000));
     }
 
     const content = contentParts.join("\n");
     const contentHash = createHash("sha256").update(content).digest("hex");
 
     return {
-      id: node.nodeType,
-      name: node.displayName,
+      id: nodeType,
+      name: displayName,
       type: "n8n_node",
-      description: node.description,
+      description: description,
       content: content,
       metadata: {
-        nodeType: node.nodeType,
-        packageName: node.packageName,
-        category: node.category,
-        hasCredentials: node.hasCredentials,
-        isTrigger: node.isTrigger,
+        nodeType: nodeType,
+        packageName: packageName,
+        category: category,
+        hasCredentials: !!(node.credentials && node.credentials.length > 0) || !!node.hasCredentials,
+        isTrigger: !!node.isTrigger,
         contentHash: contentHash,
         updatedAt: new Date().toISOString(),
       },
@@ -160,21 +173,6 @@ export class GraphPopulationService {
    * Send batch of entities to GraphRAG
    */
   private async batchUpdate(entities: GraphEntity[]): Promise<void> {
-    // We use the applyUpdate method on the bridge
-    // The bridge expects a diff object with added/modified/removed
-    // Since we are doing upserts, we treat everything as 'modified' (or 'added')
-
-    // Map to the format expected by the Python backend's insert logic
-    // The Python side expects text chunks to process
-
-    // NOTE: The current GraphRAGBridge.applyUpdate is a placeholder for a more complex
-    // graph operation. For simple ingestion, we might need to expose a specific
-    // 'ingest' method or use the 'insert' capability if available.
-
-    // Given the current bridge implementation, we will assume 'applyUpdate'
-    // can handle these entities. If not, we might need to extend the bridge.
-
-    // Construct a diff object
     const diff = {
       added: entities,
       modified: [],

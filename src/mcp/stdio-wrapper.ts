@@ -10,6 +10,16 @@ process.env.MCP_MODE = "stdio";
 process.env.DISABLE_CONSOLE_OUTPUT = "true";
 process.env.LOG_LEVEL = "error";
 
+// Three-tier config: caller env (highest) > data/.env (browser setup) > repo .env (dev fallback)
+import dotenv from "dotenv";
+import path from "path";
+try {
+  dotenv.config({ path: path.join(process.cwd(), "data", ".env") });
+} catch (e) { /* data/.env may not exist */ }
+try {
+  dotenv.config();
+} catch (e) { /* .env may not exist */ }
+
 // Suppress all console output before anything else
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;

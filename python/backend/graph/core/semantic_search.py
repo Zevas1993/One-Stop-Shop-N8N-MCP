@@ -129,7 +129,7 @@ class SemanticSearchEngine:
 
         try:
             # Get all nodes (would be optimized in production)
-            all_nodes = self.db.get_nodes()
+            all_nodes = self.db.get_nodes(limit=10000)
 
             results = []
 
@@ -230,7 +230,7 @@ class SemanticSearchEngine:
 
         try:
             query_lower = query.lower()
-            all_nodes = self.db.get_nodes()
+            all_nodes = self.db.get_nodes(limit=10000)
 
             results = []
 

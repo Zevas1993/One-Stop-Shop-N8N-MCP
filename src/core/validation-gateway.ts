@@ -1,16 +1,15 @@
 /**
- * Validation Gateway
+ * Validation Gateway (Legacy)
  *
- * Multi-layer validation that BLOCKS broken workflows from reaching n8n.
- * Every workflow must pass ALL checks before being allowed through.
+ * Multi-layer structural validation for workflows.
+ * Note: Layers 4-6 (credential check, LLM semantic check, n8n dry run)
+ * are not fully implemented. For canonical validation, prefer the
+ * modern validator stack in n8n-validation.ts and workflow-validator.ts.
  *
- * Validation Layers:
+ * Implemented Layers:
  * 1. Schema Validation (Zod) - Structure correct?
- * 2. Node Existence Check - Do these nodes exist in n8n?
+ * 2. Node Existence Check - Do these nodes exist in the local catalog?
  * 3. Connection Integrity - Are connections valid?
- * 4. Credential Check - Are required credentials available?
- * 5. LLM Semantic Check - Does this make sense?
- * 6. n8n Dry Run - Actually test in n8n (create → validate → delete)
  */
 
 import { z } from "zod";

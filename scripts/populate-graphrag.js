@@ -10,8 +10,9 @@ const { spawn } = require("child_process");
 const { createHash } = require("crypto");
 const path = require("path");
 
-// Load environment
-require("dotenv").config({ override: true });
+// Three-tier config: caller env (highest) > data/.env (browser setup) > repo .env (dev fallback)
+try { require("dotenv").config({ path: require("path").join(process.cwd(), "data", ".env") }); } catch (e) { /* data/.env may not exist */ }
+require("dotenv").config();
 
 const N8N_API_URL = process.env.N8N_API_URL || "http://localhost:5678";
 const N8N_API_KEY = process.env.N8N_API_KEY;
@@ -373,19 +374,19 @@ async function main() {
     await mcp.start();
 
     console.log("\n[Step 1] Fetching node catalog from n8n...");
-    const status = await mcp.callTool("n8n_status", {});
+    const status = await mcp.callTool("n8n_system", { action: "health" });
     console.log(`  Connected: ${status.connected}`);
     console.log(`  Node Count: ${status.nodeCatalog?.nodeCount || 0}`);
     console.log(`  n8n Version: ${status.n8nVersion || "unknown"}`);
 
     // Get all AI nodes (this will include the full catalog)
     console.log("\n[Step 2] Retrieving all nodes...");
-    const aiNodesResult = await mcp.callTool("n8n_list_ai_nodes", {});
+    const aiNodesResult = await mcp.callTool("node_discovery", { action: "list", category: "AI" });
     const aiNodes = aiNodesResult.nodes || [];
     console.log(`  AI Nodes: ${aiNodes.length}`);
 
     // Get trigger nodes
-    const triggerNodesResult = await mcp.callTool("n8n_list_trigger_nodes", {});
+    const triggerNodesResult = await mcp.callTool("node_discovery", { action: "list", category: "Trigger" });
     const triggerNodes = triggerNodesResult.nodes || [];
     console.log(`  Trigger Nodes: ${triggerNodes.length}`);
 
@@ -400,7 +401,7 @@ async function main() {
     // Also search for common node types to ensure coverage
     const searchTerms = ["http", "code", "set", "if", "switch", "merge", "split", "function"];
     for (const term of searchTerms) {
-      const searchResult = await mcp.callTool("n8n_search_nodes", { query: term });
+      const searchResult = await mcp.callTool("node_discovery", { action: "search", query: term });
       const searchNodes = searchResult.nodes || [];
       searchNodes.forEach(node => {
         if (node.name && !nodeMap.has(node.name)) {

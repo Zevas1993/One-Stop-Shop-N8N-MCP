@@ -1,7 +1,7 @@
 /**
  * AI Module
  * 
- * Complete AI infrastructure for the n8n Co-Pilot:
+ * Complete AI infrastructure for the n8n MCP Server:
  * - LLM Router: Unified access to Ollama (primary) and vLLM (fallback)
  * - Event Bus: Inter-agent communication
  * - Knowledge Agent: Learning and recommendations

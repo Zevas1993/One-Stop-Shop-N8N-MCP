@@ -1,6 +1,7 @@
 import { DatabaseAdapter } from "./database-adapter";
 import { ParsedNode } from "../parsers/node-parser";
 import { SimpleCache } from "../utils/simple-cache";
+import { normalizeNodeType, getNodeTypeAliases } from "../core/node-type-normalizer";
 
 export class NodeRepository {
   private nodeInfoCache = new SimpleCache({
@@ -15,6 +16,30 @@ export class NodeRepository {
   });
 
   constructor(private db: DatabaseAdapter) {}
+
+  /**
+   * Try to find a node row by trying all known alias forms of the type.
+   * Returns the first match or null.
+   */
+  private findNodeRow(nodeType: string): any {
+    // Try exact match first (fast path)
+    let row = this.db
+      .prepare("SELECT * FROM nodes WHERE node_type = ?")
+      .get(nodeType) as any;
+    if (row) return row;
+
+    // Try all alias forms (handles prefix drift)
+    const aliases = getNodeTypeAliases(nodeType);
+    for (const alias of aliases) {
+      if (alias === nodeType) continue; // already tried
+      row = this.db
+        .prepare("SELECT * FROM nodes WHERE node_type = ?")
+        .get(alias) as any;
+      if (row) return row;
+    }
+
+    return null;
+  }
 
   /**
    * Save node with proper JSON serialization
@@ -57,13 +82,7 @@ export class NodeRepository {
     const cached = this.nodeInfoCache.get(cacheKey);
     if (cached) return cached;
 
-    const row = this.db
-      .prepare(
-        `
-      SELECT * FROM nodes WHERE node_type = ?
-    `
-      )
-      .get(nodeType) as any;
+    const row = this.findNodeRow(nodeType);
 
     if (!row) return null;
 
@@ -122,13 +141,7 @@ export class NodeRepository {
     const cached = this.nodeInfoCache.get(cacheKey);
     if (cached) return cached;
 
-    const row = this.db
-      .prepare(
-        `
-      SELECT * FROM nodes WHERE node_type = ?
-    `
-      )
-      .get(nodeType) as any;
+    const row = this.findNodeRow(nodeType);
 
     if (!row) return null;
 
@@ -166,94 +179,8 @@ export class NodeRepository {
     const cached = this.nodeInfoCache.get(cacheKey);
     if (cached) return cached;
 
-    // Try exact match first
-    let row = this.db
-      .prepare(
-        `
-      SELECT * FROM nodes WHERE node_type = ?
-    `
-      )
-      .get(nodeType) as any;
-
-    // If not found, try normalized versions
-    // Workflows use full package names, but database stores shortened names
-    if (!row) {
-      let normalizedType = nodeType;
-
-      // Handle: n8n-nodes-base.httpRequest → nodes-base.httpRequest
-      if (nodeType.startsWith("n8n-nodes-base.")) {
-        normalizedType = nodeType.replace("n8n-nodes-base.", "nodes-base.");
-        row = this.db
-          .prepare(
-            `
-          SELECT * FROM nodes WHERE node_type = ?
-        `
-          )
-          .get(normalizedType) as any;
-      }
-      // Handle: @n8n/n8n-nodes-langchain.agent → nodes-langchain.agent
-      else if (nodeType.startsWith("@n8n/n8n-nodes-langchain.")) {
-        normalizedType = nodeType.replace(
-          "@n8n/n8n-nodes-langchain.",
-          "nodes-langchain."
-        );
-        row = this.db
-          .prepare(
-            `
-          SELECT * FROM nodes WHERE node_type = ?
-        `
-          )
-          .get(normalizedType) as any;
-      }
-      // Handle: n8n-nodes-langchain.agent → nodes-langchain.agent
-      else if (nodeType.startsWith("n8n-nodes-langchain.")) {
-        normalizedType = nodeType.replace(
-          "n8n-nodes-langchain.",
-          "nodes-langchain."
-        );
-        row = this.db
-          .prepare(
-            `
-          SELECT * FROM nodes WHERE node_type = ?
-        `
-          )
-          .get(normalizedType) as any;
-      }
-      // Handle: @n8n/n8n-nodes-base.httpRequest → nodes-base.httpRequest
-      else if (nodeType.startsWith("@n8n/n8n-nodes-base.")) {
-        normalizedType = nodeType.replace(
-          "@n8n/n8n-nodes-base.",
-          "nodes-base."
-        );
-        row = this.db
-          .prepare(
-            `
-          SELECT * FROM nodes WHERE node_type = ?
-        `
-          )
-          .get(normalizedType) as any;
-      }
-      // Generic fallback: Remove any n8n- or @n8n/ prefix
-      else if (nodeType.startsWith("n8n-")) {
-        normalizedType = nodeType.substring(4); // Remove 'n8n-'
-        row = this.db
-          .prepare(
-            `
-          SELECT * FROM nodes WHERE node_type = ?
-        `
-          )
-          .get(normalizedType) as any;
-      } else if (nodeType.startsWith("@n8n/")) {
-        normalizedType = nodeType.substring(5); // Remove '@n8n/'
-        row = this.db
-          .prepare(
-            `
-          SELECT * FROM nodes WHERE node_type = ?
-        `
-          )
-          .get(normalizedType) as any;
-      }
-    }
+    // Use centralized alias resolution (replaces brittle if/else chain)
+    const row = this.findNodeRow(nodeType);
 
     if (!row) return null;
 
@@ -387,13 +314,21 @@ export class NodeRepository {
    * Get node documentation
    */
   getNodeDocumentation(nodeType: string): string | null {
-    const row = this.db
-      .prepare(
-        `
-      SELECT documentation FROM nodes WHERE node_type = ?
-    `
-      )
+    // Try exact match first, then aliases
+    let row = this.db
+      .prepare("SELECT documentation FROM nodes WHERE node_type = ?")
       .get(nodeType) as any;
+
+    if (!row) {
+      const aliases = getNodeTypeAliases(nodeType);
+      for (const alias of aliases) {
+        if (alias === nodeType) continue;
+        row = this.db
+          .prepare("SELECT documentation FROM nodes WHERE node_type = ?")
+          .get(alias) as any;
+        if (row) break;
+      }
+    }
 
     return row?.documentation || null;
   }

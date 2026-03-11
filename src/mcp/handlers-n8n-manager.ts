@@ -13,6 +13,7 @@ import {
   validateWorkflowSize,
   hasWebhookTrigger,
   getWebhookUrl,
+  cleanWorkflowForCreate,
   cleanWorkflowForUpdate,
   validateNodeParameters,
 } from "../services/n8n-validation";
@@ -139,6 +140,7 @@ const createWorkflowSchema = z.object({
       errorWorkflow: z.string().optional(),
     })
     .optional(),
+  useAgentGeneratedWorkflow: z.boolean().optional().default(false),
 });
 
 const updateWorkflowSchema = z.object({
@@ -201,14 +203,16 @@ export async function handleCreateWorkflow(
     const client = ensureApiConfigured();
     const input = createWorkflowSchema.parse(args);
 
-    // PHASE 2 INTEGRATION: Check if agents already generated a workflow
+    // Only use agent-generated workflow from SharedMemory when explicitly requested
     let workflowInput = input;
-    const agentWorkflow = await getAgentGeneratedWorkflow();
-    if (agentWorkflow) {
-      logger.info(
-        "[handleCreateWorkflow] Using agent-generated workflow from SharedMemory"
-      );
-      workflowInput = agentWorkflow;
+    if ((input as any).useAgentGeneratedWorkflow) {
+      const agentWorkflow = await getAgentGeneratedWorkflow();
+      if (agentWorkflow) {
+        logger.info(
+          "[handleCreateWorkflow] Using agent-generated workflow from SharedMemory (explicitly requested)"
+        );
+        workflowInput = agentWorkflow;
+      }
     }
 
     // Check workflow size to prevent API failures
@@ -707,68 +711,47 @@ export async function handleUpdateWorkflow(
   try {
     const client = ensureApiConfigured();
     const input = updateWorkflowSchema.parse(args);
-    const { id, ...updateData } = input;
+    const { id, ...flatFields } = input;
 
-    // Declare fullWorkflow outside so it's accessible later
-    let fullWorkflow: Partial<Workflow> | undefined;
+    // Normalize: accept both flat fields and 'changes' wrapper (backward compat)
+    // server-modern.ts passes { id, ...changes } so flat fields work too
+    const updateData: Record<string, any> = {};
+    if (flatFields.name !== undefined) updateData.name = flatFields.name;
+    if (flatFields.nodes !== undefined) updateData.nodes = flatFields.nodes;
+    if (flatFields.connections !== undefined) updateData.connections = flatFields.connections;
+    if (flatFields.settings !== undefined) updateData.settings = flatFields.settings;
 
-    // If nodes/connections are being updated, validate the structure
-    if (updateData.nodes || updateData.connections) {
-      // AUTO-CLEAN: Remove system fields that might cause validation errors
-      const systemFields = [
-        "id",
-        "createdAt",
-        "updatedAt",
-        "active",
-        "tags",
-        "versionId",
-        "triggerCount",
-        "shared",
-        "isArchived",
-      ];
+    // ALWAYS fetch the current workflow — guarantees all 4 required fields are present
+    // This fixes: name-only updates, settings-only updates, and partial updates
+    logger.info(`[handleUpdateWorkflow] Fetching current workflow ${id}`);
+    const current = await client.getWorkflow(id);
 
-      for (const field of systemFields) {
-        if (field in updateData) {
-          delete (updateData as any)[field];
-        }
-      }
+    // Merge changes onto current workflow (changes take priority)
+    const merged: any = {
+      name: updateData.name ?? current.name,
+      nodes: updateData.nodes ?? current.nodes,
+      connections: updateData.connections ?? current.connections,
+      settings: updateData.settings ?? (current as any).settings ?? {},
+    };
 
-      // Fetch current workflow if only partial update
-      fullWorkflow = updateData as Partial<Workflow>;
-      let workflowToValidate = updateData;
+    // CLEAN FIRST — strip all forbidden fields via allowlist before any validation
+    // This prevents false rejections from validators seeing read-only fields
+    let cleanedWorkflow = cleanWorkflowForUpdate(merged as any);
 
-      if (!updateData.nodes || !updateData.connections) {
-        const current = await client.getWorkflow(id);
-        fullWorkflow = {
-          ...current,
-          ...updateData,
-        };
-        workflowToValidate = fullWorkflow;
+    // Check workflow size to prevent API failures
+    const sizeValidation = validateWorkflowSize(cleanedWorkflow, 1); // 1MB limit
+    if (!sizeValidation.valid) {
+      return createErrorResponse(
+        sizeValidation.error || "Workflow too large",
+        "WORKFLOW_SIZE_ERROR",
+        { sizeKB: sizeValidation.sizeKB }
+      );
+    }
 
-        // Clean the merged fullWorkflow of read-only fields for validation
-        for (const field of systemFields) {
-          if (field in fullWorkflow) {
-            delete (fullWorkflow as any)[field];
-          }
-        }
-      }
-
-      // Check workflow size to prevent API failures
-      const sizeValidation = validateWorkflowSize(fullWorkflow, 1); // 1MB limit
-      if (!sizeValidation.valid) {
-        return createErrorResponse(
-          sizeValidation.error || "Workflow too large",
-          "WORKFLOW_SIZE_ERROR",
-          {
-            sizeKB: sizeValidation.sizeKB,
-          }
-        );
-      }
-
-      // CRITICAL: Validate node parameters against MCP database BEFORE sending to n8n
-      // This prevents workflows that pass API validation but fail to load in n8n UI
+    // Validate node parameters against MCP database
+    if (cleanedWorkflow.nodes) {
       logger.info('[handleUpdateWorkflow] Validating node parameters against MCP database');
-      const paramValidation = await validateNodeParameters(fullWorkflow, repository);
+      const paramValidation = await validateNodeParameters(cleanedWorkflow, repository);
 
       if (!paramValidation.valid) {
         logger.error('[handleUpdateWorkflow] Node parameter validation failed', {
@@ -779,14 +762,12 @@ export async function handleUpdateWorkflow(
           `workflow_update:${id}`,
           `Parameter validation failed with ${paramValidation.errors.length} errors`,
           'validation',
-          {
-            errors: paramValidation.errors
-          }
+          { errors: paramValidation.errors }
         );
 
         return {
           success: false,
-          error: '🚨 PARAMETER VALIDATION FAILED: Workflow has missing/invalid node parameters',
+          error: 'PARAMETER VALIDATION FAILED: Workflow has missing/invalid node parameters',
           details: {
             errors: paramValidation.errors.map(e => ({
               node: e.nodeName,
@@ -795,9 +776,8 @@ export async function handleUpdateWorkflow(
               error: e.error,
               suggestion: e.suggestion
             })),
-            message: 'Fix all parameter errors before updating workflow. These parameters are required for n8n UI to load the workflow.',
+            message: 'Fix all parameter errors before updating workflow.',
             preventedBrokenWorkflow: true,
-            workflow: '1️⃣ Fix missing parameters → 2️⃣ Retry n8n_update_workflow'
           }
         };
       }
@@ -805,97 +785,65 @@ export async function handleUpdateWorkflow(
       logger.info('[handleUpdateWorkflow] Node parameter validation passed');
 
       // SEMANTIC VALIDATION: Enforce "Built-in Nodes First" policy
-      // Guide agents to use n8n's 525+ built-in nodes instead of over-relying on Code nodes
-      if (fullWorkflow && fullWorkflow.nodes) {
-        logger.info('[handleUpdateWorkflow] Running semantic validation (built-in nodes first policy)');
-        const semanticValidator = new WorkflowSemanticValidator(repository);
-        const semanticResult = await semanticValidator.validateWorkflow(fullWorkflow as any);
+      logger.info('[handleUpdateWorkflow] Running semantic validation');
+      const semanticValidator = new WorkflowSemanticValidator(repository);
+      const semanticResult = await semanticValidator.validateWorkflow(cleanedWorkflow as any);
 
-        // Log semantic analysis
-        if (process.env.DEBUG_MCP === 'true' || semanticResult.score < 60) {
-          logger.info(semanticValidator.getSummary(semanticResult));
-        }
-
-        // If semantic score is too low, provide strong guidance (but don't block)
-        if (semanticResult.score < 60) {
-          logger.warn(`[handleUpdateWorkflow] ⚠️  Semantic validation score low: ${semanticResult.score}/100`);
-          logger.warn('[handleUpdateWorkflow] Workflow over-relies on Code nodes instead of built-in nodes');
-
-          // Add semantic warnings to workflow metadata for agent feedback
-          if (semanticResult.warnings.length > 0 || semanticResult.suggestions.length > 0) {
-            logger.warn('[handleUpdateWorkflow] Semantic Issues:');
-            semanticResult.warnings.forEach(w => logger.warn(`   ${w.message}`));
-            semanticResult.suggestions.slice(0, 3).forEach(s => logger.warn(`   💡 ${s.message}`));
-          }
-        } else {
-          logger.info(`[handleUpdateWorkflow] ✅ Semantic validation passed (score: ${semanticResult.score}/100)`);
-        }
+      if (process.env.DEBUG_MCP === 'true' || semanticResult.score < 60) {
+        logger.info(semanticValidator.getSummary(semanticResult));
       }
 
-      // SKIP VALIDATION FOR UPDATES
-      // For updates, we rely entirely on live n8n validation since we're sending only updateData (cleaned)
-      // The merged fullWorkflow is just for our reference, we don't send it to n8n
-      logger.info(
-        "[handleUpdateWorkflow] Skipping local validation - will use live n8n validation only"
-      );
+      if (semanticResult.score < 60) {
+        logger.warn(`[handleUpdateWorkflow] Semantic validation score low: ${semanticResult.score}/100`);
+        if (semanticResult.warnings.length > 0 || semanticResult.suggestions.length > 0) {
+          semanticResult.warnings.forEach(w => logger.warn(`   ${w.message}`));
+          semanticResult.suggestions.slice(0, 3).forEach(s => logger.warn(`   ${s.message}`));
+        }
+      } else {
+        logger.info(`[handleUpdateWorkflow] Semantic validation passed (score: ${semanticResult.score}/100)`);
+      }
 
-      // LIVE VALIDATION: Validate against the actual n8n instance before update
-      // Use fullWorkflow (which has been cleaned of read-only fields) for validation
+      // STRUCTURE VALIDATION: Validate node types and connections locally (no API calls).
+      // NOTE: We use validateWorkflowStructure, NOT validateWorkflow, because the latter
+      // creates a throwaway POST /workflows on n8n which is wrong for updates and creates ghost workflows.
       const liveValidator = getN8nLiveValidator();
       if (liveValidator) {
-        logger.info(
-          "[handleUpdateWorkflow] Running live n8n validation before update"
-        );
-        const liveValidationResult = await liveValidator.validateWorkflow(
-          fullWorkflow as any // fullWorkflow has been cleaned of read-only fields at lines 620-625
-        );
+        logger.info("[handleUpdateWorkflow] Running structure validation");
+        const liveValidationResult = await liveValidator.validateWorkflowStructure(cleanedWorkflow as any);
 
         if (!liveValidationResult.valid) {
-          // Enhanced error analysis for node naming issues
           const namingGuidance: string[] = [];
           for (const error of liveValidationResult.errors) {
             if (error.includes('Connection from unknown source node')) {
-              // Extract the problematic node ID
               const match = error.match(/Connection from unknown source node: "([^"]+)"/);
               if (match) {
                 const wrongId = match[1];
                 namingGuidance.push(
-                  `⚠️  CRITICAL NODE NAMING ERROR: You referenced node "${wrongId}" in connections, but this node doesn't exist in the workflow.`
+                  `CRITICAL NODE NAMING ERROR: You referenced node "${wrongId}" in connections, but this node doesn't exist in the workflow.`
                 );
                 namingGuidance.push(
-                  `📝 RULE: In n8n workflows, connections must use the EXACT node NAME (usually with emojis like "🌐 API Webhook"), NOT internal IDs like "webhook_trigger".`
-                );
-                namingGuidance.push(
-                  `✅ CORRECT: Use node.name property values from the workflow's nodes array in your connections object.`
-                );
-                namingGuidance.push(
-                  `❌ WRONG: Do NOT invent simplified IDs or use camelCase versions of node names.`
+                  `RULE: In n8n workflows, connections must use the EXACT node NAME, NOT internal IDs.`
                 );
               }
             }
           }
 
-          // RECORD TO GRAPHRAG: Store validation failures for agents to learn from
           await recordExecutionError(
             `workflow_update:${id}`,
             `Live n8n validation failed with ${liveValidationResult.errors.length} errors`,
             "validation",
             {
               workflowId: id,
-              workflowNodes: fullWorkflow?.nodes?.length || 0,
+              workflowNodes: cleanedWorkflow?.nodes?.length || 0,
               validationErrors: liveValidationResult.errors,
               namingGuidance: namingGuidance.length > 0 ? namingGuidance : undefined,
-              learningPoint: namingGuidance.length > 0
-                ? "Always use exact node.name values (with emojis) in connections, never simplified IDs"
-                : undefined,
               source: "n8n-instance-live-validation",
             }
           );
 
           return {
             success: false,
-            error:
-              "🚨 LIVE VALIDATION FAILED: Update would create a broken workflow. Errors from n8n instance:",
+            error: "LIVE VALIDATION FAILED: Update would create a broken workflow.",
             details: {
               errors: liveValidationResult.errors,
               namingGuidance: namingGuidance.length > 0 ? namingGuidance : undefined,
@@ -908,7 +856,8 @@ export async function handleUpdateWorkflow(
         logger.info("[handleUpdateWorkflow] Live validation passed");
       }
 
-      const errors = validateWorkflowStructure(fullWorkflow);
+      // Structure validation
+      const errors = validateWorkflowStructure(cleanedWorkflow);
       if (errors.length > 0) {
         return createErrorResponse(
           "Workflow validation failed",
@@ -919,30 +868,117 @@ export async function handleUpdateWorkflow(
     }
 
     // Credential existence check (non-blocking — warns but doesn't prevent update)
-    const nodesForCredCheck = (fullWorkflow as any)?.nodes || (updateData as any)?.nodes || [];
+    const nodesForCredCheck = cleanedWorkflow?.nodes || [];
     const credentialWarnings = await checkCredentialExistence(client, nodesForCredCheck);
 
-    // Issue #4: Validation-Execution Gap - Validation complete, proceeding with update
-    // Workflow has been merged with current state and validated against live n8n
-    // API call proceeds with high confidence in workflow validity
-    // Use fullWorkflow if we fetched current state, otherwise use updateData
-    let workflowToSend = fullWorkflow && (fullWorkflow as any).name ? fullWorkflow : updateData;
+    logger.info(`[handleUpdateWorkflow] Sending fields to n8n: ${Object.keys(cleanedWorkflow).join(', ')}`);
 
-    // Clean the workflow before sending to remove any additional fields
-    workflowToSend = cleanWorkflowForUpdate(workflowToSend as any);
-
-    logger.info(`[handleUpdateWorkflow] Sending fields to n8n: ${Object.keys(workflowToSend).join(', ')}`);
-
-    const workflow = await client.updateWorkflow(id, workflowToSend);
+    const workflow = await client.updateWorkflow(id, cleanedWorkflow);
 
     const credWarningMsg = credentialWarnings.length > 0
-      ? `\n\n⚠️ Credential warnings:\n${credentialWarnings.join("\n")}`
+      ? `\n\nCredential warnings:\n${credentialWarnings.join("\n")}`
       : "";
 
     return {
       success: true,
       data: workflow,
       message: `Workflow "${workflow.name}" updated successfully${credWarningMsg}`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return createErrorResponse("Invalid input", "VALIDATION_ERROR", {
+        errors: error.errors,
+      });
+    }
+
+    if (error instanceof N8nApiError) {
+      return createErrorResponse(
+        getUserFriendlyErrorMessage(error),
+        error.code,
+        error.details as Record<string, unknown> | undefined
+      );
+    }
+
+    return createErrorResponse(
+      error instanceof Error ? error.message : "Unknown error occurred",
+      "UNKNOWN_ERROR"
+    );
+  }
+}
+
+// Utility: parse a dot-notation path into segments, supporting array indices like "items[0].name"
+function parsePath(path: string): (string | number)[] {
+  const segments: (string | number)[] = [];
+  for (const part of path.split('.')) {
+    const match = part.match(/^([^[]*)\[(\d+)\]$/);
+    if (match) {
+      if (match[1]) segments.push(match[1]);
+      segments.push(parseInt(match[2], 10));
+    } else {
+      segments.push(part);
+    }
+  }
+  return segments;
+}
+
+// Utility: set a nested value using dot-notation path with array index support
+function setNestedValue(obj: any, path: string, value: any): void {
+  const segments = parsePath(path);
+  let current = obj;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const key = segments[i];
+    const nextKey = segments[i + 1];
+    if (current[key] === undefined || current[key] === null) {
+      current[key] = typeof nextKey === 'number' ? [] : {};
+    }
+    current = current[key];
+  }
+  current[segments[segments.length - 1]] = value;
+}
+
+const patchWorkflowSchema = z.object({
+  id: z.string(),
+  nodeName: z.string(),
+  parameterPath: z.string(),
+  value: z.any(),
+});
+
+export async function handlePatchWorkflow(
+  args: unknown
+): Promise<McpToolResponse> {
+  try {
+    const client = ensureApiConfigured();
+    const { id, nodeName, parameterPath, value } = patchWorkflowSchema.parse(args);
+
+    // Fetch the current workflow
+    const wf = await client.getWorkflow(id);
+    const node = (wf as any).nodes?.find((n: any) => n.name === nodeName);
+    if (!node) {
+      return createErrorResponse(
+        `Node "${nodeName}" not found in workflow. Available nodes: ${(wf as any).nodes?.map((n: any) => n.name).join(', ') || 'none'}`,
+        "NODE_NOT_FOUND"
+      );
+    }
+
+    // Set the nested value on the node
+    setNestedValue(node, parameterPath, value);
+
+    // Build explicit 4-field payload (same pattern as handleUpdateWorkflow)
+    // Do NOT pass raw GET response — it contains pinData: {} and other fields
+    // that leak through cleanWorkflowForUpdate and cause additionalProperties rejection
+    const payload = {
+      name: (wf as any).name,
+      nodes: (wf as any).nodes,
+      connections: (wf as any).connections,
+      settings: (wf as any).settings ?? {},
+    };
+    const cleaned = cleanWorkflowForUpdate(payload as any);
+    const workflow = await client.updateWorkflow(id, cleaned);
+
+    return {
+      success: true,
+      data: { nodeName, parameterPath, value },
+      message: `Set ${nodeName}.${parameterPath} = ${JSON.stringify(value)} in workflow "${workflow.name}"`,
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -2134,19 +2170,9 @@ export async function handleDuplicateWorkflow(args: unknown): Promise<McpToolRes
     // Fetch the original workflow
     const original = await client.getWorkflow(input.id);
 
-    // Strip all system-managed fields that n8n manages automatically
-    const systemFields = [
-      'id', 'createdAt', 'updatedAt', 'versionId', 'active',
-      'tags', 'triggerCount', 'shared', 'isArchived',
-    ];
-    const cleaned: Record<string, any> = {};
-    for (const [key, value] of Object.entries(original as any)) {
-      if (!systemFields.includes(key)) {
-        cleaned[key] = value;
-      }
-    }
-
-    // Set the new name
+    // Use allowlist-based cleaner to strip all system/read-only fields
+    // The denylist approach misses fields like activeVersionId, versionCounter, etc.
+    const cleaned = cleanWorkflowForCreate(original as any) as any;
     cleaned.name = input.newName || `${original.name} (Copy)`;
 
     // Create the duplicate (inactive by default)
@@ -2226,7 +2252,7 @@ export async function handleListInstalledNodes(
       // Step 2: Fall back to local SQLite database
       result.strategy_used.push('local_database (SQLite)');
       try {
-        const dbNodes = await repository.getAllNodes();
+        const dbNodes = repository.searchNodes('');
         result.builtin_nodes = (dbNodes || []).map((n: any) => ({
           type: n.nodeType || n.type,
           displayName: n.displayName || n.name,

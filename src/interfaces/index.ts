@@ -1,13 +1,7 @@
 /**
  * Interfaces Module
- * 
- * Exposes the n8n Co-Pilot core through different interfaces:
- * - MCP Interface: For AI agents (Claude, etc.)
- * - Open WebUI Interface: For human users via chat
- * 
- * Both interfaces use the same core with the same validation,
- * ensuring consistent behavior regardless of who's using the system.
+ *
+ * Exposes the n8n MCP Server core through the MCP Interface for AI agents (Claude, etc.)
  */
 
 export * from './mcp-interface';
-export * from './openwebui-interface';

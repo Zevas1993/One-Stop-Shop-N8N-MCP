@@ -1,4 +1,5 @@
 import { Logger } from "../utils/logger";
+import { normalizeNodeType } from "./node-type-normalizer";
 
 /**
  * Node Filter Service
@@ -46,6 +47,9 @@ export class NodeFilter {
    * Check if a node type is allowed
    */
   public isNodeAllowed(nodeType: string): boolean {
+    // Normalize before checking so "nodes-base.X" and bare names are handled
+    nodeType = normalizeNodeType(nodeType);
+
     // 1. Allow official base nodes
     if (nodeType.startsWith("n8n-nodes-base.")) {
       return true;

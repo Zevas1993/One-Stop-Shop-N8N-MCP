@@ -29,38 +29,26 @@ export interface OperationTimeoutConfig {
 export const TIMEOUT_PROFILES = {
   // Quick operations - should complete in seconds
   quick: {
-    'n8n_get_workflow': 10000,           // 10s - simple get
-    'n8n_get_workflow_minimal': 8000,    // 8s - very lightweight
-    'n8n_health_check': 5000,            // 5s - just ping
-    'n8n_list_workflows': 15000,         // 15s - list with pagination
-    'list_nodes': 10000,                 // 10s - list from local DB
-    'get_node_info': 8000,               // 8s - local DB lookup
-    'search_nodes': 12000,               // 12s - local DB search
+    'node_discovery': 10000,             // 10s - search/list/get_info from local DB
+    'node_validation': 10000,            // 10s - validate_minimal, list_tasks
+    'n8n_system': 5000,                  // 5s - health check, diagnostics
+    'tags_manager': 8000,                // 8s - list/create/update tags
+    'variables_manager': 8000,           // 8s - list/create/update variables
   },
 
   // Standard operations - moderate complexity
   standard: {
-    'n8n_create_workflow': 30000,        // 30s - create with validation
-    'n8n_update_full_workflow': 35000,   // 35s - full workflow update
-    'n8n_update_partial_workflow': 30000, // 30s - diff-based update
-    'n8n_delete_workflow': 15000,        // 15s - delete workflow
-    'n8n_activate_workflow': 20000,      // 20s - activate/deactivate
-    'n8n_validate_workflow': 25000,      // 25s - validate from n8n
-    'validate_workflow': 20000,          // 20s - local validation
-    'validate_node_operation': 15000,    // 15s - validate node config
-    'n8n_list_executions': 20000,        // 20s - list executions
-    'n8n_get_execution': 15000,          // 15s - get single execution
+    'workflow_manager': 30000,           // 30s - create/update/get/list workflows
+    'workflow_diff': 30000,              // 30s - diff-based update
+    'credentials_manager': 15000,        // 15s - manage credentials
+    'templates_and_guides': 25000,       // 25s - template search/retrieval
+    'n8n_docs': 25000,                   // 25s - documentation search
+    'source_control': 20000,             // 20s - git operations
   },
 
   // Slow operations - may take longer
   slow: {
-    'n8n_run_workflow': 120000,          // 2 minutes - workflow execution
-    'n8n_trigger_webhook_workflow': 60000, // 1 minute - trigger and wait
-    'n8n_delete_execution': 20000,       // 20s - delete execution
-    'n8n_stop_execution': 15000,         // 15s - stop running execution
-    'fetch_templates': 45000,            // 45s - template fetching
-    'search_templates': 25000,           // 25s - template search
-    'validate_workflow_expressions': 25000, // 25s - expression validation
+    'workflow_execution': 120000,        // 2 minutes - run/trigger/monitor workflows
   },
 
   // Global default - used if no specific timeout is defined

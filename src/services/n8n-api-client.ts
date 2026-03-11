@@ -243,8 +243,12 @@ export class N8nApiClient {
 
   async activateWorkflow(id: string, active: boolean): Promise<Workflow> {
     try {
-      // Use PATCH to update only the active field
-      const response = await this.client.patch(`/workflows/${id}`, { active });
+      // n8n public API uses POST to dedicated activate/deactivate endpoints
+      // PATCH is not supported on /workflows/{id}
+      const endpoint = active
+        ? `/workflows/${id}/activate`
+        : `/workflows/${id}/deactivate`;
+      const response = await this.client.post(endpoint);
       return response.data;
     } catch (error) {
       throw handleN8nApiError(error);
@@ -505,7 +509,7 @@ export class N8nApiClient {
       // Try the internal n8n endpoint (not the /api/v1 path)
       const baseWithoutApi = this.baseUrl.replace(/\/api\/v1$/, '').replace(/\/$/, '');
       const axios = (await import('axios')).default;
-      const config = (await import('../config/n8n-api')).getN8nApiConfig();
+      const config = (await import('../config/n8n-api.js')).getN8nApiConfig();
       if (!config) return null;
 
       const response = await axios.get(

@@ -204,7 +204,7 @@ export class HandlerMemory {
       'recent-errors',
       {
         lastError: errorRecord,
-        errorCount: (await memory.get('recent-errors'))?.errorCount || 0 + 1,
+        errorCount: ((await memory.get('recent-errors'))?.errorCount ?? 0) + 1,
         lastUpdateTime: Date.now()
       },
       this.HANDLER_AGENT_ID,

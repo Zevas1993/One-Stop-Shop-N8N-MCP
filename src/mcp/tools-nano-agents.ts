@@ -260,7 +260,7 @@ export async function handleExecuteGraphRAGQuery(args: { query: string; topK?: n
     const orchestrator = await ensureOrchestratorReady();
 
     // Query GraphRAG directly
-    const { GraphRAGBridge } = await import('../ai/graphrag-bridge');
+    const { GraphRAGBridge } = await import('../ai/graphrag-bridge.js');
     const bridge = GraphRAGBridge.get();
 
     const result = await bridge.queryGraph({

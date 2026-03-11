@@ -125,13 +125,20 @@ export class EnhancedCache<T = any> {
 
     const entrySizeMB = this.estimateSize(value) / (1024 * 1024);
 
+    // Subtract previous entry size if overwriting an existing key
+    const existingEntry = this.cache.get(key);
+    if (existingEntry) {
+      const oldSizeMB = this.estimateSize(existingEntry.value) / (1024 * 1024);
+      this.currentMemoryMB -= oldSizeMB;
+    }
+
     // Check memory pressure BEFORE adding
     if (this.currentMemoryMB + entrySizeMB > this.maxMemoryMB) {
       this.evictUntilSpaceAvailable(entrySizeMB);
     }
 
-    // Check if cache is at max size (entry count)
-    if (this.cache.size >= this.config.maxSize) {
+    // Check if cache is at max size (entry count) — only for new keys
+    if (!existingEntry && this.cache.size >= this.config.maxSize) {
       this.evictLeastUsed();
     }
 

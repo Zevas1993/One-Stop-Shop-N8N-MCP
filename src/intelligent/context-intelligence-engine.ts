@@ -286,8 +286,8 @@ export class ContextIntelligenceEngine {
     }
 
     // User exploring nodes
-    if (lastTool?.includes('node_info')) {
-      return 'Tip: Use get_node_essentials for cleaner responses with just the important properties';
+    if (lastTool?.includes('node_discovery')) {
+      return 'Tip: Use node_discovery with action "get_info" for essentials (default) or pass verbosity: "full" for all properties';
     }
 
     return undefined;
@@ -319,28 +319,24 @@ export class ContextIntelligenceEngine {
   getRecommendedNextTools(): string[] {
     const { lastTool, detectedIntent } = this.state;
 
-    if (lastTool === 'list_workflows') {
-      return ['get_workflow', 'n8n_list_executions'];
+    if (lastTool === 'workflow_manager') {
+      return ['workflow_execution', 'workflow_diff'];
     }
 
-    if (lastTool === 'create_workflow') {
-      return ['validate_workflow', 'n8n_trigger_webhook_workflow'];
+    if (lastTool === 'workflow_execution') {
+      return ['workflow_manager', 'workflow_execution'];
     }
 
-    if (lastTool === 'list_executions') {
-      return ['get_execution', 'n8n_retry_execution'];
-    }
-
-    if (lastTool?.includes('node_info')) {
-      return ['get_node_essentials', 'validate_node_operation'];
+    if (lastTool === 'node_discovery') {
+      return ['node_validation', 'workflow_manager'];
     }
 
     if (detectedIntent === UserIntent.DEBUG) {
-      return ['validate_workflow', 'get_execution', 'n8n_retry_execution'];
+      return ['workflow_manager', 'workflow_execution', 'n8n_system'];
     }
 
     if (detectedIntent === UserIntent.MONITOR) {
-      return ['n8n_monitor_running_executions', 'n8n_list_executions'];
+      return ['workflow_execution', 'n8n_system'];
     }
 
     return [];

@@ -15,13 +15,11 @@ export class InputValidator {
     // Remove null bytes and limit length
     const sanitized = input.replace(/\0/g, '').slice(0, 10000);
     
-    // Basic XSS prevention
+    // Strip dangerous characters but preserve structural ones (/ for scoped packages, . for node types)
+    // XSS escaping should happen at render boundaries, not during validation
     return sanitized
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;')
-      .replace(/\//g, '&#x2F;');
+      .replace(/</g, '')
+      .replace(/>/g, '');
   }
 
   /**
@@ -36,8 +34,8 @@ export class InputValidator {
       throw new Error(`Invalid node type format: ${sanitized}`);
     }
     
-    // Prevent path traversal
-    if (sanitized.includes('..') || sanitized.includes('/')) {
+    // Prevent path traversal (allow single / for scoped packages like @n8n/...)
+    if (sanitized.includes('..')) {
       throw new Error(`Potential path traversal in node type: ${sanitized}`);
     }
     

@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "🚀 Debug Consolidated Server (stdio)",
+      "name": "Debug MCP Server (stdio)",
       "type": "node",
       "request": "launch",
-      "program": "${workspaceFolder}/dist/consolidated-server.js",
+      "program": "${workspaceFolder}/dist/mcp/stdio-wrapper.js",
       "preLaunchTask": "npm: build",
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "console": "integratedTerminal",
@@ -14,10 +14,10 @@
       "sourceMaps": true
     },
     {
-      "name": "🌐 Debug HTTP Server",
+      "name": "Debug HTTP Server",
       "type": "node",
       "request": "launch",
-      "program": "${workspaceFolder}/dist/http-server-single-session.js",
+      "program": "${workspaceFolder}/dist/main.js",
       "preLaunchTask": "npm: build",
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "console": "integratedTerminal",
@@ -31,7 +31,7 @@
       "sourceMaps": true
     },
     {
-      "name": "🧪 Debug Current Test File",
+      "name": "Debug Current Test File",
       "type": "node",
       "request": "launch",
       "program": "${workspaceFolder}/node_modules/.bin/jest",
@@ -49,7 +49,7 @@
       "skipFiles": ["<node_internals>/**"]
     },
     {
-      "name": "🧪 Debug All Tests",
+      "name": "Debug All Tests",
       "type": "node",
       "request": "launch",
       "program": "${workspaceFolder}/node_modules/.bin/jest",
@@ -66,7 +66,7 @@
       "skipFiles": ["<node_internals>/**"]
     },
     {
-      "name": "🔧 Debug Setup Script",
+      "name": "Debug Setup Script",
       "type": "node",
       "request": "launch",
       "program": "${workspaceFolder}/setup.js",
@@ -75,34 +75,7 @@
       "skipFiles": ["<node_internals>/**"]
     },
     {
-      "name": "🗄️  Debug Database Rebuild",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/dist/scripts/rebuild.js",
-      "preLaunchTask": "npm: build",
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-      "console": "integratedTerminal",
-      "skipFiles": ["<node_internals>/**"],
-      "sourceMaps": true
-    },
-    {
-      "name": "📊 Debug Dashboard",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/dist/dashboard/server.js",
-      "preLaunchTask": "npm: build",
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-      "console": "integratedTerminal",
-      "env": {
-        "DASHBOARD_PORT": "3001",
-        "NODE_ENV": "development"
-      },
-      "envFile": "${workspaceFolder}/.env",
-      "skipFiles": ["<node_internals>/**"],
-      "sourceMaps": true
-    },
-    {
-      "name": "🔌 Attach to Running Server",
+      "name": "Attach to Running Server",
       "type": "node",
       "request": "attach",
       "port": 9229,
@@ -110,17 +83,6 @@
       "skipFiles": ["<node_internals>/**"],
       "sourceMaps": true,
       "outFiles": ["${workspaceFolder}/dist/**/*.js"]
-    }
-  ],
-  "compounds": [
-    {
-      "name": "🚀 Full Dev Stack",
-      "configurations": [
-        "Debug HTTP Server",
-        "Debug Dashboard"
-      ],
-      "stopAll": true,
-      "preLaunchTask": "npm: build"
     }
   ]
 }

@@ -49,7 +49,16 @@ export interface BrowserAutomationLog {
 }
 
 export class CredentialService {
-  private static readonly ENCRYPTION_KEY = process.env.CREDENTIAL_ENCRYPTION_KEY || 'n8n-mcp-default-key-change-me-in-production';
+  private static get ENCRYPTION_KEY(): string {
+    const key = process.env.CREDENTIAL_ENCRYPTION_KEY;
+    if (!key) {
+      throw new Error(
+        'CREDENTIAL_ENCRYPTION_KEY environment variable is required for credential operations. ' +
+        'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+      );
+    }
+    return key;
+  }
   private static readonly ALGORITHM = 'aes-256-gcm';
   private static readonly IV_LENGTH = 16;
   private static readonly SALT_LENGTH = 32;
@@ -62,7 +71,8 @@ export class CredentialService {
    */
   private static async getDb(): Promise<DatabaseAdapter> {
     if (!this.dbInstance) {
-      const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'data', 'nodes.db');
+      const projectRoot = path.resolve(__dirname, '..', '..');
+      const dbPath = process.env.DB_PATH || path.join(projectRoot, 'data', 'nodes.db');
       this.dbInstance = await createDatabaseAdapter(dbPath);
     }
     return this.dbInstance;

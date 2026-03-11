@@ -2,7 +2,7 @@
   "name": "n8n-mcp",
   "version": "3.0.0",
   "description": "n8n MCP Server - Lightweight runtime (pre-built database required)",
-  "main": "dist/index.js",
+  "main": "dist/mcp/stdio-wrapper.js",
   "author": "Romuald Czlonkowski @ www.aiadvisors.pl/en",
   "license": "MIT",
   "dependencies": {
@@ -17,7 +17,7 @@
     "zod": "^3.23.8"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.19.0"
   },
   "repository": {
     "type": "git",

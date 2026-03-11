@@ -80,12 +80,6 @@ export class MCPToolService {
 
     if (filters.category === "all") {
       delete optimizedFilters.category;
-    } else if (
-      !optimizedFilters.category &&
-      !optimizedFilters.package &&
-      !optimizedFilters.isAITool
-    ) {
-      optimizedFilters.category = "trigger";
     }
 
     const cacheKey = JSON.stringify(optimizedFilters);
@@ -571,8 +565,18 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
       );
     }
 
-    if (!workflow) {
-      throw new Error("workflow is required for local validation modes");
+    // Auto-fetch workflow by ID if no workflow object provided
+    let workflowToValidate = workflow;
+    if (!workflowToValidate && workflowId) {
+      const fetchResult = await n8nHandlers.handleGetWorkflow({ id: workflowId });
+      if (!fetchResult.success) {
+        throw new Error(`Failed to fetch workflow ${workflowId}: ${fetchResult.error}`);
+      }
+      workflowToValidate = fetchResult.data;
+    }
+
+    if (!workflowToValidate) {
+      throw new Error("workflow or workflowId is required for validation");
     }
 
     const validationOptions = { ...options };
@@ -623,11 +627,11 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
     }
 
     if (mode === "connections") {
-      return this.validateWorkflowConnections(workflow);
+      return this.validateWorkflowConnections(workflowToValidate);
     } else if (mode === "expressions") {
-      return this.validateWorkflowExpressions(workflow);
+      return this.validateWorkflowExpressions(workflowToValidate);
     } else {
-      const result = await this.validateWorkflow(workflow, validationOptions);
+      const result = await this.validateWorkflow(workflowToValidate, validationOptions);
       return {
         ...result,
         mode,
@@ -1495,7 +1499,7 @@ Full documentation is being prepared. For now, use get_node_essentials for confi
     try {
       const result = await validator.validateWorkflow(workflow, options);
 
-      const { validationCache } = await import("../utils/validation-cache");
+      const { validationCache } = await import("../utils/validation-cache.js");
       const cacheHash = validationCache.recordValidation(workflow, result);
 
       const response: any = {

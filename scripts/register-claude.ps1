@@ -22,8 +22,8 @@ try {
     # Step 1: Verify installation
     Write-Log "Step 1: Verifying installation..." "INFO"
 
-    if (!(Test-Path "$InstallDir\dist\mcp\index.js")) {
-        throw "MCP server not found at $InstallDir\dist\mcp\index.js"
+    if (!(Test-Path "$InstallDir\dist\mcp\stdio-wrapper.js")) {
+        throw "MCP server not found at $InstallDir\dist\mcp\stdio-wrapper.js"
     }
     Write-Log "✓ MCP server found" "INFO"
 
@@ -59,12 +59,12 @@ try {
     # Step 4: Check if already registered
     Write-Log "Step 4: Checking registration status..." "INFO"
 
-    if ($config.mcpServers."n8n-graphrag" -and -not $Force) {
-        Write-Log "✓ n8n-graphrag is already registered" "INFO"
+    if ($config.mcpServers."n8n-mcp" -and -not $Force) {
+        Write-Log "✓ n8n-mcp is already registered" "INFO"
         Write-Log "Use -Force to override existing configuration" "INFO"
 
         # Show current configuration
-        $config.mcpServers."n8n-graphrag" | ConvertTo-Json | ForEach-Object { Write-Log "  $_" "INFO" }
+        $config.mcpServers."n8n-mcp" | ConvertTo-Json | ForEach-Object { Write-Log "  $_" "INFO" }
 
         exit 0
     }
@@ -75,16 +75,15 @@ try {
     $n8nConfig = @{
         command = "node"
         args = @(
-            "$InstallDir\dist\mcp\index.js"
+            "$InstallDir\dist\mcp\stdio-wrapper.js"
         )
         env = @{
             MCP_MODE = "stdio"
-            GRAPH_DIR = "$env:APPDATA\n8n-mcp\graph"
             NODE_ENV = "production"
         }
     }
 
-    $config.mcpServers."n8n-graphrag" = $n8nConfig
+    $config.mcpServers."n8n-mcp" = $n8nConfig
     Write-Log "✓ Configuration entry created" "INFO"
 
     # Step 6: Save configuration
@@ -106,7 +105,7 @@ try {
     # Step 7: Verify Claude Desktop will find it
     Write-Log "Step 7: Verifying configuration..." "INFO"
 
-    if (Test-Path "$InstallDir\dist\mcp\index.js") {
+    if (Test-Path "$InstallDir\dist\mcp\stdio-wrapper.js") {
         Write-Log "✓ MCP server path is accessible" "INFO"
     } else {
         throw "MCP server path is not accessible"
@@ -119,16 +118,16 @@ try {
     Write-Log "1. Completely close Claude Desktop (not just minimize)" "INFO"
     Write-Log "2. Reopen Claude Desktop" "INFO"
     Write-Log "3. Check Settings → Connected Servers" "INFO"
-    Write-Log "4. You should see 'n8n-graphrag' listed as connected" "INFO"
+    Write-Log "4. You should see 'n8n-mcp' listed as connected" "INFO"
     Write-Log "" "INFO"
     Write-Log "CONFIGURATION DETAILS:" "INFO"
     Write-Log "Config file: $claudeConfigPath" "INFO"
     Write-Log "Install dir: $InstallDir" "INFO"
-    Write-Log "Graph cache: $env:APPDATA\n8n-mcp\graph" "INFO"
+    Write-Log "Server name: n8n-mcp" "INFO"
     Write-Log "" "INFO"
-    Write-Log "If n8n-graphrag doesn't appear in Claude:" "INFO"
+    Write-Log "If n8n-mcp doesn't appear in Claude:" "INFO"
     Write-Log "1. Check logs: $env:APPDATA\Claude\logs\" "INFO"
-    Write-Log "2. Verify path exists: $InstallDir\dist\mcp\index.js" "INFO"
+    Write-Log "2. Verify path exists: $InstallDir\dist\mcp\stdio-wrapper.js" "INFO"
     Write-Log "3. Try rebuilding: npm run build in install directory" "INFO"
 
     exit 0

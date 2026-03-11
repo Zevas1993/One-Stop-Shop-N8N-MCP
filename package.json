@@ -1,10 +1,10 @@
 {
   "name": "n8n-mcp",
   "version": "3.0.0",
-  "description": "n8n Co-Pilot - Stateless MCP server with live node sync, bulletproof validation, and embedded LLM",
-  "main": "dist/main.js",
+  "description": "n8n MCP Server - Stateless MCP server with live node sync, bulletproof validation, and embedded LLM",
+  "main": "dist/mcp/stdio-wrapper.js",
   "bin": {
-    "n8n-mcp": "./dist/main.js"
+    "n8n-mcp": "./dist/mcp/stdio-wrapper.js"
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
@@ -35,7 +35,7 @@
     "ai",
     "workflow",
     "automation",
-    "copilot",
+    "mcp-server",
     "llm"
   ],
   "author": "Romuald Czlonkowski @ www.aiadvisors.pl/en",

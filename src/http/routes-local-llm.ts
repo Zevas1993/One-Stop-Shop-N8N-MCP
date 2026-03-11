@@ -18,9 +18,8 @@ const SETUP_STATE_FILE = path.join(process.cwd(), 'data', 'setup-state.json');
 interface SetupState {
   configured: boolean;
   n8nApiUrl?: string;
-  n8nApiKey?: string;
-  n8nUsername?: string;
-  n8nPassword?: string;
+  // Secrets (n8nApiKey, n8nUsername, n8nPassword) are NEVER persisted here.
+  // They are only stored in the runtime .env file or process environment.
   configuredAt?: string;
 }
 
@@ -45,6 +44,25 @@ function saveSetupState(state: SetupState): void {
     fs.writeFileSync(SETUP_STATE_FILE, JSON.stringify(state, null, 2));
   } catch (error) {
     logger.error('[Setup] Failed to save setup state:', error);
+  }
+}
+
+// Persisted env file path — loaded by all entry points on startup
+const DATA_ENV_FILE = path.join(process.cwd(), 'data', '.env');
+
+function writeDataEnvFile(vars: Record<string, string>): void {
+  try {
+    const dir = path.dirname(DATA_ENV_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const lines = Object.entries(vars)
+      .filter(([, v]) => v != null && v !== '')
+      .map(([k, v]) => `${k}=${v}`);
+    fs.writeFileSync(DATA_ENV_FILE, lines.join('\n') + '\n');
+    logger.info('[Setup] Persisted config to data/.env');
+  } catch (error) {
+    logger.error('[Setup] Failed to write data/.env:', error);
   }
 }
 
@@ -83,10 +101,14 @@ export function createLocalLLMRoutes(): Router {
       let n8nConnected = false;
       let nodeCount = 0;
 
-      if (setupState.configured && setupState.n8nApiUrl && setupState.n8nApiKey) {
+      // Use environment variables for API key (never read secrets from setup-state)
+      const apiUrl = setupState.n8nApiUrl || process.env.N8N_API_URL;
+      const apiKey = process.env.N8N_API_KEY;
+
+      if (setupState.configured && apiUrl && apiKey) {
         try {
-          const response = await axios.get(`${setupState.n8nApiUrl}/api/v1/workflows`, {
-            headers: { 'X-N8N-API-KEY': setupState.n8nApiKey },
+          await axios.get(`${apiUrl}/api/v1/workflows`, {
+            headers: { 'X-N8N-API-KEY': apiKey },
             timeout: 5000,
           });
           n8nConnected = true;
@@ -261,17 +283,23 @@ export function createLocalLLMRoutes(): Router {
         return;
       }
 
-      // Save setup state
+      // Save non-sensitive setup metadata only — secrets stay in env/runtime .env
       const setupState: SetupState = {
         configured: true,
         n8nApiUrl,
-        n8nApiKey,
-        n8nUsername: n8nUsername || undefined,
-        n8nPassword: n8nPassword || undefined,
         configuredAt: new Date().toISOString(),
       };
 
       saveSetupState(setupState);
+
+      // Persist config to data/.env so it survives restarts
+      const envVars: Record<string, string> = {
+        N8N_API_URL: n8nApiUrl,
+        N8N_API_KEY: n8nApiKey,
+      };
+      if (n8nUsername) envVars.N8N_USERNAME = n8nUsername;
+      if (n8nPassword) envVars.N8N_PASSWORD = n8nPassword;
+      writeDataEnvFile(envVars);
 
       // Set environment variables for current session
       process.env.N8N_API_URL = n8nApiUrl;

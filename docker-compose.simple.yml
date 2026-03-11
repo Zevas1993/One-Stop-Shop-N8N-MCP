@@ -18,9 +18,8 @@ services:
 
     # Environment configuration
     environment:
-      # Mode configuration - FULL MODE for all features
-      MCP_MODE: full
-      USE_FIXED_HTTP: ${USE_FIXED_HTTP:-true}
+      # Mode configuration - HTTP mode for all features
+      MCP_MODE: http
       AUTH_TOKEN: ${AUTH_TOKEN:-}
 
       # Application settings

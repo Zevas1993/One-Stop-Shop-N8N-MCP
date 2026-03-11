@@ -107,7 +107,7 @@ export class TemplateService {
   ): Promise<void> {
     try {
       // Dynamically import fetcher only when needed (requires axios)
-      const { TemplateFetcher } = await import('./template-fetcher');
+      const { TemplateFetcher } = await import('./template-fetcher.js');
       const fetcher = new TemplateFetcher();
       
       // Clear existing templates

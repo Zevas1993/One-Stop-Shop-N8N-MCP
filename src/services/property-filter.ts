@@ -209,7 +209,10 @@ export class PropertyFilter {
   static getEssentials(allProperties: any[], nodeType: string): FilteredProperties {
     // Deduplicate first
     const uniqueProperties = this.deduplicateProperties(allProperties);
-    const config = this.ESSENTIAL_PROPERTIES[nodeType];
+    // Try the given key, then the short "nodes-base.X" form (used in ESSENTIAL_PROPERTIES map)
+    const config = this.ESSENTIAL_PROPERTIES[nodeType]
+      || this.ESSENTIAL_PROPERTIES[nodeType.replace(/^n8n-nodes-base\./, 'nodes-base.')]
+      || this.ESSENTIAL_PROPERTIES[nodeType.replace(/^@n8n\/n8n-nodes-langchain\./, 'n8n-nodes-langchain.')];
     
     if (!config) {
       // Fallback for unconfigured nodes

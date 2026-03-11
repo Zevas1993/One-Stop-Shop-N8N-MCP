@@ -1,7 +1,7 @@
 /**
  * Core Module
  * 
- * The heart of the n8n Co-Pilot MCP Server.
+ * The heart of the n8n MCP Server MCP Server.
  * Exports all core components and provides unified initialization.
  * 
  * Architecture:
@@ -65,7 +65,7 @@ export interface CoreStatus {
 /**
  * Core Orchestrator
  * 
- * Main entry point for the n8n Co-Pilot system.
+ * Main entry point for the n8n MCP Server system.
  * Initializes and coordinates all core components.
  */
 export class CoreOrchestrator extends EventEmitter {
@@ -87,7 +87,7 @@ export class CoreOrchestrator extends EventEmitter {
    * Call this on startup
    */
   async initialize(): Promise<boolean> {
-    logger.info('[Core] Initializing n8n Co-Pilot...');
+    logger.info('[Core] Initializing n8n MCP Server...');
     const startTime = Date.now();
 
     try {

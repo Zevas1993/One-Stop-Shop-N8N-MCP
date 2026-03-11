@@ -1,11 +1,11 @@
 version: "3.9"
 
 # ============================================================================
-# n8n Co-Pilot Stack
-# 
+# n8n MCP Server Stack
+#
 # Complete setup with:
 # - n8n: Workflow automation platform
-# - MCP: Co-Pilot server (live sync, validation, LLM)
+# - MCP: MCP Server (live sync, validation, LLM)
 # - Ollama: Dual-model LLM backend (embedding + generation)
 # - Open WebUI: Human interface for chat-based workflow building
 #
@@ -35,7 +35,7 @@ services:
     volumes:
       - n8n-data:/home/node/.n8n
     networks:
-      - copilot-network
+      - mcp-network
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
       interval: 10s
@@ -43,7 +43,7 @@ services:
       retries: 5
       start_period: 30s
 
-  # MCP Server - n8n Co-Pilot
+  # MCP Server - n8n MCP Server
   # Runs in HTTP mode to serve both Open WebUI and direct API access
   mcp:
     build:
@@ -64,7 +64,7 @@ services:
     ports:
       - "3001:3001"
     networks:
-      - copilot-network
+      - mcp-network
     depends_on:
       n8n:
         condition: service_healthy
@@ -90,7 +90,7 @@ services:
     volumes:
       - ollama-data:/root/.ollama
     networks:
-      - copilot-network
+      - mcp-network
     # GPU support (uncomment if you have NVIDIA GPU)
     # deploy:
     #   resources:
@@ -113,7 +113,7 @@ services:
     container_name: open-webui
     restart: unless-stopped
     environment:
-      - WEBUI_NAME=n8n Co-Pilot
+      - WEBUI_NAME=n8n MCP Server
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-change-me-in-production}
       - OLLAMA_BASE_URL=http://ollama:11434
       # Enable function calling for MCP integration
@@ -125,7 +125,7 @@ services:
     volumes:
       - open-webui-data:/app/backend/data
     networks:
-      - copilot-network
+      - mcp-network
     depends_on:
       - mcp
       - ollama
@@ -145,7 +145,7 @@ volumes:
     driver: local
 
 networks:
-  copilot-network:
+  mcp-network:
     driver: bridge
 
 # ============================================================================

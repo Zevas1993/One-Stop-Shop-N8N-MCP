@@ -226,13 +226,15 @@ export async function handleUpdatePartialWorkflow(args: unknown): Promise<McpToo
       };
     }
 
-    // LIVE VALIDATION: Validate against the actual n8n instance before update
+    // STRUCTURE VALIDATION: Validate node types and connections locally (no API calls).
+    // NOTE: We use validateWorkflowStructure, NOT validateWorkflow, because the latter
+    // creates a throwaway POST /workflows on n8n which creates ghost workflows.
     const liveValidator = getN8nLiveValidator();
     if (liveValidator) {
       logger.info(
-        "[handleUpdatePartialWorkflow] Running live n8n validation before update"
+        "[handleUpdatePartialWorkflow] Running structure validation"
       );
-      const liveValidationResult = await liveValidator.validateWorkflow(diffResult.workflow!);
+      const liveValidationResult = await liveValidator.validateWorkflowStructure(diffResult.workflow!);
 
       if (!liveValidationResult.valid) {
         // Enhanced error analysis for node naming issues
@@ -292,9 +294,17 @@ export async function handleUpdatePartialWorkflow(args: unknown): Promise<McpToo
       logger.info("[handleUpdatePartialWorkflow] Live validation passed");
     }
 
-    // Update workflow via API
+    // Update workflow via API — build explicit 4-field payload
+    // Do NOT pass raw diffResult.workflow which contains extra GET fields
+    // (pinData: {}, activeVersionId, etc.) that cause additionalProperties rejection
     try {
-      const updatedWorkflow = await client.updateWorkflow(input.id, diffResult.workflow!);
+      const cleanPayload = {
+        name: diffResult.workflow!.name,
+        nodes: diffResult.workflow!.nodes,
+        connections: (diffResult.workflow as any).connections,
+        settings: (diffResult.workflow as any).settings ?? {},
+      };
+      const updatedWorkflow = await client.updateWorkflow(input.id, cleanPayload as any);
 
       return {
         success: true,

@@ -56,11 +56,12 @@ export async function createDatabaseAdapter(dbPath: string): Promise<DatabaseAda
   }
 
   // For database builds, prefer better-sqlite3 (supports FTS5)
-  // Check if we're in a build/rebuild context
-  const isDbBuild = process.argv.some(arg =>
-    arg.includes('rebuild') ||
-    arg.includes('build') && !arg.includes('dist')
-  );
+  // Explicit config takes precedence, then fall back to argv heuristic
+  const isDbBuild = process.env.DB_ADAPTER === 'better-sqlite3' ||
+    (!process.env.DB_ADAPTER && process.argv.some(arg =>
+      arg.includes('rebuild') ||
+      (arg.includes('build') && !arg.includes('dist'))
+    ));
 
   if (isDbBuild) {
     // Try better-sqlite3 first for builds (FTS5 support needed)
@@ -227,8 +228,12 @@ class SQLJSAdapter implements DatabaseAdapter {
     try {
       const data = this.db.export();
       const buffer = Buffer.from(data);
-      fsSync.writeFileSync(this.dbPath, buffer);
-      logger.debug(`Database saved to ${this.dbPath}`);
+      // Use async write to avoid blocking the event loop
+      fs.writeFile(this.dbPath, buffer).then(() => {
+        logger.debug(`Database saved to ${this.dbPath}`);
+      }).catch((err) => {
+        logger.error('Failed to save database (async)', err);
+      });
     } catch (error) {
       logger.error('Failed to save database', error);
     }

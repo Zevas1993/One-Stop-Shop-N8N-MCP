@@ -1,64 +1,89 @@
 #!/usr/bin/env node
 
-import dotenv from "dotenv";
-// Always try to load .env file - this provides defaults for local development
-// Use override: true to ensure .env values take precedence (fixes Windows # character issue)
-try {
-  dotenv.config({ override: true });
-} catch (e) {
-  // Ignore errors if .env doesn't exist
+/**
+ * MCP Server entry point (stdio mode)
+ *
+ * Sets MCP_MODE and suppresses console output BEFORE any imports
+ * to prevent JSON-RPC stream corruption in Claude Desktop.
+ *
+ * Preferred entry point: dist/mcp/stdio-wrapper.js (same behavior, static imports)
+ * This file exists for backwards compatibility.
+ */
+
+// CRITICAL: Set environment BEFORE any imports to prevent initialization logs
+process.env.MCP_MODE = "stdio";
+process.env.DISABLE_CONSOLE_OUTPUT = "true";
+if (!process.env.LOG_LEVEL) {
+  process.env.LOG_LEVEL = "error";
 }
 
-import { logger } from "../utils/logger";
+import dotenv from "dotenv";
+import path from "path";
+// Three-tier config: caller env (highest) > data/.env (browser setup) > repo .env (dev fallback)
+try {
+  dotenv.config({ path: path.join(process.cwd(), "data", ".env") });
+} catch (e) { /* data/.env may not exist */ }
+try {
+  dotenv.config();
+} catch (e) { /* .env may not exist */ }
 
-// Add error details to stderr for Claude Desktop debugging
+// Suppress all console output to prevent JSON-RPC interference
+// Save originals for fatal error reporting only
+const _stderr = process.stderr.write.bind(process.stderr);
+const originalConsoleError = console.error;
+console.log = () => {};
+console.error = () => {};
+console.warn = () => {};
+console.info = () => {};
+console.debug = () => {};
+console.trace = () => {};
+console.dir = () => {};
+console.time = () => {};
+console.timeEnd = () => {};
+console.timeLog = () => {};
+console.group = () => {};
+console.groupEnd = () => {};
+console.table = () => {};
+console.clear = () => {};
+console.count = () => {};
+console.countReset = () => {};
+
+// Import server AFTER suppressing output (static import for reliable module resolution)
+import { createUnifiedMCPServer } from "./server-modern";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+// Error handlers use stderr directly to avoid JSON-RPC corruption
 process.on("uncaughtException", (error) => {
-  console.error("Uncaught Exception:", error);
-  logger.error("Uncaught Exception:", error);
+  originalConsoleError("Uncaught Exception:", error);
   process.exit(1);
 });
 
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
-  logger.error("Unhandled Rejection:", reason);
+process.on("unhandledRejection", (reason) => {
+  originalConsoleError("Unhandled Rejection:", reason);
   process.exit(1);
 });
 
 async function main() {
-  console.error(`[DEBUG] Starting Unified MCP Server.`);
-
   try {
-    const mod = await import("./server-modern.js");
-    const { createUnifiedMCPServer } = (mod as any).default || mod;
     const server = await createUnifiedMCPServer();
-    await server.run();
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
   } catch (error) {
-    console.error("Failed to start MCP server:", error);
-    logger.error("Failed to start MCP server", error);
+    originalConsoleError("Failed to start MCP server:", error);
 
     if (
       error instanceof Error &&
       error.message.includes("nodes.db not found")
     ) {
-      console.error("\nTo fix this issue:");
-      console.error("1. cd to the n8n-mcp directory");
-      console.error("2. Run: npm run build");
-      console.error("3. Run: npm run rebuild");
+      originalConsoleError("\nTo fix: cd to n8n-mcp directory, run: npm run build && npm run rebuild");
     } else if (
       error instanceof Error &&
       error.message.includes("NODE_MODULE_VERSION")
     ) {
-      console.error("\nTo fix this Node.js version mismatch:");
-      console.error("1. cd to the n8n-mcp directory");
-      console.error("2. Run: npm rebuild better-sqlite3");
-      console.error(
-        "3. If that doesn't work, try: rm -rf node_modules && npm install"
-      );
+      originalConsoleError("\nTo fix: cd to n8n-mcp directory, run: npm rebuild better-sqlite3");
     }
     process.exit(1);
   }
 }
 
-if (require.main === module) {
-  main().catch(console.error);
-}
+main();

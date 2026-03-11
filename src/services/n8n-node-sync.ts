@@ -333,7 +333,7 @@ export class N8nNodeSync {
       logger.info('Notifying GraphRAG of node catalog changes...');
 
       // Import GraphRAG bridge dynamically to avoid circular dependencies
-      const { GraphRAGBridge } = await import('../ai/graphrag-bridge');
+      const { GraphRAGBridge } = await import('../ai/graphrag-bridge.js');
       const bridge = GraphRAGBridge.get();
 
       // Invalidate cache

@@ -8,74 +8,60 @@ import { Workflow } from '../types/n8n-api';
 import { logger } from '../utils/logger';
 
 /**
- * Fields that are READ-ONLY in n8n API
- * These are managed by n8n and must never be sent in POST/PUT requests
+ * ALLOWLIST of fields the n8n API accepts for POST/PUT requests.
+ * Aligned with the canonical cleanWorkflowForCreate/Update in n8n-validation.ts.
+ * Any field NOT in this list is stripped.
  */
-const READ_ONLY_FIELDS = [
-  'id',              // System-generated workflow ID
-  'active',          // Managed by activate/deactivate endpoints
-  'createdAt',       // System timestamp
-  'updatedAt',       // System timestamp
-  'tags',            // Managed via separate /tags endpoints
-  'versionId',       // Version tracking (inferred)
-  'triggerCount',    // Generated from execution history
-  'isArchived',      // System state flag
+const ALLOWED_WORKFLOW_FIELDS = [
+  'name', 'nodes', 'connections', 'settings',  // Required
+  'staticData', 'pinData', 'meta',             // Optional user-settable
 ] as const;
 
 /**
- * Strips all read-only fields from a workflow object
- * Returns a new object with only API-acceptable fields
+ * Strips all non-allowed fields from a workflow object.
+ * Uses an allowlist approach (same as n8n-validation.ts) so new read-only
+ * fields added by future n8n versions are automatically excluded.
  *
  * @param workflow - The workflow to clean
- * @returns Cleaned workflow with only settable fields
+ * @returns Cleaned workflow with only API-acceptable fields
  */
 export function stripReadOnlyFields(workflow: any): Partial<Workflow> {
   const cleaned: Record<string, any> = {};
+  const strippedFields: string[] = [];
 
-  // Required fields (must always be present)
-  const requiredFields = ['name', 'nodes', 'connections', 'settings'];
-  for (const field of requiredFields) {
+  for (const field of ALLOWED_WORKFLOW_FIELDS) {
     if (field in workflow) {
       cleaned[field] = workflow[field];
     }
   }
 
-  // Optional user-settable fields
-  const optionalFields = ['staticData', 'pinData', 'meta', 'shared', 'active'];
-  for (const field of optionalFields) {
-    if (field in workflow) {
-      cleaned[field] = workflow[field];
+  // Log which fields were stripped
+  for (const key of Object.keys(workflow)) {
+    if (!(ALLOWED_WORKFLOW_FIELDS as readonly string[]).includes(key)) {
+      strippedFields.push(key);
     }
   }
 
-  // Explicitly exclude read-only fields
-  const readOnlyFound: string[] = [];
-  for (const field of READ_ONLY_FIELDS) {
-    if (field in workflow && workflow[field] !== undefined && workflow[field] !== null) {
-      readOnlyFound.push(field);
-    }
-  }
-
-  if (readOnlyFound.length > 0) {
-    logger.info(`[stripReadOnlyFields] Removed system-managed fields: ${readOnlyFound.join(', ')}`);
+  if (strippedFields.length > 0) {
+    logger.info(`[stripReadOnlyFields] Stripped non-allowed fields: ${strippedFields.join(', ')}`);
   }
 
   return cleaned as Partial<Workflow>;
 }
 
 /**
- * Checks if a workflow contains read-only fields
- * Useful for validation before API calls
+ * Checks if a workflow contains non-allowed (read-only / system-managed) fields.
+ * Any key NOT in ALLOWED_WORKFLOW_FIELDS is considered read-only.
  *
  * @param workflow - The workflow to check
- * @returns Array of read-only field names found (empty if clean)
+ * @returns Array of non-allowed field names found (empty if clean)
  */
 export function findReadOnlyFields(workflow: any): string[] {
   const found: string[] = [];
 
-  for (const field of READ_ONLY_FIELDS) {
-    if (field in workflow && workflow[field] !== undefined && workflow[field] !== null) {
-      found.push(field);
+  for (const key of Object.keys(workflow)) {
+    if (!(ALLOWED_WORKFLOW_FIELDS as readonly string[]).includes(key)) {
+      found.push(key);
     }
   }
 

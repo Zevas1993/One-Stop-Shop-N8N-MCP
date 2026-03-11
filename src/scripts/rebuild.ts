@@ -58,7 +58,7 @@ async function rebuild() {
   } else {
     console.log('📦 Using local npm package extraction (fallback)...\n');
     // Fallback to npm package loading if Docker volumes not available
-    const { N8nNodeLoader } = await import('../loaders/node-loader');
+    const { N8nNodeLoader } = await import('../loaders/node-loader.js');
     const loader = new N8nNodeLoader();
     nodes = await loader.loadAllNodes();
   }

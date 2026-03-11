@@ -1,10 +1,14 @@
 # 🚀 Quick Start Guide
 
-Welcome to the **n8n Co-Pilot MCP Server**! This guide will help you navigate the documentation and get started quickly based on your goals.
+Welcome to the **n8n MCP Server**! This guide will help you navigate the documentation and get started quickly based on your goals.
 
 ## 🏁 Getting Started
 
 ### 1. Installation & Setup
+
+**Node.js Requirements:**
+- **Runtime** (pre-built `nodes.db`, `npx n8n-mcp`): Node 18+
+- **Development** (`npm install` with devDeps, `npm run rebuild`): Node 20.19+
 
 For installation instructions, configuration, and running the server:
 👉 **[Read the README](README.md)**

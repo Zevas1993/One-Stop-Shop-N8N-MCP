@@ -98,9 +98,9 @@ export class WorkflowSemanticValidator {
 
     // Check 2: Detect common Code node anti-patterns
     for (const codeNode of analysis.codeNodes) {
-      const suggestions = await this.analyzeCodeNode(codeNode);
-      if (suggestions.length > 0) {
-        score -= 10 * suggestions.length;
+      const nodeSuggestions = await this.analyzeCodeNode(codeNode);
+      if (nodeSuggestions.length > 0) {
+        score -= 10 * nodeSuggestions.length;
         warnings.push({
           severity: 'warning',
           message: `Node "${codeNode.name}" might be replaceable with built-in nodes`,
@@ -109,7 +109,7 @@ export class WorkflowSemanticValidator {
           nodeType: codeNode.type
         });
       }
-      suggestions.push(...suggestions);
+      suggestions.push(...nodeSuggestions);
     }
 
     // Check 3: Too few built-in nodes

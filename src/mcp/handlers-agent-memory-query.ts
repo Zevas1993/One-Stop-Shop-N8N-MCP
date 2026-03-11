@@ -87,27 +87,67 @@ export async function handleQueryAgentMemory(args: unknown): Promise<any> {
 }
 
 /**
- * Retrieve graph insights from GraphRAG pipeline
+ * Retrieve graph insights from GraphRAG Python backend (with SharedMemory fallback)
  */
 export async function handleGetGraphInsights(args: unknown): Promise<any> {
   try {
     const input = getGraphInsightsSchema.parse(args);
-    const memory = await getHandlerSharedMemory();
-
     logger.info('[AgentMemoryQuery] Retrieving graph insights');
 
+    // Primary: query Python GraphRAG backend directly
+    try {
+      const { GraphRAGBridge } = await import('../ai/graphrag-bridge.js');
+      const bridge = GraphRAGBridge.get();
+      const stats = await bridge.getStats();
+
+      if (stats && stats.ok !== false) {
+        if (!input.detailed) {
+          return {
+            success: true,
+            data: {
+              summary: {
+                nodeCount: stats.node_count || 0,
+                edgeCount: stats.edge_count || 0,
+                categoryCount: Object.keys(stats.categories || {}).length,
+                edgeTypeCount: Object.keys(stats.edge_types || {}).length,
+              },
+              message: 'Graph insights available. Set detailed=true for full breakdown.'
+            }
+          };
+        }
+
+        return {
+          success: true,
+          data: {
+            categories: stats.categories || {},
+            edgeTypes: stats.edge_types || {},
+            sampleRelationships: stats.sample_relationships || [],
+            metadata: {
+              nodeCount: stats.node_count,
+              edgeCount: stats.edge_count,
+              source: 'graphrag-backend'
+            }
+          },
+          message: `Detailed graph insights: ${stats.node_count} nodes, ${stats.edge_count} edges across ${Object.keys(stats.categories || {}).length} categories`
+        };
+      }
+    } catch (bridgeError) {
+      logger.warn('[AgentMemoryQuery] GraphRAG bridge unavailable, falling back to SharedMemory', bridgeError as Error);
+    }
+
+    // Fallback: read from SharedMemory (populated by agent pipeline)
+    const memory = await getHandlerSharedMemory();
     const insights = await memory.get('graph-insights');
 
     if (!insights) {
       return {
         success: true,
         data: null,
-        message: 'No graph insights available. Run agent pipeline first to generate insights.'
+        message: 'No graph insights available. Run populate_graph first to seed the knowledge graph.'
       };
     }
 
     if (!input.detailed) {
-      // Return summary
       return {
         success: true,
         data: {
@@ -117,12 +157,11 @@ export async function handleGetGraphInsights(args: unknown): Promise<any> {
             validationRuleCount: insights.validations?.length || 0,
             recommendationCount: insights.recommendations?.length || 0
           },
-          message: 'Graph insights available. Set detailed=true for full data'
+          message: 'Graph insights from SharedMemory. Set detailed=true for full data.'
         }
       };
     }
 
-    // Return detailed insights
     return {
       success: true,
       data: {
@@ -132,7 +171,8 @@ export async function handleGetGraphInsights(args: unknown): Promise<any> {
         recommendations: insights.recommendations || [],
         metadata: {
           generatedAt: insights.generatedAt || Date.now(),
-          version: insights.version || '1.0'
+          version: insights.version || '1.0',
+          source: 'shared-memory'
         }
       },
       message: `Detailed graph insights retrieved: ${Object.keys(insights).length} categories`
